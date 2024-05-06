@@ -108,7 +108,7 @@ class RootComponent(basecomponent.BaseComponent):
 
             masterCtrlName = self.formatName(name='Master', type='control')
             masterCtrl = self.scene.createNode('transform', name=masterCtrlName, parent=masterSpace)
-            masterCtrl.addPointHelper('cylinder', size=15.0, colorRGB=colorRGB, lineWidth=2.0)
+            masterCtrl.addPointHelper('diamond', size=15.0, colorRGB=colorRGB, lineWidth=2.0)
             masterCtrl.addAttr(longName='stowed', attributeType='float', min=0.0, max=1.0, keyable=True)
             masterCtrl.prepareChannelBoxForAnimation()
             masterCtrl.tagAsController()
