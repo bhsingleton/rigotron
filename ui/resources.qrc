@@ -1,0 +1,15 @@
+<RCC>
+  <qresource prefix="rigotron">
+    <file>icons/DigitComponent.svg</file>
+    <file>icons/HeadComponent.svg</file>
+    <file>icons/NeckComponent.svg</file>
+    <file>icons/ArmComponent.svg</file>
+    <file>icons/FootComponent.svg</file>
+    <file>icons/HandComponent.svg</file>
+    <file>icons/LegComponent.svg</file>
+    <file>icons/RootComponent.svg</file>
+    <file>icons/ClavicleComponent.svg</file>
+    <file>icons/SpineComponent.svg</file>
+    <file>icons/TailComponent.svg</file>
+  </qresource>
+</RCC>

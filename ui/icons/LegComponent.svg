@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="leg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16.004 16.02">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #181818;
+      }
+
+      .cls-1, .cls-2, .cls-3, .cls-4, .cls-5, .cls-6 {
+        stroke-width: 0px;
+      }
+
+      .cls-2 {
+        fill: #2878e8;
+      }
+
+      .cls-3 {
+        fill: #28d0f8;
+      }
+
+      .cls-4 {
+        fill: #d83028;
+      }
+
+      .cls-5 {
+        fill: #f090e0;
+      }
+
+      .cls-6 {
+        fill: #f8f8f8;
+      }
+    </style>
+  </defs>
+  <rect class="cls-5" x="10" y="11" width="1" height="1"/>
+  <rect class="cls-5" x="11" y="10" width="1" height="1"/>
+  <g>
+    <polygon class="cls-4" points="12 10 12 11 11 11 11 12 10 12 10 13 11 13 12 13 12 12 13 12 13 11 13 10 12 10"/>
+    <polygon class="cls-4" points="10 10 11 10 12 10 12 9 11 9 10 9 9 9 9 10 9 11 9 12 10 12 10 11 10 10"/>
+  </g>
+  <g>
+    <polygon class="cls-2" points="7 12 6 12 5 12 5 13 6 13 7 13 8 13 9 13 9 12 8 12 7 12"/>
+    <rect class="cls-2" x="4" y="11" width="1" height="1"/>
+    <rect class="cls-2" x="3" y="10" width="1" height="1"/>
+    <polygon class="cls-2" points="12 5 12 6 12 7 12 8 12 9 13 9 13 8 13 7 13 6 13 5 12 5"/>
+    <rect class="cls-2" x="11" y="4" width="1" height="1"/>
+    <rect class="cls-2" x="10" y="3" width="1" height="1"/>
+  </g>
+  <g>
+    <polygon class="cls-3" points="5 11 5 12 6 12 7 12 7 11 6 11 5 11"/>
+    <rect class="cls-3" x="4" y="10" width="1" height="1"/>
+    <rect class="cls-3" x="3" y="9" width="1" height="1"/>
+    <rect class="cls-3" x="3" y="6" width="1" height="1"/>
+    <polygon class="cls-3" points="11 5 11 6 11 7 12 7 12 6 12 5 11 5"/>
+    <rect class="cls-3" x="10" y="4" width="1" height="1"/>
+    <rect class="cls-3" x="9" y="3" width="1" height="1"/>
+    <rect class="cls-3" x="6" y="3" width="1" height="1"/>
+  </g>
+  <g>
+    <rect class="cls-6" x="10" y="10" width="1" height="1"/>
+    <polygon class="cls-6" points="6 10 6 9 5 9 5 8 4 8 4 7 3 7 3 8 3 9 4 9 4 10 5 10 5 11 6 11 7 11 7 12 8 12 8 11 8 10 7 10 6 10"/>
+    <polygon class="cls-6" points="11 6 11 5 10 5 10 4 9 4 9 3 8 3 7 3 7 4 8 4 8 5 9 5 9 6 10 6 10 7 10 8 11 8 12 8 12 7 11 7 11 6"/>
+    <path class="cls-6" d="M14,1H1v14h14V1h-1ZM14,3v11H2V2h12v1Z"/>
+  </g>
+  <g>
+    <polygon class="cls-1" points="13 15 12 15 11 15 10 15 9 15 8 15 7 15 6 15 5 15 4 15 3 15 2 15 1 15 1 16 2 16 3 16 4 16 5 16 6 16 7 16 8 16 9 16 10 16 11 16 12 16 13 16 14 16 15 16 15 15 14 15 13 15"/>
+    <polygon class="cls-1" points="1 13 1 12 1 11 1 10 1 9 1 8 1 7 1 6 1 5 1 4 1 3 1 2 1 1 0 1 0 2 0 3 0 4 0 5 0 6 0 7 0 8 0 9 0 10 0 11 0 12 0 13 0 14 0 15 1 15 1 14 1 13"/>
+    <path class="cls-1" d="M12,2H2v12h12V2h-2ZM13,6v3h-1v1h1v2h-1v1h-2v-1h-1v1h-4v-1h-1v-1h-1v-5h1v2h1v1h1v1h2v2h1v-3h3v-1h-2v-2h-1v-1h-1v-1h-2v-1h5v1h1v1h1v1Z"/>
+    <polygon class="cls-1" points="15 1 15 2 15 3 15 4 15 5 15 6 15 7 15 8 15 9 15 10 15 11 15 12 15 13 15 14 15 15 16 15 16 14 16 13 16 12 16 11 16 10 16 9 16 8 16 7 16 6 16 5 16 4 16 3 16 2 16 1 15 1"/>
+    <polygon class="cls-1" points="3 1 4 1 5 1 6 1 7 1 8 1 9 1 10 1 11 1 12 1 13 1 14 1 15 1 15 0 14 0 13 0 12 0 11 0 10 0 9 0 8 0 7 0 6 0 5 0 4 0 3 0 2 0 1 0 1 1 2 1 3 1"/>
+  </g>
+</svg>

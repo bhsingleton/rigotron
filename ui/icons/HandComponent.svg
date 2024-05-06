@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="hand" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 16.056 16.056">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #000;
+      }
+
+      .cls-1, .cls-2, .cls-3, .cls-4, .cls-5, .cls-6 {
+        stroke-width: 0px;
+      }
+
+      .cls-2 {
+        fill: #a8a8a8;
+      }
+
+      .cls-3 {
+        fill: #f088b8;
+      }
+
+      .cls-4 {
+        fill: #606060;
+      }
+
+      .cls-5 {
+        fill: #28e050;
+      }
+
+      .cls-6 {
+        fill: #f0f0f0;
+      }
+    </style>
+  </defs>
+  <image width="223" height="223" transform="scale(.072)" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAN8AAADUCAYAAAAcPvbvAAAACXBIWXMAAJnKAACZygHjkaQiAAAFdElEQVR4nO3dv2tdZRzH8aeaqI2hiSHQYkJoq0MJ2MWlyB1aUXDoUrhDEQcnXTtJXUp1UZwydJDOIo6CbjreIVwQS4ulQwhyUUwlpE2osdr64x9owfPYez568nrtX74PN7y5z3DOzb5DF0/8VSpsXFytGYNOmXtzuTxx+EDN6KnHHvVhgH9m3xOHD1R987187KXGMwsLC+XMmTM162CshsNhGQ6Hjee+HX1Xbu1u16w8NfH79zs1g+XQyUONZ44cOVJ6vV7VPhinO3fulNFo1Hhu35Ur5feNuoZcOyFEfBAiPggRH4SID0LEByHigxDxQYj4IER8ECI+CBEfhEzUDq6srDSeGQwGZXZ2tnYljE2/3y/9fr/x3HA4LBsbG1U7ffNBiPggRHwQIj4IER+EiA9CxAch4oMQ8UGI+CBEfBAiPggRH4SID0LEByHigxDxQYj4IER8ECI+CBEfhIgPQsQHIeKDEPFBiPggpPrn4rtscnGqTC5ONZ777fp2+WPnXuO5F559rsw89XTjuVqD9atVc1Mn5hvP/Llzr9y9vl21r+vE9wAz/aUyf+5Y47nR2UHZXd1sPPfB6bdL7+jxxnO1Zs+/VjW39Fmv8czu6mYZnR1U7es6104IER+EiA9CxAch4oMQ8UGI+CBEfBAiPggRH4SID0LEByGdfrC69u2Empl/49pP663ua9PjBya9DfEQnY6v9u2Etr37xcfpI4zNk8sz3oZ4CNdOCBEfhIgPQsQHIeKDEPFBiPggRHwQIj4IER+EiA9CxAchnX6wend1s2yu3Ght370fdlvbleCzfLQ6H1/N/07gwdqMby9w7YQQ8UGI+CBEfBAiPggRH4SID0LEByHigxDxQYj4IER8ENLpB6t7R4+X3tHjjecG61fLYP3qGE609yw9c7C8/uKrjedGt26WT7/5agwn+u/ofHznX3mj8dyHX38ivkdk6ZmDVX+DwfrVzsfn2gkh4oMQ8UGI+CBEfBAiPggRH4SID0LEByHigxDxQYj4IER8ECI+CBEfhIgPQsQHIeKDEPFBiPggRHwQIj4IER+EiA9CxAch4oOQTv9c/KfffFX1s++jWzfHcJq96dpP6+X05Xcaz23f/WUMp/lv6XR8o1s3hRS2/esd//fiIVw7IUR8ECI+CBEfhIgPQsQHIeKDEPFBiPggRHwQIj4IER+EdPrB6pn+UpnpL7W27+f3r5W717db29e2pc96re367fp2ufn+tdb2JXQ6vsnFqTJ1Yr61fY8dmGxtV0Kbn+Ve4NoJIeKDEPFBiPggRHwQIj4IER+EiA9CxAch4oMQ8UGI+CCk0w9Wb67cKJsrNxrPzZ87VubPHRvDiR7sy7c+Kr2jx1vbN3v+tdZ27a5ultHZQWv7/k9880GI+CBEfBAiPggRH4SID0LEByHigxDxQYj4IER8ECI+CBEfhHT6rYZatW9D1Dp9+Z3Wdv0bNw5/nj5Cp/jmgxDxQYj4IER8ECI+CBEfhIgPQsQHIeKDEPFBiPggRHwQIj4IER+EiA9CxAch4oMQ8UGI+CBEfBAiPggRH4SID0LEByHigxDxQUj1z8Wvra01nrl9+3ZZXl6uXQljMz09Xba2thrP3b9/v3pndXyXLl1qPDM3N1cuXLhQuxLGZm1trQyHw8ZzOzs71TtdOyFEfBAiPggRH4SID0LEByHigxDxQYj4IER8ECI+CBEfhOybPrn4V83g87fnG8/s37+/LCws1KyDsdra2qp6q+HH6e3y68S9mpWnJqZPLtYMlisXV6vmoEvm3lwu04cPVs26dkKI+CBEfBAiPggRH4SID0LEByHigxDxQYj4IER8ECI+CJkopbyXPgTsQd+nDwB71t8Mmu0pWBHYtAAAAABJRU5ErkJggg=="/>
+  <g>
+    <rect class="cls-4" x="14" y="14" width="1" height="1"/>
+    <rect class="cls-4" x="1" y="14" width="1" height="1"/>
+    <g>
+      <polygon class="cls-3" points="7 11 7 12 8 12 9 12 9 11 8 11 7 11"/>
+      <polygon class="cls-3" points="11 7 11 8 11 9 12 9 12 8 12 7 11 7"/>
+      <polygon class="cls-3" points="4 8 4 9 5 9 5 8 5 7 4 7 4 8"/>
+      <polygon class="cls-3" points="7 4 7 5 8 5 9 5 9 4 8 4 7 4"/>
+    </g>
+    <g>
+      <polygon class="cls-5" points="10 10 10 11 10 12 11 12 11 11 12 11 12 10 11 10 10 10"/>
+      <polygon class="cls-5" points="4 10 4 11 5 11 5 12 6 12 6 11 6 10 5 10 4 10"/>
+      <polygon class="cls-5" points="11 5 11 4 10 4 10 5 10 6 11 6 12 6 12 5 11 5"/>
+      <polygon class="cls-5" points="5 5 4 5 4 6 5 6 6 6 6 5 6 4 5 4 5 5"/>
+    </g>
+    <g>
+      <polygon class="cls-2" points="12 14 11 14 10 14 9 14 8 14 7 14 6 14 5 14 4 14 3 14 2 14 2 15 3 15 4 15 5 15 6 15 7 15 8 15 9 15 10 15 11 15 12 15 13 15 14 15 14 14 13 14 12 14"/>
+      <polygon class="cls-2" points="14 2 14 3 14 4 14 5 14 6 14 7 14 8 14 9 14 10 14 11 14 12 14 13 14 14 15 14 15 13 15 12 15 11 15 10 15 9 15 8 15 7 15 6 15 5 15 4 15 3 15 2 14 2"/>
+    </g>
+    <rect class="cls-4" x="14" y="1" width="1" height="1"/>
+    <g>
+      <polygon class="cls-6" points="1 3 1 4 1 5 1 6 1 7 1 8 1 9 1 10 1 11 1 12 1 13 1 14 2 14 2 13 2 12 2 11 2 10 2 9 2 8 2 7 2 6 2 5 2 4 2 3 2 2 1 2 1 3"/>
+      <polygon class="cls-6" points="13 1 12 1 11 1 10 1 9 1 8 1 7 1 6 1 5 1 4 1 3 1 2 1 2 2 3 2 4 2 5 2 6 2 7 2 8 2 9 2 10 2 11 2 12 2 13 2 14 2 14 1 13 1"/>
+    </g>
+    <rect class="cls-4" x="1" y="1" width="1" height="1"/>
+    <g>
+      <polygon class="cls-1" points="13 15 12 15 11 15 10 15 9 15 8 15 7 15 6 15 5 15 4 15 3 15 2 15 1 15 1 16 2 16 3 16 4 16 5 16 6 16 7 16 8 16 9 16 10 16 11 16 12 16 13 16 14 16 15 16 15 15 14 15 13 15"/>
+      <polygon class="cls-1" points="1 13 1 12 1 11 1 10 1 9 1 8 1 7 1 6 1 5 1 4 1 3 1 2 1 1 0 1 0 2 0 3 0 4 0 5 0 6 0 7 0 8 0 9 0 10 0 11 0 12 0 13 0 14 0 15 1 15 1 14 1 13"/>
+      <path class="cls-1" d="M12,2H2v12h12V2h-2ZM12,6h-2v-2h1v1h1v1ZM12,8v1h-1v-2h1v1ZM12,11h-1v1h-1v-2h2v1ZM4,11v-1h2v2h-1v-1h-1ZM4,8v-1h1v2h-1v-1ZM4,5h1v-1h1v2h-2v-1ZM9,5h-2v-1h2v1ZM7,11h2v1h-2v-1Z"/>
+      <polygon class="cls-1" points="15 1 15 2 15 3 15 4 15 5 15 6 15 7 15 8 15 9 15 10 15 11 15 12 15 13 15 14 15 15 16 15 16 14 16 13 16 12 16 11 16 10 16 9 16 8 16 7 16 6 16 5 16 4 16 3 16 2 16 1 15 1"/>
+      <polygon class="cls-1" points="3 1 4 1 5 1 6 1 7 1 8 1 9 1 10 1 11 1 12 1 13 1 14 1 15 1 15 0 14 0 13 0 12 0 11 0 10 0 9 0 8 0 7 0 6 0 5 0 4 0 3 0 2 0 1 0 1 1 2 1 3 1"/>
+    </g>
+  </g>
+</svg>
