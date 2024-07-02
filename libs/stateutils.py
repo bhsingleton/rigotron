@@ -1,5 +1,5 @@
-from . import Status
-from ..interops import controlrig
+from . import Side, Status
+from ..components import basecomponent
 
 import logging
 logging.basicConfig()
@@ -7,93 +7,118 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-def metaToSkeleton(controlRig):
+class StateError(Exception):
+    """
+    Overload of `Exception` for processing state change conflicts.
+    """
+
+    pass
+
+
+def metaToSkeleton(component):
     """
     Changes the supplied rig's state from meta to skeleton.
 
-    :type controlRig: controlrig.ControlRig
+    :type component: basecomponent.BaseComponent
     :rtype: None
     """
 
-    for component in controlRig.walkComponents():
+    for childComponent in component.walkComponents():
 
-        component.prepareToBuildSkeleton()
-        component.buildSkeleton()
-        component.finalizeSkeleton()
+        childComponent.prepareToBuildSkeleton()
+        childComponent.buildSkeleton()
+        childComponent.skeletonCompleted()
 
-        component.prepareToBuildPivots()
-        component.buildPivots()
-        component.finalizePivots()
-
-        component.componentStatus = Status.SKELETON
+        childComponent.prepareToBuildPivots()
+        childComponent.buildPivots()
+        childComponent.pivotsCompleted()
 
 
-def skeletonToRig(controlRig):
+def skeletonToRig(component):
     """
     Changes the supplied rig's state from skeleton to rig.
 
-    :type controlRig: controlrig.ControlRig
+    :type component: basecomponent.BaseComponent
     :rtype: None
     """
 
-    for component in controlRig.walkComponents():
+    for childComponent in component.walkComponents():
 
-        component.cachePivots(delete=True)
-        component.cacheSkeleton(delete=False)
+        childComponent.cachePivots(delete=True)
 
-        component.prepareToBuildRig()
-        component.buildRig()
-        component.rigCompleted()
+        childComponent.prepareToBuildRig()
+        childComponent.buildRig()
+        childComponent.rigCompleted()
 
-    for component in controlRig.walkComponents():
+        childComponent.cacheSkeleton(delete=False)
 
-        component.finalizeRig()
+    for childComponent in component.walkComponents():
+
+        childComponent.finalizeRig()
 
 
-def rigToSkeleton(controlRig):
+def rigToSkeleton(component):
     """
     Changes the supplied rig's state from rig to skeleton.
 
-    :type controlRig: controlrig.ControlRig
+    :type component: basecomponent.BaseComponent
     :rtype: None
     """
 
-    for component in reversed(list(controlRig.walkComponents())):
+    for childComponent in reversed(list(component.walkComponents())):
 
-        component.deleteRig()
-        component.componentStatus = Status.SKELETON
+        childComponent.deleteRig()
+
+        childComponent.prepareToBuildPivots()
+        childComponent.buildPivots()
+        childComponent.pivotsCompleted()
+
+        childComponent.componentStatus = Status.SKELETON
 
 
-def skeletonToMeta(controlRig):
+def skeletonToMeta(component):
     """
     Changes the supplied rig's state from skeleton to meta.
 
-    :type controlRig: controlrig.ControlRig
+    :type component: basecomponent.BaseComponent
     :rtype: None
     """
 
-    for component in reversed(list(controlRig.walkComponents())):
+    for childComponent in reversed(list(component.walkComponents())):
 
-        component.cachePivots(delete=True)
-        component.cacheSkeleton(delete=True)
+        childComponent.cachePivots(delete=True)
+        childComponent.cacheSkeleton(delete=True)
 
-        component.componentStatus = Status.META
+        childComponent.componentStatus = Status.META
 
 
-def changeState(controlRig, state):
+def changeState(component, state):
     """
     Changes the state on the supplied control rig.
 
-    :type controlRig: controlrig.ControlRig
-    :type state: int
+    :type component: basecomponent.BaseComponent
+    :type state: Status
     :rtype: None
     """
 
-    # Evaluate current state
+    # Redundancy check
     #
-    rootComponent = controlRig.scene(controlRig.rootComponent)
-    currentState = rootComponent.componentStatus
+    if not (isinstance(component, basecomponent.BaseComponent) and isinstance(state, Status)):
 
+        raise TypeError('changeState() expects a component and state!')
+
+    # Evaluate state request
+    # We must ensure the parent components are already at the requested state!
+    #
+    currentState = Status(component.componentStatus)
+    isValid = all([Status(ancestor.componentStatus) >= state for ancestor in component.iterComponentAncestors()])
+
+    if not isValid:
+
+        raise StateError('changeState() cannot process state change with current parent component status!')
+
+    # Process state change
+    #
     if currentState == Status.META:
 
         # Evaluate requested state change
@@ -104,12 +129,12 @@ def changeState(controlRig, state):
 
         elif state == Status.SKELETON:
 
-            metaToSkeleton(controlRig)
+            metaToSkeleton(component)
 
         else:
 
-            metaToSkeleton(controlRig)
-            skeletonToRig(controlRig)
+            metaToSkeleton(component)
+            skeletonToRig(component)
 
     elif currentState == Status.SKELETON:
 
@@ -117,7 +142,7 @@ def changeState(controlRig, state):
         #
         if state == Status.META:
 
-            skeletonToMeta(controlRig)
+            skeletonToMeta(component)
 
         elif state == Status.SKELETON:
 
@@ -125,7 +150,7 @@ def changeState(controlRig, state):
 
         else:
 
-            skeletonToRig(controlRig)
+            skeletonToRig(component)
 
     elif currentState == Status.RIG:
 
@@ -133,12 +158,12 @@ def changeState(controlRig, state):
         #
         if state == Status.META:
 
-            metaToSkeleton(controlRig)
-            skeletonToRig(controlRig)
+            metaToSkeleton(component)
+            skeletonToRig(component)
 
         elif state == Status.SKELETON:
 
-            rigToSkeleton(controlRig)
+            rigToSkeleton(component)
 
         else:
 
@@ -146,4 +171,4 @@ def changeState(controlRig, state):
 
     else:
 
-        raise TypeError(f'changeState() expects a valid state ({state} given)!')
+        raise StateError(f'changeState() expects a valid state ({state} given)!')

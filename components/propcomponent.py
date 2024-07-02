@@ -156,7 +156,7 @@ class PropComponent(basecomponent.BaseComponent):
         propOffsetCtrl.addPointHelper('cylinder', size=15.0, colorRGB=colorRGB, lineWidth=2.0)
         propOffsetCtrl.addDivider('Space')
         propOffsetCtrl.prepareChannelBoxForAnimation()
-        self.publishNode(propCtrl, alias='Offset')
+        self.publishNode(propOffsetCtrl, alias='Offset')
 
         propSpaceSwitch = None
 
@@ -220,8 +220,4 @@ class PropComponent(basecomponent.BaseComponent):
 
         propCtrl.userProperties['space'] = propSpace.uuid()
         propCtrl.userProperties['spaceSwitch'] = propSpaceSwitch.uuid()
-
-        # Constrain export joint
-        #
-        propExportJoint.addConstraint('transformConstraint', [propCtrl], maintainOffset=requiresMirroring)
     # endregion

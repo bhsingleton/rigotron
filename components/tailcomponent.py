@@ -3,6 +3,7 @@ from mpy import mpynode, mpyattribute
 from itertools import chain
 from collections import namedtuple
 from typing import List, Union
+from dcc.dataclasses.colour import Colour
 from dcc.maya.libs import transformutils, shapeutils
 from rigomatic.libs import kinematicutils
 from . import basecomponent
@@ -37,17 +38,19 @@ class TailComponent(basecomponent.BaseComponent):
 
     # region Attributes
     numTailLinks = mpyattribute.MPyAttribute('numTailLinks', attributeType='int', min=3, default=5)
+    # endregion
 
+    # region Properties
     @numTailLinks.changed
     def numTailLinks(self, numTailLinks):
         """
-        Changed method that notifies any tail-link size changes.
+        Changed method that notifies any tail link size changes.
 
         :type numTailLinks: int
         :rtype: None
         """
 
-        self.markDirty()
+        self.markSkeletonDirty()
     # endregion
 
     # region Methods
@@ -61,16 +64,16 @@ class TailComponent(basecomponent.BaseComponent):
 
         # Edit skeleton specs
         #
-        tailCount = int(self.numTailLinks) + 1
+        tailCount = int(self.numTailLinks) + 1  # Reserve space for tail tip joint!
         *tailSpecs, tailTipSpec = self.resizeSkeletonSpecs(tailCount, skeletonSpecs)
 
         for (i, tailSpec) in enumerate(tailSpecs, start=1):
 
-            tailSpec['name'] = self.formatName(index=i)
-            tailSpec['driver'] = self.formatName(index=i, type='control')
+            tailSpec.name = self.formatName(index=i)
+            tailSpec.driver = self.formatName(index=i, type='control')
 
-        tailTipSpec['name'] = self.formatName(name=f'{self.componentName}Tip')
-        tailTipSpec['driver'] = self.formatName(name=f'{self.componentName}Tip', type='target')
+        tailTipSpec.name = self.formatName(name=f'{self.componentName}Tip')
+        tailTipSpec.driver = self.formatName(name=f'{self.componentName}Tip', type='target')
 
         # Call parent method
         #
@@ -101,6 +104,7 @@ class TailComponent(basecomponent.BaseComponent):
             tailJoint.side = componentSide
             tailJoint.type = self.Type.OTHER
             tailJoint.otherType = self.componentName
+            tailJoint.displayLocalAxis = True
 
             defaultTailSpacing = (i + 1) * self.__default_tail_spacing__
             defaultTailMatrix = transformutils.createTranslateMatrix([defaultTailSpacing, 0.0, 0.0]) * self.__default_tail_matrix__
@@ -135,19 +139,37 @@ class TailComponent(basecomponent.BaseComponent):
 
         # Get component properties
         #
+        *tailSpecs, tailTipSpec = self.skeletonSpecs()
+        tailExportJoints = [self.scene(tailSpec.uuid) for tailSpec in chain(tailSpecs, [tailTipSpec])]
+        firstTailExportJoint, lastTailExportJoint = tailExportJoints[0], tailExportJoints[-1]
+
         componentSide = self.Side(self.componentSide)
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
         jointsGroup = self.scene(self.jointsGroup)
 
-        *tailSpecs, tailTipSpec = self.skeletonSpecs()
-        tailExportJoints = [self.scene(tailSpec.uuid) for tailSpec in chain(tailSpecs, [tailTipSpec])]
+        colorRGB = Colour(*shapeutils.COLOUR_SIDE_RGB[componentSide])
+        lightColorRGB = colorRGB.lighter()
+        darkColorRGB = colorRGB.darker()
+
+        rigScale = self.findControlRig().getRigScale()
+
+        parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
 
         # Create base control
         #
-        baseCtrl = self.scene.createNode('transform')
-        baseCtrl.copyTransform(tailExportJoints[0])
+        baseSpaceName = self.formatName(subname='Base', type='space')
+        baseSpace = self.scene.createNode('transform', name=baseSpaceName, parent=controlsGroup)
+        baseSpace.copyTransform(firstTailExportJoint)
+        baseSpace.freezeTransform()
+
+        baseSpaceName = self.formatName(subname='Base', type='control')
+        baseCtrl = self.scene.createNode('transform', name=baseSpaceName, parent=baseSpace)
+        baseCtrl.addStar(30.0, numPoints=4, colorRGB=darkColorRGB)
         baseCtrl.prepareChannelBoxForAnimation()
+        self.publishNode(baseCtrl, alias='Base')
+
+        baseSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
 
         # Create FK controls
         #
@@ -175,18 +197,19 @@ class TailComponent(basecomponent.BaseComponent):
 
             tailFKRotCtrlName = self.formatName(subname='FK', index=index, kinemat='Rot', type='control')
             tailFKRotCtrl = self.scene.createNode('transform', name=tailFKRotCtrlName, parent=tailFKOffset)
-            tailFKRotCtrl.addPointHelper('box', size=18.0, side=componentSide)
+            tailFKRotCtrl.addPointHelper('box', size=(15.0 * rigScale), colorRGB=colorRGB)
             tailFKRotCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
             tailFKRotCtrl.prepareChannelBoxForAnimation()
             self.publishNode(tailFKRotCtrl, alias=f'{self.componentName}{index}_FK_Rot')
 
             tailFKTransCtrlName = self.formatName(subname='FK', index=index, kinemat='Trans', type='control')
             tailFKTransCtrl = self.scene.createNode('transform', name=tailFKTransCtrlName, parent=tailFKRotCtrl)
-            tailFKTransCtrl.addPointHelper('axisView', size=12.0, localScale=(0.0, 3.0, 3.0), side=componentSide)
+            tailFKTransCtrl.addPointHelper('axisView', size=(10.0 * rigScale), localScale=(0.0, 3.0, 3.0), colorRGB=lightColorRGB)
             tailFKTransCtrl.prepareChannelBoxForAnimation()
             self.publishNode(tailFKTransCtrl, alias=f'{self.componentName}{index}_FK_Trans')
 
             tailFKRotCtrl.userProperties['space'] = tailFKSpace.uuid()
+            tailFKRotCtrl.userProperties['translate'] = tailFKTransCtrl.uuid()
             tailFKRotCtrl.userProperties['offset'] = tailFKOffset.uuid()
 
             # Add space switching to control
@@ -208,11 +231,11 @@ class TailComponent(basecomponent.BaseComponent):
 
                 previousFKRotCtrl.shape().reorientAndScaleToFit(tailFKRotCtrl)
 
-        tailIKTipTargetName = self.formatName()
-        tailIKTipTarget = self.scene.createNode('transform', name=tailIKTipTargetName, parent=tailFKCtrls[-1].trans)
+        tailIKTipTargetName = self.formatName(name=f'{self.componentName}Tip', type='target')
+        tailIKTipTarget = self.scene.createNode('transform', name=tailIKTipTargetName, parent=tailFKCtrls[-1].rot)
         tailIKTipTarget.displayLocalAxis = True
         tailIKTipTarget.visibility = False
-        tailIKTipTarget.copyTransform(tailExportJoints[-1])
+        tailIKTipTarget.copyTransform(lastTailExportJoint)
         tailIKTipTarget.freezeTransform()
 
         firstFKRotCtrl, firstFKTransCtrl = tailFKCtrls[0]
@@ -230,7 +253,7 @@ class TailComponent(basecomponent.BaseComponent):
 
         tailIKBaseCtrlName = self.formatName(subname='IK', kinemat='Base', type='control')
         tailIKBaseCtrl = self.scene.createNode('transform', name=tailIKBaseCtrlName, parent=tailIKBaseSpace)
-        tailIKBaseCtrl.addPointHelper('sphere', size=24.0, side=componentSide)
+        tailIKBaseCtrl.addPointHelper('sphere', size=(20.0 * rigScale), side=componentSide)
         tailIKBaseCtrl.addAttr(longName='stretch', attributeType='float', min=0.0, max=1.0)
         tailIKBaseCtrl.prepareChannelBoxForAnimation()
         self.publishNode(tailIKBaseCtrl, alias=f'{self.componentName}_IK_Base')
@@ -245,7 +268,7 @@ class TailComponent(basecomponent.BaseComponent):
 
         tailIKTipCtrlName = self.formatName(subname='IK', kinemat='Tip', type='control')
         tailIKTipCtrl = self.scene.createNode('transform', name=tailIKTipCtrlName, parent=tailIKTipSpace)
-        tailIKTipCtrl.addPointHelper('sphere', size=24.0, side=componentSide)
+        tailIKTipCtrl.addPointHelper('sphere', size=(20.0 * rigScale), side=componentSide)
         tailIKTipCtrl.addProxyAttr('stretch', tailIKBaseCtrl['stretch'])
         tailIKTipCtrl.prepareChannelBoxForAnimation()
         self.publishNode(tailIKTipCtrl, alias=f'{self.componentName}_IK_Tip')
@@ -281,23 +304,29 @@ class TailComponent(basecomponent.BaseComponent):
         #
         influences = (tailIKBaseJoint.object(), tailIKTipJoint.object())
 
-        skinCluster = curveShape.addDeformer('skinCluster')
+        skinClusterName = self.formatName(type='skinCluster')
+        skinCluster = curveShape.addDeformer('skinCluster', name=skinClusterName)
         skinCluster.skinningMethod = 0  # Linear
         skinCluster.maxInfluences = 2
         skinCluster.maintainMaxInfluences = True
         skinCluster.addInfluences(*influences)
 
+        tailIKBaseCtrl.connectPlugs(f'parentInverseMatrix[{tailIKBaseJoint.instanceNumber()}]', skinCluster['bindPreMatrix[0]'])
+        tailIKTipCtrl.connectPlugs(f'parentInverseMatrix[{tailIKTipJoint.instanceNumber()}]', skinCluster['bindPreMatrix[1]'])
+
         # Create remap for skin weights
         #
-        skinRemap = self.scene.createNode('remapArray')
-        skinRemap.setAttr('value', [{'value_FloatValue': 1.0, 'value_Interp': 2}, {'value_FloatValue': 0.0,'value_Interp': 2}])
+        weightRemapName = self.formatName(subname='Weights', type='remapArray')
+        weightRemap = self.scene.createNode('remapArray', name=weightRemapName)
+        weightRemap.setAttr('value', [{'value_FloatValue': 1.0, 'value_Interp': 2}, {'value_FloatValue': 0.0,'value_Interp': 2}])
 
         intermediateCurve = skinCluster.intermediateObject()
         curveLength = intermediateCurve.length()
+        controlNodes = [tailFKTransCtrl if (tailFKTransCtrl is not None) else tailFKRotCtrl for (tailFKRotCtrl, tailFKTransCtrl) in tailFKCtrls]
 
         parameters = [None] * numControlPoints
 
-        for i in range(numControlPoints):
+        for (i, controlNode) in enumerate(controlNodes):
 
             # Calculate parameter for point
             #
@@ -308,13 +337,21 @@ class TailComponent(basecomponent.BaseComponent):
             parameter = paramLength / curveLength
             parameters[i] = parameter
 
+            # Add parameter to control node
+            #
+            controlNode.addAttr(longName='parameter', attributeType='float', min=0.0, max=1.0, hidden=True)
+            controlNode.setAttr('parameter', parameter)
+
             # Connect remap parameter
             #
-            skinRemap.setAttr(f'parameter[{i}]', parameter)
-            skinRemap.connectPlugs(f'outValue[{i}].outValueX', skinCluster[f'weightList[{i}].weights[0]'])
+            index = i + 1
 
-            reverseWeight = self.scene.createNode('revDoubleLinear')
-            reverseWeight.connectPlugs(skinRemap[f'outValue[{i}].outValueX'], 'input')
+            weightRemap.setAttr(f'parameter[{i}]', parameter)
+            weightRemap.connectPlugs(f'outValue[{i}].outValueX', skinCluster[f'weightList[{i}].weights[0]'])
+
+            reverseWeightName = self.formatName(subname='Weights', index=index, type='revDoubleLinear')
+            reverseWeight = self.scene.createNode('revDoubleLinear', name=reverseWeightName)
+            reverseWeight.connectPlugs(weightRemap[f'outValue[{i}].outValueX'], 'input')
             reverseWeight.connectPlugs('output', skinCluster[f'weightList[{i}].weights[1]'])
 
         # Override control-points on intermediate-object
@@ -341,11 +378,6 @@ class TailComponent(basecomponent.BaseComponent):
             breakMatrix.connectPlugs('row4Z', intermediateCurve[f'controlPoints[{i}].zValue'], force=True)
 
             matrices[i] = breakMatrix
-
-        # Override pre-bind matrices on skin cluster
-        #
-        tailIKBaseCtrl.connectPlugs(f'parentInverseMatrix[{tailIKBaseJoint.instanceNumber()}]', skinCluster['bindPreMatrix[0]'])
-        tailIKTipCtrl.connectPlugs(f'parentInverseMatrix[{tailIKTipJoint.instanceNumber()}]', skinCluster['bindPreMatrix[1]'])
 
         # Create tail IK joints
         #
@@ -421,7 +453,7 @@ class TailComponent(basecomponent.BaseComponent):
 
         tailRotateBaseCtrlName = self.formatName(subname='Rotate', kinemat='Base', type='control')
         tailRotateBaseCtrl = self.scene.createNode('transform', name=tailRotateBaseCtrlName, parent=tailRotateBaseSpace)
-        tailRotateBaseCtrl.addShape('RoundQuadArrowCurve', size=30.0, side=componentSide)
+        tailRotateBaseCtrl.addShape('RoundQuadArrowCurve', size=(25.0 * rigScale), colorRGB=darkColorRGB)
         tailRotateBaseCtrl.prepareChannelBoxForAnimation()
         tailRotateBaseCtrl.connectPlugs('inverseMatrix', tailRotateBaseCtrl['offsetParentMatrix'])
         self.publishNode(tailRotateBaseCtrl, alias=f'{self.componentName}_Rotate_Base')
@@ -434,7 +466,7 @@ class TailComponent(basecomponent.BaseComponent):
 
         tailRotateTipCtrlName = self.formatName(subname='Rotate', kinemat='Tip', type='control')
         tailRotateTipCtrl = self.scene.createNode('transform', name=tailRotateTipCtrlName, parent=tailRotateTipSpace)
-        tailRotateTipCtrl.addShape('RoundQuadArrowCurve', size=30.0, localRotate=(0.0, 0.0, 180.0), side=componentSide)
+        tailRotateTipCtrl.addShape('RoundQuadArrowCurve', size=(25.0 * rigScale), localRotate=(0.0, 0.0, 180.0), colorRGB=darkColorRGB)
         tailRotateTipCtrl.prepareChannelBoxForAnimation()
         tailRotateTipCtrl.connectPlugs('inverseMatrix', tailRotateTipCtrl['offsetParentMatrix'])
         self.publishNode(tailRotateTipCtrl, alias=f'{self.componentName}_Rotate_Tip')
@@ -488,9 +520,7 @@ class TailComponent(basecomponent.BaseComponent):
 
             tailCtrlName = self.formatName(index=index, type='control')
             tailCtrl = self.scene.createNode('transform', name=tailCtrlName, parent=tailSpace)
-            tailCtrl.addPointHelper('tearDrop', size=24.0, localRotate=(-90.0, 0.0, 0.0), side=componentSide)
+            tailCtrl.addPointHelper('tearDrop', size=(20.0 * rigScale), localRotate=(-90.0, 0.0, 0.0), colorRGB=darkColorRGB)
             tailCtrl.prepareChannelBoxForAnimation()
             self.publishNode(tailCtrl, alias=f'{self.componentName}{index}')
-
-            tailExportJoints[i].addConstraint('transformConstraint', [tailCtrl])
     # endregion

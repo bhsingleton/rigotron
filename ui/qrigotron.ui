@@ -46,7 +46,7 @@
         <item>
          <widget class="QGroupBox" name="outlinerHeader">
           <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
             <horstretch>0</horstretch>
             <verstretch>0</verstretch>
            </sizepolicy>
@@ -63,46 +63,40 @@
          </widget>
         </item>
         <item>
-         <widget class="QWidget" name="nameWidget" native="true">
-          <layout class="QHBoxLayout" name="horizontalLayout">
-           <property name="leftMargin">
-            <number>0</number>
-           </property>
-           <property name="topMargin">
-            <number>0</number>
-           </property>
-           <property name="rightMargin">
-            <number>0</number>
-           </property>
-           <property name="bottomMargin">
-            <number>0</number>
-           </property>
-           <item>
-            <widget class="QLineEdit" name="nameLineEdit">
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>24</height>
-              </size>
-             </property>
-             <property name="maximumSize">
-              <size>
-               <width>16777215</width>
-               <height>24</height>
-              </size>
-             </property>
-             <property name="placeholderText">
-              <string>Enter rig name...</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
+         <widget class="QLineEdit" name="nameLineEdit">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+          <property name="placeholderText">
+           <string/>
+          </property>
          </widget>
         </item>
         <item>
          <widget class="QTreeView" name="outlinerTreeView">
           <property name="styleSheet">
            <string notr="true">QTreeView::item { height: 24px; }</string>
+          </property>
+          <property name="editTriggers">
+           <set>QAbstractItemView::NoEditTriggers</set>
           </property>
           <property name="dragEnabled">
            <bool>true</bool>
@@ -115,6 +109,37 @@
           </property>
           <property name="alternatingRowColors">
            <bool>true</bool>
+          </property>
+          <property name="uniformRowHeights">
+           <bool>true</bool>
+          </property>
+          <attribute name="headerMinimumSectionSize">
+           <number>50</number>
+          </attribute>
+          <attribute name="headerDefaultSectionSize">
+           <number>200</number>
+          </attribute>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="attachmentComboBox">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>24</height>
+           </size>
           </property>
          </widget>
         </item>
@@ -137,7 +162,7 @@
         <item>
          <widget class="QGroupBox" name="propertyHeader">
           <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
             <horstretch>0</horstretch>
             <verstretch>0</verstretch>
            </sizepolicy>
@@ -183,6 +208,15 @@
           <property name="alternatingRowColors">
            <bool>true</bool>
           </property>
+          <property name="uniformRowHeights">
+           <bool>true</bool>
+          </property>
+          <attribute name="headerMinimumSectionSize">
+           <number>50</number>
+          </attribute>
+          <attribute name="headerDefaultSectionSize">
+           <number>200</number>
+          </attribute>
          </widget>
         </item>
        </layout>
@@ -225,9 +259,9 @@
         </widget>
        </item>
        <item row="0" column="2">
-        <widget class="QPushButton" name="freezePushButton">
+        <widget class="QPushButton" name="sanitizePushButton">
          <property name="text">
-          <string>Freeze</string>
+          <string>Sanitize</string>
          </property>
         </widget>
        </item>
@@ -380,7 +414,7 @@
   </widget>
   <widget class="QToolBar" name="mainToolbar">
    <property name="sizePolicy">
-    <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+    <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
      <horstretch>0</horstretch>
      <verstretch>0</verstretch>
     </sizepolicy>
@@ -397,7 +431,7 @@
     <bool>false</bool>
    </property>
    <property name="orientation">
-    <enum>Qt::Vertical</enum>
+    <enum>Qt::Horizontal</enum>
    </property>
    <property name="iconSize">
     <size>
@@ -412,48 +446,27 @@
     <bool>true</bool>
    </property>
    <attribute name="toolBarArea">
-    <enum>LeftToolBarArea</enum>
+    <enum>TopToolBarArea</enum>
    </attribute>
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
+   <addaction name="addRootComponentAction"/>
    <addaction name="separator"/>
    <addaction name="addSpineComponentAction"/>
+   <addaction name="addTailComponentAction"/>
+   <addaction name="separator"/>
    <addaction name="addLegComponentAction"/>
    <addaction name="addFootComponentAction"/>
+   <addaction name="separator"/>
    <addaction name="addClavicleComponentAction"/>
    <addaction name="addArmComponentAction"/>
    <addaction name="addHandComponentAction"/>
-   <addaction name="addHeadComponentAction"/>
-   <addaction name="addTailComponentAction"/>
    <addaction name="separator"/>
-  </widget>
-  <widget class="QMenuBar" name="mainMenuBar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>690</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <widget class="QMenu" name="menuFile">
-    <property name="title">
-     <string>File</string>
-    </property>
-    <addaction name="newAction"/>
-    <addaction name="separator"/>
-    <addaction name="importAction"/>
-    <addaction name="exportAction"/>
-   </widget>
-   <widget class="QMenu" name="menuHelp">
-    <property name="title">
-     <string>Help</string>
-    </property>
-    <addaction name="usingRigotronAction"/>
-   </widget>
-   <addaction name="menuFile"/>
-   <addaction name="menuHelp"/>
+   <addaction name="addHeadComponentAction"/>
+   <addaction name="separator"/>
+   <addaction name="addPropComponentAction"/>
+   <addaction name="addStowedComponentAction"/>
   </widget>
   <action name="addRootComponentAction">
    <property name="icon">
@@ -631,9 +644,41 @@
     <string>ClavicleComponent</string>
    </property>
   </action>
+  <action name="addPropComponentAction">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/rigotron/icons/PropComponent.svg</normaloff>:/rigotron/icons/PropComponent.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Prop</string>
+   </property>
+   <property name="toolTip">
+    <string>Adds a prop to the selected component.</string>
+   </property>
+   <property name="statusTip">
+    <string/>
+   </property>
+   <property name="whatsThis">
+    <string>PropComponent</string>
+   </property>
+  </action>
+  <action name="addStowedComponentAction">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/rigotron/icons/StowedComponent.svg</normaloff>:/rigotron/icons/StowedComponent.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Stow</string>
+   </property>
+   <property name="toolTip">
+    <string>Adds a stowed prop to the selected component.</string>
+   </property>
+   <property name="whatsThis">
+    <string>StowedComponent</string>
+   </property>
+  </action>
  </widget>
  <resources>
-  <include location="resources.qrc"/>
   <include location="resources.qrc"/>
  </resources>
  <connections/>

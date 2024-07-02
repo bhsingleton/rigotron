@@ -1,6 +1,6 @@
-from dcc.decorators.classproperty import classproperty
 from mpy import mpynodeextension
 from mpy.abstract import mabcmeta
+from dcc.decorators.classproperty import classproperty
 
 import logging
 logging.basicConfig()
@@ -8,34 +8,34 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-class AbstractInterop(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MABCMeta):
+class AbstractInterface(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MABCMeta):
     """
-    Overload of `MPyNodeExtension` that outlines rig interoperability behaviour.
+    Overload of `MPyNodeExtension` that outlines the rig interface behaviour.
     """
 
     # region Dunderscores
-    __interop_factory__ = None
+    __interface_factory__ = None
     __component_factory__ = None
     # endregion
 
     # region Properties
     @classproperty
-    def interopManager(cls):
+    def rigManager(cls):
         """
         Returns the rig interop manager.
         It's a bit hacky but this way we can bypass cyclical import errors.
 
-        :rtype: rigotron.libs.interopfactory.InteropFactory
+        :rtype: rigotron.libs.interfacefactory.InterfaceFactory
         """
 
         # Check if factory exists
         #
-        if cls.__interop_factory__ is None:
+        if cls.__interface_factory__ is None:
 
-            from ..libs import interopfactory
-            cls.__interop_factory__ = interopfactory.InteropFactory.getInstance(asWeakReference=True)
+            from ..libs import interfacefactory
+            cls.__interface_factory__ = interfacefactory.InterfaceFactory.getInstance(asWeakReference=True)
 
-        return cls.__interop_factory__()
+        return cls.__interface_factory__()
 
     @classproperty
     def componentManager(cls):
@@ -43,7 +43,7 @@ class AbstractInterop(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MABC
         Returns the rig interop manager.
         It's a bit hacky but this way we can bypass cyclical import errors.
 
-        :rtype: rigotron.libs.interopfactory.InteropFactory
+        :rtype: rigotron.libs.componentfactory.ComponentFactory
         """
 
         # Check if factory exists

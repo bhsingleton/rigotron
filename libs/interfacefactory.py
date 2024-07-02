@@ -1,8 +1,8 @@
 from maya.api import OpenMaya as om
 from mpy import mpyscene
 from dcc.abstract import proxyfactory
-from .. import interops
-from ..abstract import abstractinterop
+from .. import interfaces
+from ..abstract import abstractinterface
 
 import logging
 logging.basicConfig()
@@ -10,9 +10,9 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-class InteropFactory(proxyfactory.ProxyFactory):
+class InterfaceFactory(proxyfactory.ProxyFactory):
     """
-    Overload of `ProxyFactory` that interfaces with rig interops.
+    Overload of `ProxyFactory` that interfaces with rig interfaces.
     I've purposely chosen to separate this class from the `ComponentFactory` for the sake of abstraction.
     """
 
@@ -28,7 +28,7 @@ class InteropFactory(proxyfactory.ProxyFactory):
 
         # Call parent method
         #
-        super(InteropFactory, self).__init__(*args, **kwargs)
+        super(InterfaceFactory, self).__init__(*args, **kwargs)
 
         # Declare private variables
         #
@@ -39,10 +39,10 @@ class InteropFactory(proxyfactory.ProxyFactory):
         Returns a new component based on the supplied type name.
 
         :type typeName: str
-        :rtype: abstractinterop.AbstractInterop
+        :rtype: abstractinterface.AbstractInterface
         """
 
-        return self.createInterop(typeName, **kwargs)
+        return self.createInterface(typeName, **kwargs)
     # endregion
 
     # region Properties
@@ -65,7 +65,7 @@ class InteropFactory(proxyfactory.ProxyFactory):
         :rtype: List[module]
         """
 
-        return [interops]
+        return [interfaces]
 
     def classFilter(self):
         """
@@ -74,14 +74,14 @@ class InteropFactory(proxyfactory.ProxyFactory):
         :rtype: Callable
         """
 
-        return abstractinterop.AbstractInterop
+        return abstractinterface.AbstractInterface
 
-    def createInterop(self, typeName, **kwargs):
+    def createInterface(self, typeName, **kwargs):
         """
         Returns a new interop based on the supplied type name.
 
         :type typeName: str
-        :rtype: abstractinterop.AbstractInterop
+        :rtype: abstractinterface.AbstractInterface
         """
 
         # Check if type is valid
@@ -94,15 +94,15 @@ class InteropFactory(proxyfactory.ProxyFactory):
 
         else:
 
-            log.warning(f'createInterop() expects a valid type name ({typeName} given)!')
+            log.warning(f'createInterface() expects a valid type name ({typeName} given)!')
             return None
 
-    def iterInterops(self, typeName='AbstractInterop'):
+    def iterInterfaces(self, typeName='AbstractInterface'):
         """
         Returns a generator that yields interops derived from the specified type name.
 
         :type typeName: str
-        :rtype: Iterator[abstractinterop.AbstractInterop]
+        :rtype: Iterator[abstractinterface.AbstractInterface]
         """
 
         return self.scene.iterExtensionsByTypeName(typeName)
@@ -114,7 +114,7 @@ class InteropFactory(proxyfactory.ProxyFactory):
         :rtype: Iterator[controlrig.ControlRig]
         """
 
-        return self.iterInterops(typeName='ControlRig')
+        return self.iterInterfaces(typeName='ControlRig')
 
     def controlRigs(self):
         """
@@ -133,5 +133,5 @@ class InteropFactory(proxyfactory.ProxyFactory):
         :rtype: controlrig.ControlRig
         """
 
-        return self.createInterop('ControlRig', name=name)
+        return self.createInterface('ControlRig', name=name)
     # endregion

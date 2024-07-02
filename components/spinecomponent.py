@@ -23,7 +23,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
     # region Attributes
     spineEnabled = mpyattribute.MPyAttribute('spineEnabled', attributeType='bool', default=True)
-    numSpineLinks = mpyattribute.MPyAttribute('numSpineLinks', attributeType='int', min=2, default=2)
+    numSpineLinks = mpyattribute.MPyAttribute('numSpineLinks', attributeType='int', min=2, default=3)
     # endregion
 
     # region Dunderscores
@@ -83,7 +83,8 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Edit skeleton specs
         #
-        skeletonCount = 2 + self.numSpineLinks
+        numSpineLinks = int(self.numSpineLinks)
+        skeletonCount = 2 + numSpineLinks
         pelvisSpec, nullSpec, *spineSpecs = self.resizeSkeletonSpecs(skeletonCount, skeletonSpecs)
 
         pelvisSpec.name = self.formatName(name='Pelvis')
@@ -93,11 +94,22 @@ class SpineComponent(basecomponent.BaseComponent):
         nullSpec.name = self.formatName(name='Null', subname='Spine')
         nullSpec.driver = self.formatName(name='UpperBody', subname='Align', type='control')
 
+        spineEnabled = bool(self.spineEnabled)
+
         for (i, spineSpec) in enumerate(spineSpecs, start=1):
 
-            spineSpec.enabled = self.spineEnabled
+            spineSpec.enabled = spineEnabled
             spineSpec.name = self.formatName(name='Spine', index=i)
-            spineSpec.driver = self.formatName(name='Spine', index=i, type='control')
+
+            isLastSpineSpec = i == numSpineLinks
+
+            if isLastSpineSpec:
+
+                spineSpec.driver = self.formatName(name='Chest', type='control')
+
+            else:
+
+                spineSpec.driver = self.formatName(name='Spine', index=i, type='control')
 
         # Call parent method
         #
@@ -121,51 +133,58 @@ class SpineComponent(basecomponent.BaseComponent):
         pelvisJoint.side = componentSide
         pelvisJoint.type = self.Type.HIP
         pelvisJoint.displayLocalAxis = True
-        pelvisJoint.segmentScaleCompensate = False
 
         pelvisMatrix = pelvisSpec.getMatrix(default=self.__default_pelvis_matrix__)
         pelvisJoint.setWorldMatrix(pelvisMatrix)
 
         pelvisSpec.uuid = pelvisJoint.uuid()
 
-        # Create null-spine joint
+        # Check if spine was enabled
         #
-        nullJoint = self.scene.createNode('joint', name=nullSpec.name, parent=pelvisJoint)
-        nullJoint.side = componentSide
-        nullJoint.drawStyle = self.Style.BOX
-        nullJoint.type = self.Type.SPINE
-        nullJoint.displayLocalAxis = True
-        nullJoint.segmentScaleCompensate = False
+        spineEnabled = bool(self.spineEnabled)
 
-        defaultNullMatrix = self.__default_pelvis_matrix__ * transformutils.createTranslateMatrix([0.0, 0.0, self.__default_spine_spacing__])
-        nullMatrix = nullSpec.getMatrix(default=defaultNullMatrix)
-        nullJoint.setWorldMatrix(nullMatrix)
+        if spineEnabled:
 
-        nullSpec.uuid = nullJoint.uuid()
+            # Create null-spine joint
+            #
+            nullJoint = self.scene.createNode('joint', name=nullSpec.name, parent=pelvisJoint)
+            nullJoint.side = componentSide
+            nullJoint.drawStyle = self.Style.BOX
+            nullJoint.type = self.Type.SPINE
+            nullJoint.displayLocalAxis = True
 
-        # Create spine joints
-        #
-        spineCount = len(spineSpecs)
-        spineJoints = [None] * spineCount
+            defaultNullMatrix = self.__default_pelvis_matrix__ * transformutils.createTranslateMatrix([0.0, 0.0, self.__default_spine_spacing__])
+            nullMatrix = nullSpec.getMatrix(default=defaultNullMatrix)
+            nullJoint.setWorldMatrix(nullMatrix)
 
-        for (i, spineSpec) in enumerate(spineSpecs):
+            nullSpec.uuid = nullJoint.uuid()
 
-            parent = nullJoint if (i == 0) else spineJoints[i - 1]
+            # Create spine joints
+            #
+            spineCount = len(spineSpecs)
+            spineJoints = [None] * spineCount
 
-            spineJoint = self.scene.createNode('joint', name=spineSpec.name, parent=parent)
-            spineJoint.side = componentSide
-            spineJoint.type = self.Type.SPINE
-            spineJoint.displayLocalAxis = True
+            for (i, spineSpec) in enumerate(spineSpecs):
 
-            defaultSpineMatrix = self.__default_pelvis_matrix__ * transformutils.createTranslateMatrix([0.0, 0.0, ((i + 1) * self.__default_spine_spacing__)])
-            spineMatrix = spineSpec.getMatrix(default=defaultSpineMatrix)
-            spineJoint.setWorldMatrix(spineMatrix)
-            spineJoint.segmentScaleCompensate = False
+                parent = nullJoint if (i == 0) else spineJoints[i - 1]
 
-            spineSpec.uuid = spineJoint.uuid()
-            spineJoints[i] = spineJoint
+                spineJoint = self.scene.createNode('joint', name=spineSpec.name, parent=parent)
+                spineJoint.side = componentSide
+                spineJoint.type = self.Type.SPINE
+                spineJoint.displayLocalAxis = True
 
-        return (pelvisJoint, nullJoint, *spineJoints)
+                defaultSpineMatrix = self.__default_pelvis_matrix__ * transformutils.createTranslateMatrix([0.0, 0.0, ((i + 1) * self.__default_spine_spacing__)])
+                spineMatrix = spineSpec.getMatrix(default=defaultSpineMatrix)
+                spineJoint.setWorldMatrix(spineMatrix)
+
+                spineSpec.uuid = spineJoint.uuid()
+                spineJoints[i] = spineJoint
+
+            return (pelvisJoint, nullJoint, *spineJoints)
+
+        else:
+
+            return (pelvisJoint,)
 
     def buildRig(self):
         """
@@ -190,6 +209,10 @@ class SpineComponent(basecomponent.BaseComponent):
         lightColorRGB = colorRGB.lighter()
         darkColorRGB = colorRGB.darker()
 
+        rigScale = self.findControlRig().getRigScale()
+
+        parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
+
         # Find world-space control
         #
         rootComponent = self.findRootComponent()
@@ -207,20 +230,17 @@ class SpineComponent(basecomponent.BaseComponent):
 
         cogCtrlName = self.formatName(name='COG', type='control')
         cogCtrl = self.scene.createNode('transform', name=cogCtrlName, parent=cogSpace)
-        cogCtrl.addPointHelper('square', size=50.0, localRotate=(45.0, 90.0, 0.0), lineWidth=4.0, colorRGB=colorRGB)
-        cogCtrl.addDivider('Display')
-        cogCtrl.addAttr(longName='displayPivot', attributeType='bool', channelBox=True)
-        cogCtrl.addAttr(longName='displayAlign', attributeType='bool', channelBox=True)
+        cogCtrl.addPointHelper('square', size=(50.0 * rigScale), localRotate=(45.0, 90.0, 0.0), lineWidth=4.0, colorRGB=colorRGB)
         cogCtrl.prepareChannelBoxForAnimation()
         self.publishNode(cogCtrl, alias='COG')
 
         cogPivotCtrlName = self.formatName(name='COG', subname='Pivot', type='control')
         cogPivotCtrl = self.scene.createNode('transform', name=cogPivotCtrlName, parent=cogSpace)
-        cogPivotCtrl.addPointHelper('axisTripod', 'cross', size=10.0, colorRGB=darkColorRGB)
+        cogPivotCtrl.addPointHelper('axisTripod', 'cross', size=(10.0 * rigScale), colorRGB=darkColorRGB)
         cogPivotCtrl.connectPlugs('translate', cogCtrl['rotatePivot'])
         cogPivotCtrl.connectPlugs('translate', cogCtrl['scalePivot'])
-        cogPivotCtrl.connectPlugs(cogCtrl['displayPivot'], 'visibility')
-        cogPivotCtrl.hideAttr('rotate', 'scale', 'visibility', lock=True)
+        cogPivotCtrl.hideAttr('rotate', 'scale', lock=True)
+        cogPivotCtrl.prepareChannelBoxForAnimation()
 
         cogPivotMatrixName = self.formatName(name='COG', subname='Pivot', type='composeMatrix')
         cogPivotMatrix = self.scene.createNode('composeMatrix', name=cogPivotMatrixName)
@@ -244,15 +264,18 @@ class SpineComponent(basecomponent.BaseComponent):
             waistCenter = sum([self.scene(legComponent.skeletonSpecs()[0].uuid).translation(space=om.MSpace.kWorld) * weight for legComponent in legComponents], start=om.MVector.kZeroVector)
             waistMatrix = self.__default_spine_matrix__ * transformutils.createTranslateMatrix([0.0, waistCenter.y, waistCenter.z])
 
+        preEulerRotation = transformutils.decomposeTransformMatrix(waistMatrix)[1]
+
         waistSpaceName = self.formatName(name='Waist', type='space')
         waistSpace = self.scene.createNode('transform', name=waistSpaceName, parent=controlsGroup)
-        waistSpace.setWorldMatrix(waistMatrix)
+        waistSpace.setWorldMatrix(waistMatrix, skipRotate=True)
         waistSpace.freezeTransform()
         waistSpace.addConstraint('transformConstraint', [cogCtrl], maintainOffset=True)
 
         waistCtrlName = self.formatName(name='Waist', type='control')
-        waistCtrl = self.scene.createNode('transform', name=waistCtrlName, parent=waistSpace)
-        waistCtrl.addShape('CradleCurve', size=25.0, localScale=(1.0, 1.0, 1.25), lineWidth=4.0, colorRGB=colorRGB)
+        waistCtrl = self.scene.createNode('freeform', name=waistCtrlName, parent=waistSpace)
+        waistCtrl.addShape('CradleCurve', size=(40.0 * rigScale), localScale=(1.0, 1.0, 1.25), lineWidth=4.0, colorRGB=colorRGB)
+        waistCtrl.setPreEulerRotation(preEulerRotation)
         waistCtrl.prepareChannelBoxForAnimation()
         self.publishNode(waistCtrl, alias='Waist')
 
@@ -271,11 +294,11 @@ class SpineComponent(basecomponent.BaseComponent):
 
         hipsCtrlName = self.formatName(name='Hips', type='control')
         hipsCtrl = self.scene.createNode('transform', name=hipsCtrlName, parent=hipsSpace)
-        hipsCtrl.addShape('HandleBarCurve', size=30.0, localPosition=localPosition, localRotate=localRotate, localScale=(0.25, 0.25, 1.25), colorRGB=lightColorRGB)
-        hipsCtrl.addDivider('Custom')
+        hipsCtrl.addShape('HandleBarCurve', size=(45.0 * rigScale), localPosition=localPosition, localRotate=localRotate, localScale=(0.25, 0.25, 1.25), colorRGB=lightColorRGB)
+        hipsCtrl.addDivider('Settings')
         hipsCtrl.addAttr(longName='stretch', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
         hipsCtrl.addAttr(longName='spineInfluence', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
-        hipsCtrl.addDivider('Space')
+        hipsCtrl.addDivider('Spaces')
         hipsCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
         hipsCtrl.prepareChannelBoxForAnimation()
         self.publishNode(hipsCtrl, alias='Hips')
@@ -297,13 +320,11 @@ class SpineComponent(basecomponent.BaseComponent):
 
         pelvisCtrlName = self.formatName(name='Pelvis', type='control')
         pelvisCtrl = self.scene.createNode('transform', name=pelvisCtrlName, parent=pelvisSpace)
-        pelvisCtrl.addPointHelper('diamond', size=12.0, colorRGB=darkColorRGB)
+        pelvisCtrl.addPointHelper('diamond', size=(12.0 * rigScale), colorRGB=darkColorRGB)
         pelvisCtrl.prepareChannelBoxForAnimation()
         self.publishNode(pelvisCtrl, alias=f'Pelvis')
 
         pelvisCtrl.userProperties['space'] = pelvisSpace.uuid()
-
-        pelvisExportJoint.addConstraint('transformConstraint', [pelvisCtrl])
 
         # Create spine FK controls
         #
@@ -333,8 +354,8 @@ class SpineComponent(basecomponent.BaseComponent):
 
                 spineFKRotCtrlName = self.formatName(name='Spine', subname='FK', index=index, kinemat='Rot', type='control')
                 spineFKRotCtrl = self.scene.createNode('transform', name=spineFKRotCtrlName, parent=spineFKRotSpace)
-                spineFKRotCtrl.addPointHelper('disc', size=24.0, localScale=(1.0, 1.0, 1.5), colorRGB=lightColorRGB, lineWidth=2.0)
-                spineFKRotCtrl.addDivider('Space')
+                spineFKRotCtrl.addPointHelper('disc', size=(24.0 * rigScale), localScale=(1.0, 1.0, 1.5), colorRGB=lightColorRGB, lineWidth=2.0)
+                spineFKRotCtrl.addDivider('Spaces')
                 spineFKRotCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
                 spineFKRotCtrl.prepareChannelBoxForAnimation()
                 self.publishNode(spineFKRotCtrl, alias=f'Spine{index}_FK_Rot')
@@ -359,7 +380,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
                     spineFKTransCtrlName = self.formatName(name='Spine', subname='FK', index=index, kinemat='Trans', type='control')
                     spineFKTransCtrl = self.scene.createNode('transform', name=spineFKTransCtrlName, parent=spineFKRotCtrl)
-                    spineFKTransCtrl.addPointHelper('axisView', size=12.0, localScale=(0.0, 3.0, 0.0), colorRGB=lightColorRGB)
+                    spineFKTransCtrl.addPointHelper('axisView', size=(12.0 * rigScale), localScale=(0.0, 3.0, 0.0), colorRGB=lightColorRGB)
                     spineFKTransCtrl.prepareChannelBoxForAnimation()
                     self.publishNode(spineFKTransCtrl, alias=f'Spine{index}_FK_Trans')
 
@@ -383,8 +404,8 @@ class SpineComponent(basecomponent.BaseComponent):
 
                 chestFKCtrlName = self.formatName(name='Chest', kinemat='FK', type='control')
                 chestFKCtrl = self.scene.createNode('transform', name=chestFKCtrlName, parent=chestFKSpace)
-                chestFKCtrl.addPointHelper('disc', size=24.0, localScale=(1.0, 1.0, 1.5), colorRGB=lightColorRGB, lineWidth=2.0)
-                chestFKCtrl.addDivider('Space')
+                chestFKCtrl.addPointHelper('disc', size=(24.0 * rigScale), localScale=(1.0, 1.0, 1.5), colorRGB=lightColorRGB, lineWidth=2.0)
+                chestFKCtrl.addDivider('Spaces')
                 chestFKCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
                 chestFKCtrl.prepareChannelBoxForAnimation()
                 chestFKCtrl.userProperties['space'] = chestFKSpace.uuid()
@@ -404,10 +425,17 @@ class SpineComponent(basecomponent.BaseComponent):
         # Create chest IK control
         #
         clavicleComponents = self.findComponentDescendants('ClavicleComponent')
-        clavicleJoints = [self.scene(clavicleComponent.skeletonSpecs()[0].uuid) for clavicleComponent in clavicleComponents]
-        clavicleWeight = 1.0 / len(clavicleJoints)
-        clavicleCenter = sum([clavicleJoint.translation(space=om.MSpace.kWorld) * clavicleWeight for clavicleJoint in clavicleJoints], start=om.MVector.kZeroVector)
-        chestShapeOffset = om.MPoint(clavicleCenter) * lastSpineExportJoint.worldInverseMatrix()
+        hasClavicles = len(clavicleComponents) > 0
+
+        chestShapeOffset = om.MPoint.kOrigin
+
+        if hasClavicles:
+
+            clavicleJoints = [self.scene(clavicleComponent.skeletonSpecs()[0].uuid) for clavicleComponent in clavicleComponents]
+            clavicleWeight = 1.0 / len(clavicleJoints)
+            clavicleCenter = sum([clavicleJoint.translation(space=om.MSpace.kWorld) * clavicleWeight for clavicleJoint in clavicleJoints], start=om.MVector.kZeroVector)
+
+            chestShapeOffset = om.MPoint(clavicleCenter) * lastSpineExportJoint.worldInverseMatrix()
 
         chestIKSpaceName = self.formatName(name='Chest', subname='IK', type='space')
         chestIKSpace = self.scene.createNode('transform', name=chestIKSpaceName, parent=controlsGroup)
@@ -417,8 +445,8 @@ class SpineComponent(basecomponent.BaseComponent):
 
         chestIKCtrlName = self.formatName(name='Chest', subname='IK', type='control')
         chestIKCtrl = self.scene.createNode('transform', name=chestIKCtrlName, parent=chestIKSpace)
-        chestIKCtrl.addShape('CradleCurve', size=25.0, localPosition=(chestShapeOffset.x, 0.0, 0.0), colorRGB=colorRGB, lineWidth=4.0)
-        chestIKCtrl.addDivider('Custom')
+        chestIKCtrl.addShape('CradleCurve', size=(25.0 * rigScale), localPosition=(chestShapeOffset.x, 0.0, 0.0), colorRGB=colorRGB, lineWidth=4.0)
+        chestIKCtrl.addDivider('Settings')
         chestIKCtrl.addProxyAttr('stretch', hipsCtrl['stretch'])
         chestIKCtrl.prepareChannelBoxForAnimation()
         self.publishNode(chestIKCtrl, alias='Chest_IK')
@@ -444,7 +472,7 @@ class SpineComponent(basecomponent.BaseComponent):
         spineIKBaseJoint.addConstraint('pointConstraint', [spineIKBaseTarget])
         spineIKBaseJoint.addConstraint('scaleConstraint', [cogCtrl])
 
-        constraint = spineIKBaseJoint.addConstraint('orientConstraint', [hipsCtrl, firstSpineFKCtrl])  # TODO: Fix offset between spine and hips!
+        constraint = spineIKBaseJoint.addConstraint('parentConstraint', [hipsCtrl, firstSpineFKCtrl], skipTranslate=True)
         constraint.interpType = 2  # Shortest
 
         targets = constraint.targets()
@@ -493,7 +521,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Create remap for skin weights
         #
-        weightRemapName = self.formatName(subname='Weight', type='remapArray')
+        weightRemapName = self.formatName(subname='Weights', type='remapArray')
         weightRemap = self.scene.createNode('remapArray', name=weightRemapName)
         weightRemap.clamp = True
         weightRemap.setAttr('value', [{'value_FloatValue': 0.0, 'value_Interp': 2}, {'value_FloatValue': 1.0, 'value_Interp': 2}])
@@ -527,7 +555,7 @@ class SpineComponent(basecomponent.BaseComponent):
             weightRemap.connectPlugs(controlNode['parameter'], f'parameter[{i}]')
             weightRemap.connectPlugs(f'outValue[{i}].outValueX', skinCluster[f'weightList[{i}].weights[1]'])
 
-            reverseWeightName = self.formatName(subname='Skin', index=index, type='revDoubleLinear')
+            reverseWeightName = self.formatName(subname='Weights', index=index, type='revDoubleLinear')
             reverseWeight = self.scene.createNode('revDoubleLinear', name=reverseWeightName)
             reverseWeight.connectPlugs(weightRemap[f'outValue[{i}].outValueX'], 'input')
             reverseWeight.connectPlugs('output', skinCluster[f'weightList[{i}].weights[0]'])
@@ -680,15 +708,13 @@ class SpineComponent(basecomponent.BaseComponent):
 
                 chestCtrlName = self.formatName(name='Chest', type='control')
                 chestCtrl = self.scene.createNode('transform', name=chestCtrlName, parent=chestSpace)
-                chestCtrl.addPointHelper('diamond', size=12.0, colorRGB=darkColorRGB)
+                chestCtrl.addPointHelper('sphere', size=(6.0 * rigScale), colorRGB=darkColorRGB)
                 chestCtrl.prepareChannelBoxForAnimation()
                 self.publishNode(chestCtrl, alias=f'Chest')
                 spineCtrls[i] = chestCtrl
 
                 scaleConstraint = chestSpace.addConstraint('scaleConstraint', [spineFKCtrls[i].rot])
                 scaleConstraint.connectPlugs(scaleRemap[f'outValue[{i}]'], 'offset')
-
-                spineExportJoint.addConstraint('transformConstraint', [chestCtrl])
 
             else:
 
@@ -702,15 +728,13 @@ class SpineComponent(basecomponent.BaseComponent):
 
                 spineCtrlName = self.formatName(index=index, type='control')
                 spineCtrl = self.scene.createNode('transform', name=spineCtrlName, parent=spineSpace)
-                spineCtrl.addPointHelper('sphere', size=6.0, colorRGB=darkColorRGB)
+                spineCtrl.addPointHelper('sphere', size=(6.0 * rigScale), colorRGB=darkColorRGB)
                 spineCtrl.prepareChannelBoxForAnimation()
                 self.publishNode(spineCtrl, alias=f'Spine{index}')
                 spineCtrls[i] = spineCtrl
 
                 scaleConstraint = spineSpace.addConstraint('scaleConstraint', [spineFKCtrls[i].rot])
                 scaleConstraint.connectPlugs(scaleRemap[f'outValue[{i}]'], 'offset')
-
-                spineExportJoint.addConstraint('transformConstraint', [spineCtrl])
 
         # Create upper-body align control
         #
@@ -723,10 +747,9 @@ class SpineComponent(basecomponent.BaseComponent):
 
         upperBodyCtrlName = self.formatName(name='UpperBody', subname='Align', type='control')
         upperBodyCtrl = self.scene.createNode('transform', name=upperBodyCtrlName, parent=upperBodySpace)
-        upperBodyCtrl.addShape('DoubleArrowCurve', size=50.0, localRotate=(0.0, 90.0, 0.0), colorRGB=darkColorRGB)
-        upperBodyCtrl.addDivider('Space')
+        upperBodyCtrl.addShape('DoubleArrowCurve', size=(50.0 * rigScale), localRotate=(0.0, 90.0, 0.0), colorRGB=darkColorRGB)
+        upperBodyCtrl.addDivider('Spaces')
         upperBodyCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
-        upperBodyCtrl.connectPlugs(cogCtrl['displayAlign'], 'visibility')
         upperBodyCtrl.prepareChannelBoxForAnimation()
         self.publishNode(upperBodyCtrl, alias='UpperBody_Align')
 
@@ -738,8 +761,6 @@ class SpineComponent(basecomponent.BaseComponent):
 
         upperBodyCtrl.userProperties['space'] = upperBodySpace.uuid()
         upperBodyCtrl.userProperties['spaceSwitch'] = upperBodySpaceSwitch.uuid()
-
-        spineNullJoint.addConstraint('transformConstraint', [upperBodyCtrl])
 
         # Tag controllers
         #

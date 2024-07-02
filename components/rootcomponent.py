@@ -28,6 +28,16 @@ class RootComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Methods
+    def findRootComponent(self):
+        """
+        Returns the root component relative to this instance.
+        For the sake of redundancy this overload will just return itself!
+
+        :rtype: RootComponent
+        """
+
+        return self
+
     def invalidateSkeletonSpecs(self, skeletonSpecs):
         """
         Rebuilds the internal skeleton specs for this component.
@@ -40,7 +50,7 @@ class RootComponent(basecomponent.BaseComponent):
         #
         rootSpec, = self.resizeSkeletonSpecs(1, skeletonSpecs)
         rootSpec.name = self.formatName()
-        rootSpec.driver = self.formatName(type='control')
+        rootSpec.driver = self.formatName(name='Root', type='control')
 
         # Call parent method
         #
@@ -62,7 +72,6 @@ class RootComponent(basecomponent.BaseComponent):
         rootJoint.side = rootSide
         rootJoint.type = self.Type.ROOT
         rootJoint.displayLocalAxis = True
-        rootJoint.segmentScaleCompensate = False
 
         rootMatrix = rootSpec.getMatrix(default=self.__default_root_matrix__)
         rootJoint.setMatrix(rootMatrix)
@@ -93,39 +102,39 @@ class RootComponent(basecomponent.BaseComponent):
         lightColorRGB = colorRGB.lighter()
         darkColorRGB = colorRGB.darker()
 
+        rigScale = self.findControlRig().getRigScale()
+
         # Check if this component is used as a prop
         #
         usedAsProp = bool(self.usedAsProp)
 
         if usedAsProp:
 
-            # Create master control
+            # Create root control
             #
-            masterSpaceName = self.formatName(name='Master', type='space')
-            masterSpace = self.scene.createNode('transform', name=masterSpaceName, parent=controlsGroup)
-            masterSpace.setWorldMatrix(rootMatrix)
-            masterSpace.freezeTransform()
+            rootSpaceName = self.formatName(name='Root', type='space')
+            rootSpace = self.scene.createNode('transform', name=rootSpaceName, parent=controlsGroup)
+            rootSpace.setWorldMatrix(rootMatrix)
+            rootSpace.freezeTransform()
 
-            masterCtrlName = self.formatName(name='Master', type='control')
-            masterCtrl = self.scene.createNode('transform', name=masterCtrlName, parent=masterSpace)
-            masterCtrl.addPointHelper('diamond', size=15.0, colorRGB=colorRGB, lineWidth=2.0)
-            masterCtrl.addAttr(longName='stowed', attributeType='float', min=0.0, max=1.0, keyable=True)
-            masterCtrl.prepareChannelBoxForAnimation()
-            masterCtrl.tagAsController()
-            self.publishNode(masterCtrl, alias='Master')
+            rootCtrlName = self.formatName(name='Root', type='control')
+            rootCtrl = self.scene.createNode('transform', name=rootCtrlName, parent=rootSpace)
+            rootCtrl.addPointHelper('sphere', size=(5.0 * rigScale), colorRGB=darkColorRGB)
+            rootCtrl.addAttr(longName='stowed', attributeType='float', min=0.0, max=1.0, keyable=True)
+            rootCtrl.prepareChannelBoxForAnimation()
+            rootCtrl.tagAsController()
+            self.publishNode(rootCtrl, alias='Root')
 
-            masterSpaceSwitch = masterSpace.addSpaceSwitch([])
-            masterSpaceSwitch.weighted = True
-            masterSpaceSwitch.setAttr('target', [{'targetName': 'Default', 'targetReverse': (True, True, True)}, {'targetName': 'Stowed'}])
-            masterSpaceSwitch.connectPlugs(masterCtrl['stowed'], 'target[0].targetWeight')
-            masterSpaceSwitch.connectPlugs(masterCtrl['stowed'], 'target[1].targetWeight')
-
-            masterCtrl.userProperties['space'] = masterSpace.uuid()
-            masterCtrl.userProperties['spaceSwitch'] = masterSpaceSwitch.uuid()
-
-            # Constrain export joint
+            # Setup space switching placeholder
             #
-            rootExportJoint.addConstraint('transformConstraint', [masterCtrl])
+            rootSpaceSwitch = rootSpace.addSpaceSwitch([])
+            rootSpaceSwitch.weighted = True
+            rootSpaceSwitch.setAttr('target', [{'targetName': 'Default', 'targetReverse': (True, True, True)}, {'targetName': 'Stowed'}])
+            rootSpaceSwitch.connectPlugs(rootCtrl['stowed'], 'target[0].targetWeight')
+            rootSpaceSwitch.connectPlugs(rootCtrl['stowed'], 'target[1].targetWeight')
+
+            rootCtrl.userProperties['space'] = rootSpace.uuid()
+            rootCtrl.userProperties['spaceSwitch'] = rootSpaceSwitch.uuid()
 
         else:
 
@@ -133,7 +142,7 @@ class RootComponent(basecomponent.BaseComponent):
             #
             masterCtrlName = self.formatName(name='Master', type='control')
             masterCtrl = self.scene.createNode('transform', name=masterCtrlName, parent=controlsGroup)
-            masterCtrl.addPointHelper('tearDrop', size=100.0, localRotate=(90.0, 90.0, 0.0), colorRGB=colorRGB, lineWidth=4.0)
+            masterCtrl.addPointHelper('tearDrop', size=(100.0 * rigScale), localRotate=(90.0, 90.0, 0.0), colorRGB=colorRGB, lineWidth=4.0)
             masterCtrl.setWorldMatrix(rootMatrix)
             masterCtrl.addGlobalScale()
             masterCtrl.prepareChannelBoxForAnimation()
@@ -143,7 +152,7 @@ class RootComponent(basecomponent.BaseComponent):
             #
             motionCtrlName = self.formatName(name='Motion', type='control')
             motionCtrl = self.scene.createNode('transform', name=motionCtrlName, parent=masterCtrl)
-            motionCtrl.addPointHelper('disc', size=80.0, localRotate=(0.0, 90.0, 0.0), colorRGB=lightColorRGB, lineWidth=2.0)
+            motionCtrl.addPointHelper('disc', size=(80.0 * rigScale), localRotate=(0.0, 90.0, 0.0), colorRGB=lightColorRGB, lineWidth=2.0)
             motionCtrl.prepareChannelBoxForAnimation()
             self.publishNode(motionCtrl, alias='Motion')
 
@@ -154,7 +163,8 @@ class RootComponent(basecomponent.BaseComponent):
 
             rootCtrlName = self.formatName(name='Root', type='control')
             rootCtrl = self.scene.createNode('transform', name=rootCtrlName, parent=rootSpace)
-            rootCtrl.addPointHelper('sphere', size=5.0, colorRGB=darkColorRGB)
+            rootCtrl.addPointHelper('sphere', size=(15.0 * rigScale), colorRGB=darkColorRGB)
+            rootCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=(0.0, (-7.5 * rigScale), 0.0), localRotate=(0.0, 0.0, -90.0), colorRGB=darkColorRGB)
             rootCtrl.addDivider('Space')
             rootCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
             rootCtrl.prepareChannelBoxForAnimation()
@@ -171,8 +181,4 @@ class RootComponent(basecomponent.BaseComponent):
             masterCtrl.tagAsController(children=[motionCtrl])
             motionCtrl.tagAsController(parent=masterCtrl, children=[rootCtrl])
             rootCtrl.tagAsController(parent=motionCtrl)
-
-            # Constrain export joint
-            #
-            rootExportJoint.addConstraint('transformConstraint', [rootCtrl])
     # endregion

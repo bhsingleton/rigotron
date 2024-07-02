@@ -1,6 +1,6 @@
-from dcc.json import psonobject
 from maya.api import OpenMaya as om
 from mpy import mpyscene
+from dcc.maya.json import melsonobject
 
 import logging
 logging.basicConfig()
@@ -8,13 +8,13 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-class PivotSpec(psonobject.PSONObject):
+class PivotSpec(melsonobject.MELSONObject):
     """
-    Overload of `PSONObject` that outlines pivot specifications.
+    Overload of `MELSONObject` that outlines pivot specifications.
     """
 
     # region Dunderscores
-    __slots__ = ('_scene', '_name', '_uuid', '_matrix', '_controlPoints', '_enabled')
+    __slots__ = ('_scene', '_name', '_uuid', '_matrix', '_shapes', '_enabled')
 
     def __init__(self, *args, **kwargs):
         """
@@ -33,7 +33,7 @@ class PivotSpec(psonobject.PSONObject):
         self._name = kwargs.get('name', '')
         self._uuid = kwargs.get('uuid', om.MUuid())
         self._matrix = kwargs.get('matrix', None)
-        self._controlPoints = kwargs.get('controlPoints', [])
+        self._shapes = kwargs.get('shapes', None)
         self._enabled = kwargs.get('enabled', True)
     # endregion
 
@@ -112,25 +112,25 @@ class PivotSpec(psonobject.PSONObject):
         self._matrix = matrix
 
     @property
-    def controlPoints(self):
+    def shapes(self):
         """
-        Getter method that returns the control points.
+        Getter method that returns the shapes.
 
-        :rtype: List[om.MPoint]
+        :rtype: Union[str, None]
         """
 
-        return self._controlPoints
+        return self._shapes
 
-    @controlPoints.setter
-    def controlPoints(self, controlPoints):
+    @shapes.setter
+    def shapes(self, shapes):
         """
-        Setter method that updates the control points.
+        Setter method that updates the shapes.
 
-        :type controlPoints: List[om.MPoint]
+        :type shapes: Union[str, None]
         :rtype: None
         """
 
-        self._controlPoints = controlPoints
+        self._shapes = shapes
 
     @property
     def enabled(self):
@@ -155,23 +155,6 @@ class PivotSpec(psonobject.PSONObject):
     # endregion
 
     # region Methods
-    @classmethod
-    def isJsonCompatible(cls, T):
-        """
-        Evaluates whether the given type is json compatible.
-
-        :type T: Union[Callable, Tuple[Callable]]
-        :rtype: bool
-        """
-
-        if T.__module__ == 'OpenMaya':
-
-            return True
-
-        else:
-
-            return super(PivotSpec, cls).isJsonCompatible(T)
-
     def enable(self):
         """
         Enables this pivot component.
@@ -197,10 +180,14 @@ class PivotSpec(psonobject.PSONObject):
         :rtype: mpynode.MPyNode
         """
 
+        # Evaluate UUID exists
+        #
         if not isinstance(self.uuid, om.MUuid):
 
             return None
 
+        # Check if UUID is valid
+        #
         if self.uuid.valid():
 
             return self.scene(self.uuid)
@@ -261,15 +248,31 @@ class PivotSpec(psonobject.PSONObject):
         #
         node = self.getNode()
 
-        if node is not None:
-
-            self.matrix = node.worldMatrix()
-
-            if delete:
-
-                node.delete()
-
-        else:
+        if node is None:
 
             log.warning(f'Unable to cache "{self.name}" matrix!')
+            return
+
+        # Cache world matrix
+        #
+        self.matrix = node.worldMatrix()
+
+        # Cache any customizable shapes
+        #
+        shapes = node.shapes()
+        hasShapes = len(shapes)
+
+        if hasShapes:
+
+            shape = shapes[0]
+            hasNurbsCurve = shape.hasFn(om.MFn.kNurbsCurve)
+
+            self.shapes = node.dumpShapes() if hasNurbsCurve else None
+
+        # Check if pivot requires deleting
+        #
+        if delete:
+
+            node.removeConstraints()
+            node.delete()
     # endregion

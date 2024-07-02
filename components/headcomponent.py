@@ -182,17 +182,19 @@ class HeadComponent(basecomponent.BaseComponent):
         lightColorRGB = colorRGB.lighter()
         darkColorRGB = colorRGB.darker()
 
+        rigScale = self.findControlRig().getRigScale()
+
+        parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
+
         # Get space switch options
         #
         neckEnabled = bool(neckSpecs[0].enabled)
-        parentAlias = 'Neck' if neckEnabled else 'Chest'
 
         rootComponent = self.findRootComponent()
-        spineComponent = self.findComponentAncestors('SpineComponent')[0]
-
         worldCtrl = rootComponent.getPublishedNode('Motion')
+
+        spineComponent = self.findComponentAncestors('SpineComponent')[0]
         cogCtrl = spineComponent.getPublishedNode('Waist')
-        chestCtrl = spineComponent.getPublishedNode('Chest')
 
         # Create head control
         #
@@ -203,12 +205,11 @@ class HeadComponent(basecomponent.BaseComponent):
 
         headCtrlName = self.formatName(type='control')
         headCtrl = self.scene.createNode('transform', name=headCtrlName, parent=headSpace)
-        headCtrl.addShape('VisorCurve', size=20.0, colorRGB=colorRGB, lineWidth=4.0)
-        headCtrl.addDivider('Customize')
+        headCtrl.addShape('MeltedCircleCurve', size=(30.0 * rigScale), colorRGB=colorRGB, lineWidth=4.0)
+        headCtrl.addDivider('Settings')
         headCtrl.addAttr(longName='stretch', attributeType='float', min=0.0, max=1.0, keyable=True)
-        headCtrl.addAttr(longName='displayLookAt', niceName='Display Look-At', attributeType='bool', channelBox=True)
         headCtrl.addAttr(longName='lookAtOffset', niceName='Look-At Offset', attributeType='distance', min=1.0, default=100.0, channelBox=True)
-        headCtrl.addDivider('Space')
+        headCtrl.addDivider('Spaces')
         headCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
         headCtrl.prepareChannelBoxForAnimation()
         self.publishNode(headCtrl, alias='Head')
@@ -223,17 +224,15 @@ class HeadComponent(basecomponent.BaseComponent):
         headLookAtCtrlName = self.formatName(subname='LookAt', type='control')
         headLookAtCtrl = self.scene.createNode('transform', name=headLookAtCtrlName, parent=headLookAtSpace)
         headLookAtCtrl.freezeTransform()
-        headLookAtCtrl.addPointHelper('sphere', 'centerMarker', size=20.0, colorRGB=colorRGB)
-        headLookAtCtrl.addDivider('Customize')
-        headLookAtCtrl.addProxyAttr('displayLookAt', headCtrl['displayLookAt'])
+        headLookAtCtrl.addPointHelper('sphere', 'centerMarker', size=(20.0 * rigScale), colorRGB=colorRGB)
+        headLookAtCtrl.addDivider('Settings')
         headLookAtCtrl.addProxyAttr('lookAtOffset', headCtrl['lookAtOffset'])
-        headLookAtCtrl.addDivider('Space')
+        headLookAtCtrl.addDivider('Spaces')
         headLookAtCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
         headLookAtCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
         headLookAtCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Chest)', attributeType='float', min=0.0, max=1.0, keyable=True)
         headLookAtCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (Neck)', attributeType='float', min=0.0, max=1.0, keyable=True)
         headLookAtCtrl.hideAttr('scale', lock=True)
-        headLookAtCtrl.connectPlugs(headCtrl['displayLookAt'], 'visibility')
         headLookAtCtrl.prepareChannelBoxForAnimation()
         self.publishNode(headLookAtCtrl, alias='LookAt')
 
@@ -319,15 +318,15 @@ class HeadComponent(basecomponent.BaseComponent):
 
             neckCtrlName = self.formatName(name='Neck', type='control')
             neckCtrl = self.scene.createNode('transform', name=neckCtrlName, parent=neckSpace)
-            neckCtrl.addPointHelper('disc', size=15.0, colorRGB=lightColorRGB, lineWidth=2.0)
-            neckCtrl.addDivider('Customize')
+            neckCtrl.addPointHelper('disc', size=(15.0 * rigScale), colorRGB=lightColorRGB, lineWidth=2.0)
+            neckCtrl.addDivider('Settings')
             neckCtrl.addAttr(longName='inheritsTwist', attributeType='angle', min=0.0, max=1.0, default=0.5, keyable=True)
-            neckCtrl.addDivider('Space')
+            neckCtrl.addDivider('Spaces')
             neckCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
             neckCtrl.prepareChannelBoxForAnimation()
             self.publishNode(neckCtrl, alias='Neck')
 
-            neckSpaceSwitch = neckSpace.addSpaceSwitch([chestCtrl, worldCtrl], maintainOffset=True)
+            neckSpaceSwitch = neckSpace.addSpaceSwitch([parentExportCtrl, worldCtrl], maintainOffset=True)
             neckSpaceSwitch.weighted = True
             neckSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
             neckSpaceSwitch.connectPlugs(neckCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
@@ -338,13 +337,15 @@ class HeadComponent(basecomponent.BaseComponent):
 
             # Connect head look-at to neck control
             #
-            headLookAtSpaceSwitch = headLookAtSpace.addSpaceSwitch([worldCtrl, cogCtrl, chestCtrl, neckCtrl], maintainOffset=True)
+            headLookAtSpaceSwitch = headLookAtSpace.addSpaceSwitch([worldCtrl, cogCtrl, parentExportCtrl, neckCtrl], maintainOffset=True)
             headLookAtSpaceSwitch.weighted = True
             headLookAtSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (1.0, 0.0, 1.0)}])
             headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW0'], 'target[0].targetRotateWeight')
             headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW1'], 'target[1].targetRotateWeight')
             headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW2'], 'target[2].targetRotateWeight')
             headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW3'], 'target[3].targetRotateWeight')
+
+            headLookAtTarget.addConstraint('scaleConstraint', [neckCtrl])
 
             # Create neck IK joints
             #
@@ -358,14 +359,9 @@ class HeadComponent(basecomponent.BaseComponent):
             neckIKTipJoint.copyTransform(headExportJoint)
             neckIKTipJoint.freezePivots(includeTranslate=False, includeScale=False)
 
-            neckIKHandle, neckIKEffector = kinematicutils.applySingleChainSolver(neckIKJoint, neckIKTipJoint)
-
-            neckIKEffector.setName(self.formatName(name='Neck', type='ikEffector'))
-            neckIKHandle.setName(self.formatName(name='Neck', type='ikHandle'))
-            neckIKHandle.setParent(privateGroup)
-
             neckIKJoint.addConstraint('pointConstraint', [neckCtrl])
-            neckIKHandle.addConstraint('pointConstraint', [headCtrl])
+            constraint = neckIKJoint.addConstraint('aimConstraint', [headCtrl], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 1.0, 0.0), worldUpType=2, worldUpVector=(0.0, 1.0, 0.0), worldUpObject=neckCtrl)
+            neckIKJoint.addConstraint('scaleConstraint', [neckCtrl])
 
             # Setup neck stretch
             #
@@ -406,13 +402,12 @@ class HeadComponent(basecomponent.BaseComponent):
             neckTwistSolver.connectPlugs(neckCtrl[f'worldMatrix[{neckCtrl.instanceNumber()}]'], 'startMatrix')
             neckTwistSolver.connectPlugs(headCtrl[f'worldMatrix[{headCtrl.instanceNumber()}]'], 'endMatrix')
 
-            neckTwistEnvelopeName = self.formatName(name='Neck', subname='TwistEnvelope', type='linearMath')
-            neckTwistEnvelope = self.scene.createNode('linearMath', name=neckTwistEnvelopeName)
+            neckTwistEnvelopeName = self.formatName(name='Neck', subname='TwistEnvelope', type='floatMath')
+            neckTwistEnvelope = self.scene.createNode('floatMath', name=neckTwistEnvelopeName)
             neckTwistEnvelope.operation = 2  # Multiply
             neckTwistEnvelope.connectPlugs(neckTwistSolver['roll'], 'inAngleA')
             neckTwistEnvelope.connectPlugs(neckCtrl['inheritsTwist'], 'inAngleB')
 
-            constraint = neckIKHandle.addConstraint('orientConstraint', [neckCtrl])
             constraint.connectPlugs(neckTwistEnvelope['outAngle'], 'offsetX')
 
             # Tag controllers
@@ -420,16 +415,6 @@ class HeadComponent(basecomponent.BaseComponent):
             neckCtrl.tagAsController(children=[headCtrl])
             headCtrl.tagAsController(parent=neckCtrl, children=[headLookAtCtrl])
             headLookAtCtrl.tagAsController(parent=headCtrl)
-
-            # Constraint joints
-            #
-            neckExportJoint.addConstraint('pointConstraint', [neckCtrl])
-            neckExportJoint.addConstraint('orientConstraint', [neckIKJoint])
-            neckExportJoint.addConstraint('scaleConstraint', [neckCtrl])
-
-            headExportJoint.addConstraint('pointConstraint', [neckIKTipJoint])
-            headExportJoint.addConstraint('orientConstraint', [headCtrl])
-            headExportJoint.addConstraint('scaleConstraint', [headCtrl])
 
         else:
 

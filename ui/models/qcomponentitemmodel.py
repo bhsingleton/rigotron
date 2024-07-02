@@ -1,10 +1,12 @@
+import json
+
 from maya.api import OpenMaya as om
+from mpy import mpyscene, mpynode
 from Qt import QtCore, QtWidgets, QtGui, QtCompat
 from enum import IntEnum
-from dcc import fnqt
 from dcc.python import stringutils
+from ...libs import Status
 from ...components import rootcomponent
-from mpy import mpyscene, mpynode
 
 import logging
 logging.basicConfig()
@@ -12,15 +14,15 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-class ViewDetails(IntEnum):
+class ViewDetail(IntEnum):
     """
-    Overload of `IntEnum` that contains all the displayable data.
+    Overload of `IntEnum` that contains all displayable data.
     """
 
-    Name = 0
-    Type = 1
-    Hash = 2
-    Uuid = 3
+    NAME = 0
+    TYPE = 1
+    HASH = 2
+    UUID = 3
 
 
 class QComponentItemModel(QtCore.QAbstractItemModel):
@@ -44,13 +46,22 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         # Declare private variables
         #
         self._scene = mpyscene.MPyScene.getInstance(asWeakReference=True)
-        self._qt = fnqt.FnQt()
-        self._invisibleRootItem = lambda: None
-        self._viewDetails = [ViewDetails.Name, ViewDetails.Type, ViewDetails.Uuid]
-        self._headerLabels = [stringutils.pascalize(x.name, separator=' ') for x in self._viewDetails]
+        self._rootComponent = self.nullWeakReference
+        self._viewDetails = [ViewDetail.NAME, ViewDetail.TYPE]
+        self._headerLabels = [detail.name.title() for detail in self._viewDetails]
     # endregion
 
     # region Properties
+    @property
+    def nullWeakReference(self):
+        """
+        Getter method that returns a null weak reference.
+
+        :rtype: Callable
+        """
+
+        return lambda: None
+
     @property
     def scene(self):
         """
@@ -62,31 +73,21 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         return self._scene()
 
     @property
-    def qt(self):
+    def rootComponent(self):
         """
-        Getter method that returns the qt function set.
+        Getter method that returns the root component.
 
-        :rtype: fnqt.FnQt
-        """
-
-        return self._qt
-
-    @property
-    def invisibleRootItem(self):
-        """
-        Getter method that returns the invisible root item.
-
-        :rtype: mpynode.MPyNode
+        :rtype: rootcomponent.RootComponent
         """
 
-        return self._invisibleRootItem()
+        return self._rootComponent()
 
-    @invisibleRootItem.setter
-    def invisibleRootItem(self, invisibleRootItem):
+    @rootComponent.setter
+    def rootComponent(self, rootComponent):
         """
-        Setter method that updates the invisible root item.
+        Setter method that updates the root component.
 
-        :type invisibleRootItem: mpynode.MPyNode
+        :type rootComponent: rootcomponent.RootComponent
         :rtype: None
         """
 
@@ -96,13 +97,17 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
 
         # Evaluate invisible root item
         #
-        if isinstance(invisibleRootItem, rootcomponent.RootComponent):
+        if isinstance(rootComponent, rootcomponent.RootComponent):
 
-            self._invisibleRootItem = invisibleRootItem.weakReference()
+            self._rootComponent = rootComponent.weakReference()
+
+        elif rootComponent is None:
+
+            self._rootComponent = self.nullWeakReference
 
         else:
 
-            self._invisibleRootItem = lambda: None
+            raise TypeError(f'rootComponent.setter() expects a RootComponent ({type(rootComponent).__name__} given)!')
 
         # Signal end of model reset
         #
@@ -113,7 +118,7 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         """
         Getter method that returns the view details for this model.
 
-        :rtype: List[ViewDetails]
+        :rtype: List[ViewDetail]
         """
 
         return self._viewDetails
@@ -123,7 +128,7 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         """
         Setter method that updates the view details for this model.
 
-        :type viewDetails: List[ViewDetails]
+        :type viewDetails: List[ViewDetail]
         :rtype: None
         """
 
@@ -172,6 +177,29 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
 
         return self.decodeInternalId(index.internalId())
 
+    def indexFromComponent(self, component, column=0):
+        """
+        Returns an index from the supplied component.
+
+        :type component: mpynode.MPyNode
+        :type column: int
+        :rtype: QtCore.QModelIndex
+        """
+
+        componentParent = component.componentParent()
+        hashCode = component.hashCode()
+
+        if componentParent is not None:
+
+            componentChildren = list(componentParent.iterComponentChildren())
+            row = componentChildren.index(component)
+
+            return self.createIndex(row, column, id=hashCode)
+
+        else:
+
+            return self.createIndex(0, column, id=hashCode)
+
     def rowCount(self, parent=QtCore.QModelIndex()):
         """
         Returns the number of rows under the given parent.
@@ -180,18 +208,16 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         :rtype: int
         """
 
-        if parent.isValid():
+        isRoot = not parent.isValid()
 
-            component = self.decodeInternalId(parent.internalId())
-            return len(component.componentChildren)
+        if isRoot:
 
-        elif self.invisibleRootItem is not None:
-
-            return 1
+            return int(self.rootComponent is not None)
 
         else:
 
-            return 0
+            component = self.decodeInternalId(parent.internalId())
+            return component.componentChildCount()
 
     def columnCount(self, parent=QtCore.QModelIndex()):
         """
@@ -219,7 +245,7 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
 
         if componentParent is None:
 
-            return self.createIndex(row, column, id=self.invisibleRootItem.hashCode())
+            return self.createIndex(row, column, id=self.rootComponent.hashCode())
 
         # Check if row is in range
         #
@@ -256,7 +282,7 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         index = args[0]
         component = self.decodeInternalId(index.internalId())
 
-        if component is self.invisibleRootItem:
+        if component is self.rootComponent:
 
             return QtCore.QModelIndex()
 
@@ -277,7 +303,15 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         :rtype: bool
         """
 
-        return True  # All components can have children!
+        isRoot = not parent.isValid()
+
+        if isRoot:
+
+            return self.rootComponent is not None
+
+        else:
+
+            return True  # All components can have children!
 
     def flags(self, index):
         """
@@ -287,7 +321,7 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         :rtype: int
         """
 
-        return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEditable
+        return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsDragEnabled | QtCore.Qt.ItemIsDropEnabled
 
     def supportedDragActions(self):
         """
@@ -316,9 +350,76 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
 
         return ['text/plain']
 
+    def mimeData(self, indexes):
+        """
+        Returns an object that contains serialized items of data corresponding to the list of indexes specified.
+
+        :type indexes: List[QtCore.QModelIndex]
+        :rtype: QtCore.QMimeData
+        """
+
+        # Collect valid components
+        #
+        filteredIndexes = [index for index in indexes if index.column() == 0]
+        hashCodes = []
+
+        for index in filteredIndexes:
+
+            component = self.componentFromIndex(index)
+            componentStatus = Status(component.componentStatus)
+
+            if componentStatus == Status.META:
+
+                hashCodes.append(component.hashCode())
+
+            else:
+
+                continue
+
+        # Populate mime data with UUIDs
+        #
+        mimeData = QtCore.QMimeData()
+        mimeData.setText(json.dumps(hashCodes))
+
+        return mimeData
+
     def canDropMimeData(self, data, action, row, column, parent):
         """
         Evaluates if mime data can be dropped on the requested row.
+
+        :type data: QtCore.QMimeData
+        :type action: QtCore.Qt.DropAction
+        :type row: int
+        :type column: int
+        :type parent: QtCore.QModelIndex
+        :rtype: bool
+        """
+
+        # Get component from index
+        #
+        index = self.index(row, column, parent=parent) if (row >= 0) else parent
+        component = self.componentFromIndex(index)
+
+        if component is None:
+
+            return False
+
+        # Evaluate component status
+        #
+        componentStatus = Status(component.componentStatus)
+
+        if componentStatus == Status.META:
+
+            return True  # TODO: Test if incoming components are also in the meta state!
+
+        else:
+
+            return False
+
+    def dropMimeData(self, data, action, row, column, parent):
+        """
+        Handles the data supplied by a drag and drop operation that ended with the given action.
+        Returns true if the data and action were handled by the model; otherwise returns false.
 
         :type data: QtCore.QMimeData
         :type action: int
@@ -328,7 +429,50 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         :rtype: bool
         """
 
-        return True
+        # Load mime data
+        #
+        hashCodes = []
+
+        try:
+
+            hashCodes = json.loads(data.text())
+
+        except json.JSONDecodeError as exception:
+
+            log.error(exception)
+            return False
+
+        finally:
+
+            # Iterate through internal IDs
+            #
+            success = False
+
+            for hashCode in reversed(hashCodes):
+
+                sourceComponent = self.decodeInternalId(hashCode)
+                sourceIndex = self.indexFromComponent(sourceComponent)
+                sourceRow = sourceIndex.row()
+                sourceParent = self.parent(sourceIndex)
+
+                success = self.moveRow(sourceParent, sourceRow, parent, row)
+
+                if not success:
+
+                    break
+
+            return success
+
+    def appendRow(self, item, parent=QtCore.QModelIndex()):
+        """
+        Appends a single row before the given row in the child items of the parent specified.
+
+        :type item: object
+        :type parent: QtCore.QModelIndex
+        :rtype: bool
+        """
+
+        return self.insertRow(self.rowCount(parent), item, parent=parent)
 
     def insertRow(self, row, item, parent=QtCore.QModelIndex()):
         """
@@ -439,6 +583,57 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
 
         return True
 
+    def removeRow(self, row, parent=QtCore.QModelIndex()):
+        """
+        Removes the given row from the child items of the parent specified.
+        Returns true if the row is removed; otherwise returns false.
+
+        :type row: int
+        :type count: int
+        :type parent: QtCore.QModelIndex
+        :rtype: bool
+        """
+
+        return self.removeRows(row, 1, parent=parent)
+
+    def removeRows(self, row, count, parent=QtCore.QModelIndex()):
+        """
+        On models that support this, removes count rows starting with the given row under parent from the model.
+        Returns true if the rows were successfully removed; otherwise returns false.
+
+        :type row: int
+        :type count: int
+        :type parent: QtCore.QModelIndex
+        :rtype: bool
+        """
+
+        # Signal start of removal
+        #
+        lastRow = (row + count) - 1
+        self.beginRemoveRows(parent, row, lastRow)
+
+        # Check if indices are valid
+        #
+        if not parent.isValid():
+
+            self.endRemoveRows()
+            return False
+
+        # Get parent items
+        #
+        parentComponent = self.componentFromIndex(parent)
+        childComponents = parentComponent.popComponentChild(slice(row, lastRow + 1))
+
+        for childComponent in childComponents:
+
+            childComponent.delete()
+
+        # Signal end of removal
+        #
+        self.endRemoveRows()
+
+        return True
+
     def details(self, index):
         """
         Returns the details for the given index.
@@ -452,19 +647,19 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         column = index.column()
         viewDetail = self.viewDetails[column]
 
-        if viewDetail == ViewDetails.Name:
+        if viewDetail == ViewDetail.NAME:
 
             return component.name()
 
-        elif viewDetail == ViewDetails.Type:
+        elif viewDetail == ViewDetail.TYPE:
 
             return component.className
 
-        elif viewDetail == ViewDetails.Hash:
+        elif viewDetail == ViewDetail.HASH:
 
             return component.hashCode()
 
-        elif viewDetail == ViewDetails.Uuid:
+        elif viewDetail == ViewDetail.UUID:
 
             return component.uuid().asString()
 
@@ -484,7 +679,7 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         #
         column = index.column()
         component = self.decodeInternalId(index.internalId())
-        isNameColumn = self.viewDetails.index(ViewDetails.Name) == column
+        isNameColumn = self.viewDetails.index(ViewDetail.NAME) == column
 
         if isNameColumn:
 
@@ -522,8 +717,8 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         Returns the data for the given role and section in the header with the specified orientation.
 
         :type section: int
-        :type orientation: int
-        :type role: int
+        :type orientation: QtCore.Qt.Orientation
+        :type role: QtCore.Qt.ItemDataRole
         :rtype: Any
         """
 

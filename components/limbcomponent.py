@@ -17,7 +17,6 @@ class LimbComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Attributes
-    limbLength = mpyattribute.MPyAttribute('limbLength', attributeType='float', array=True)
     twistEnabled = mpyattribute.MPyAttribute('twistEnabled', attributeType='bool', default=True)
     numTwistLinks = mpyattribute.MPyAttribute('numTwistLinks', attributeType='int', min=2, default=3)
     # endregion

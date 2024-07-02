@@ -71,7 +71,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
             specs.extend(newSpecs)
 
-        elif size > currentSize:
+        elif size < currentSize:
 
             del specs[size:]
 
@@ -81,55 +81,19 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         return specs
 
-    def markSkeletonDirty(self):
-        """
-        Marks the internal skeleton specs as dirty.
-
-        :rtype: None
-        """
-
-        self.userProperties[self.SKELETON_DIRTY_KEY] = True
-
-    def markSkeletonClean(self):
-        """
-        Marks the internal skeleton specs as clean.
-
-        :rtype: None
-        """
-
-        self.userProperties[self.SKELETON_DIRTY_KEY] = False
-
-    def skeletonSpecs(self):
-        """
-        Returns the current skeleton specs.
-
-        :rtype: List[skeletonspec.SkeletonSpec]
-        """
-
-        # Check if skeleton specs are clean
-        #
-        isDirty = self.userProperties.get(self.SKELETON_DIRTY_KEY, True)
-        skeletonSpecs = self.userProperties[self.SKELETON_KEY]
-
-        if isDirty:
-
-            self.invalidateSkeletonSpecs(skeletonSpecs)
-
-        # Return clean skeleton specs
-        #
-        return skeletonSpecs
-
-    def walkSkeletonSpecs(self, skipDisabled=True):
+    @staticmethod
+    def flattenSpecs(skeletonSpecs, **kwargs):
         """
         Returns a generator that yields all skeleton specs.
 
-        :type skipDisabled: bool
+        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
+        :key skipDisabled: bool
         :rtype: Iterator[skeletonspec.SkeletonSpec]
         """
 
         # Iterate through skeleton specs
         #
-        skeletonSpecs = self.skeletonSpecs()
+        skipDisabled = kwargs.get('skipDisabled', True)
 
         for skeletonSpec in skeletonSpecs:
 
@@ -166,6 +130,51 @@ class BaseComponent(abstractcomponent.AbstractComponent):
                     else:
 
                         yield groupSpec
+
+    def markSkeletonDirty(self):
+        """
+        Marks the internal skeleton specs as dirty.
+
+        :rtype: None
+        """
+
+        self.userProperties[self.SKELETON_DIRTY_KEY] = True
+
+    def markSkeletonClean(self):
+        """
+        Marks the internal skeleton specs as clean.
+
+        :rtype: None
+        """
+
+        self.userProperties[self.SKELETON_DIRTY_KEY] = False
+
+    def skeletonSpecs(self, **kwargs):
+        """
+        Returns the current skeleton specs.
+
+        :key flatten: bool
+        :rtype: List[skeletonspec.SkeletonSpec]
+        """
+
+        # Check if skeleton specs are clean
+        #
+        isDirty = self.userProperties.get(self.SKELETON_DIRTY_KEY, True)
+        skeletonSpecs = self.userProperties[self.SKELETON_KEY]
+
+        if isDirty:
+
+            self.invalidateSkeletonSpecs(skeletonSpecs)
+
+        # Check if skeleton specs require flattening
+        #
+        flatten = kwargs.pop('flatten', False)
+
+        if flatten:
+
+            skeletonSpecs = list(self.flattenSpecs(skeletonSpecs, **kwargs))
+
+        return skeletonSpecs
 
     def resizeSkeletonSpecs(self, size, specs):
         """
@@ -209,13 +218,14 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         pass
 
-    def finalizeSkeleton(self):
+    def skeletonCompleted(self):
         """
         Notifies the component that the skeleton is complete.
 
         :rtype: None
         """
 
+        self.componentStatus = self.Status.SKELETON
         self.save()
 
     def cacheSkeleton(self, delete=False):
@@ -228,7 +238,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         # Update skeleton matrices
         #
-        skeletonSpecs = list(self.walkSkeletonSpecs(skipDisabled=True))
+        skeletonSpecs = self.skeletonSpecs(flatten=True, skipDisabled=True)
 
         for skeletonSpec in reversed(skeletonSpecs):
 
@@ -245,12 +255,49 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         :rtype: None
         """
 
-        for skeletonSpec in self.walkSkeletonSpecs(skipDisabled=True):
+        # Re-parent export skeleton
+        #
+        parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
 
-            node = skeletonSpec.getNode()
-            driver = skeletonSpec.getDriver()
+        skeletonSpecs = self.skeletonSpecs(flatten=True, skipDisabled=True)
+        exportJoint = skeletonSpecs[0].getNode()
 
-            node.addConstraint('transformConstraint', [driver])
+        if parentExportJoint is not None:
+
+            exportJoint.setParent(parentExportJoint, absolute=True)
+
+        # Constrain export skeleton
+        #
+        maintainOffset = self.Side(self.componentSide) == self.Side.RIGHT
+
+        for skeletonSpec in skeletonSpecs:
+
+            # Check if export joint exists
+            #
+            exportJoint = skeletonSpec.getNode()
+
+            if exportJoint is None:
+
+                log.error(f'Cannot locate export joint: {skeletonSpec.driver}')
+                continue
+
+            # Remove any pre-rotations
+            #
+            exportJoint.unfreezePivots()
+
+            # Check if export driver exists
+            #
+            exportDriver = skeletonSpec.getDriver()
+
+            if exportDriver is None:
+
+                log.error(f'Cannot locate export driver: {skeletonSpec.driver}')
+                continue
+
+            # Constrain export joint
+            #
+            log.info(f'Constraining "{skeletonSpec.driver}" > "{skeletonSpec.name}"')
+            exportJoint.addConstraint('transformConstraint', [exportDriver], maintainOffset=maintainOffset)
 
     def unbindSkeleton(self):
         """
@@ -259,10 +306,22 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         :rtype: None
         """
 
-        for skeletonSpec in self.walkSkeletonSpecs(skipDisabled=True):
+        # De-constrain export skeleton
+        #
+        skeletonSpecs = self.skeletonSpecs(flatten=True, skipDisabled=True)
 
-            node = skeletonSpec.getNode()
-            node.removeConstraints(absolute=True)
+        for skeletonSpec in skeletonSpecs:
+
+            exportJoint = skeletonSpec.getNode()
+            exportJoint.removeConstraints()
+
+            matrix = skeletonSpec.getMatrix(asTransformationMatrix=True)
+            exportJoint.setMatrix(matrix)
+
+        # Un-parent export skeleton
+        #
+        exportJoint = skeletonSpecs[0].getNode()
+        exportJoint.setParent(None, absolute=True)
 
     def markPivotsDirty(self):
         """
@@ -342,7 +401,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         pass
 
-    def finalizePivots(self):
+    def pivotsCompleted(self):
         """
         Notifies the component that the pivots are complete.
 
@@ -370,6 +429,48 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         # Save changes
         #
         self.save()
+
+    def getAttachmentOptions(self):
+        """
+        Returns the attachment options for this component.
+
+        :rtype: List[skeletonspec.SkeletonSpec]
+        """
+
+        # Check if parent exists
+        #
+        componentParent = self.componentParent()
+
+        if componentParent is not None:
+
+            return componentParent.skeletonSpecs(flatten=True)
+
+        else:
+
+            return []
+
+    def getAttachmentTargets(self):
+        """
+        Returns the attachment targets for this component.
+
+        :rtype: Tuple[mpynode.MPyNode, mpynode.MPyNode]
+        """
+
+        # Check if attachment index is in range
+        #
+        skeletonSpecs = self.getAttachmentOptions()
+        numSkeletonSpecs = len(skeletonSpecs)
+
+        attachmentIndex = int(self.attachmentId)
+
+        if 0 <= attachmentIndex < numSkeletonSpecs:
+
+            skeletonSpec = skeletonSpecs[attachmentIndex]
+            return self.scene(skeletonSpec.uuid), self.scene(skeletonSpec.driver)
+
+        else:
+
+            return None, None
 
     def addNodeAddedCallback(self):
         """
@@ -481,19 +582,25 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         name = self.formatName(type='dagContainer')
         self.setName(name)
 
-        controlsGroupName = self.formatName(subname='Controls', type='transform')
-        controlsGroup = self.scene.createNode('transform', name=controlsGroupName, parent=self)
-        self.controlsGroup = controlsGroup.object()
+        if self.controlsGroup.isNull():
 
-        jointsGroupName = self.formatName(subname='Joints', type='transform')
-        jointsGroup = self.scene.createNode('transform', name=jointsGroupName, parent=self)
-        jointsGroup.visibility = False
-        self.jointsGroup = jointsGroup.object()
+            controlsGroupName = self.formatName(subname='Controls', type='transform')
+            controlsGroup = self.scene.createNode('transform', name=controlsGroupName, parent=self)
+            self.controlsGroup = controlsGroup.object()
 
-        privateGroupName = self.formatName(subname='Private', type='transform')
-        privateGroup = self.scene.createNode('transform', name=privateGroupName, parent=self)
-        privateGroup.visibility = False
-        self.privateGroup = privateGroup.object()
+        if self.jointsGroup.isNull():
+
+            jointsGroupName = self.formatName(subname='Joints', type='transform')
+            jointsGroup = self.scene.createNode('transform', name=jointsGroupName, parent=self)
+            jointsGroup.visibility = False
+            self.jointsGroup = jointsGroup.object()
+
+        if self.privateGroup.isNull():
+
+            privateGroupName = self.formatName(subname='Private', type='transform')
+            privateGroup = self.scene.createNode('transform', name=privateGroupName, parent=self)
+            privateGroup.visibility = False
+            self.privateGroup = privateGroup.object()
 
     @abstractmethod
     def buildRig(self):

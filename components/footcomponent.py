@@ -2,8 +2,9 @@ from maya.api import OpenMaya as om
 from mpy import mpyattribute
 from enum import IntEnum
 from dcc.dataclasses.colour import Colour
+from dcc.python import stringutils
 from dcc.maya.libs import transformutils, shapeutils
-from rigomatic.libs import kinematicutils
+from dcc.maya.json import mshapeparser
 from . import extremitycomponent
 from ..libs import Side, setuputils
 
@@ -114,6 +115,16 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             )
         }
     }
+    __default_pivot_points__ = [
+        om.MVector(0.0, -10.0, 0.0),
+        om.MVector(0.0, -10.0, -5.0),
+        om.MVector(0.0, 0.0, -5.0),
+        om.MVector(0.0, 10.0, -5.0),
+        om.MVector(0.0, 10.0, 0.0),
+        om.MVector(0.0, 10.0, 5.0),
+        om.MVector(0.0, 0.0, 5.0),
+        om.MVector(0.0, -10.0, 5.0)
+    ]
     __default_pivot_matrices__ = {
         Side.LEFT: {
             FootPivotType.HEEL: om.MMatrix(
@@ -293,6 +304,52 @@ class FootComponent(extremitycomponent.ExtremityComponent):
     numToeLinks = mpyattribute.MPyAttribute('numToeLinks', attributeType='int', min=1, max=3, default=3)
     # endregion
 
+    # region Properties
+    @bigToeEnabled.changed
+    def bigToeEnabled(self, bigToeEnabled):
+        """
+        Changed method that notifies any big-toe state changes.
+
+        :type bigToeEnabled: bool
+        :rtype: None
+        """
+
+        self.markSkeletonDirty()
+
+    @numBigToeLinks.changed
+    def numBigToeLinks(self, numBigToeLinks):
+        """
+        Changed method that notifies any big-toe link size changes.
+
+        :type numBigToeLinks: int
+        :rtype: None
+        """
+
+        self.markSkeletonDirty()
+
+    @numToes.changed
+    def numToes(self, numToes):
+        """
+        Changed method that notifies any toe state changes.
+
+        :type numToes: bool
+        :rtype: None
+        """
+
+        self.markSkeletonDirty()
+
+    @numToeLinks.changed
+    def numToeLinks(self, numToeLinks):
+        """
+        Changed method that notifies any toe link size changes.
+
+        :type numToeLinks: int
+        :rtype: None
+        """
+
+        self.markSkeletonDirty()
+    # endregion
+
     # region Methods
     def toeFlags(self):
         """
@@ -328,16 +385,12 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         :rtype: None
         """
 
-        # Concatenate pivot names
+        # Concatenate pivot name
         #
-        pivotTypes = self.FootPivotType.__members__
-        numPivotTypes = len(pivotTypes)
+        pivotSpecs = self.resizePivotSpecs(1, pivotSpecs)
 
-        pivotSpecs = self.resizePivotSpecs(numPivotTypes, pivotSpecs)
-
-        for (name, i) in pivotTypes.items():
-
-            pivotSpecs[i].name = self.formatName(subname=name.title(), type='locator')
+        pivotSpec = pivotSpecs[0]
+        pivotSpec.name = self.formatName(subname='Pivot', type='nurbsCurve')
 
         # Call parent method
         #
@@ -350,19 +403,41 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         :rtype: Union[Tuple[mpynode.MPyNode], None]
         """
 
-        # Iterate through default pivots
+        # Create pivot
         #
-        pivotSpecs = self.pivotSpecs()
-        side = self.Side(self.componentSide)
+        pivotSpec, = self.pivotSpecs()
+        componentSide = self.Side(self.componentSide)
 
-        for (i, pivotSpec) in enumerate(pivotSpecs):
+        pivot = self.scene.createNode('transform', name=pivotSpec.name)
+        pivotSpec.uuid = pivot.uuid()
 
-            pivot = self.scene.createNode('transform', name=pivotSpec.name)
-            pivot.addPointHelper('cross', 'axisTripod', size=5.0)
-            pivotSpec.uuid = pivot.uuid()
+        defaultMatrix = self.__default_component_matrices__[componentSide][self.FootType.FOOT]
+        matrix = pivotSpec.getMatrix(default=defaultMatrix)
+        pivot.setWorldMatrix(matrix, skipTranslateZ=True)
 
-            matrix = pivotSpec.getMatrix(default=self.__default_pivot_matrices__[side][i])
-            pivotSpec.setWorldMatrix(matrix)
+        # Constrain pivot
+        #
+        footSpec, ballSpec, toesSpec = self.skeletonSpecs()
+        footExportJoint = self.scene(footSpec.uuid)
+
+        pivot.addConstraint('transformConstraint', [footExportJoint], skipTranslateZ=True)
+
+        # Check if shape data exists
+        #
+        hasShape = not stringutils.isNullOrEmpty(pivotSpec.shapes)
+
+        if hasShape:
+
+            pivot.loadShapes(pivotSpec.shapes)
+
+        else:
+
+            controlPoints = list(map(om.MVector, self.__default_pivot_points__))
+            controlPoints.extend(controlPoints[:3])  # Periodic curves require overlapping points equal to the degree!
+
+            pivot.addCurve(controlPoints, degree=3, form=om.MFnNurbsCurve.kPeriodic)
+
+        return (pivotSpec,)
 
     def invalidateSkeletonSpecs(self, skeletonSpecs):
         """
@@ -380,10 +455,10 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         # Edit skeleton specs
         #
         footSpec.name = self.formatName()
-        footSpec.driver = self.formatName(type='control')
+        footSpec.driver = self.formatName(subname='Ankle', kinemat='Blend', type='joint')
 
         ballSpec.name = self.formatName(subname='Ball')
-        ballSpec.driver = self.formatName(subname='Ball', type='control')
+        ballSpec.driver = self.formatName(subname='Ball', kinemat='Blend', type='joint')
         ballSpec.enabled = (self.numToes > 1) or self.bigToeEnabled
 
         toesSpec.name = self.formatName(subname='Toes')
@@ -406,21 +481,28 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         #
         toeFlags = self.toeFlags()
 
-        for (i, toeLinks) in toeGroups.items():
+        for (toeType, toeGroup) in toeGroups.items():
 
             # Iterate through digit specs
             #
-            toeType = self.ToeType(i)
+            toeType = self.ToeType(toeType)
             toeName = toeType.name.title()
+            toeEnabled = toeFlags.get(toeType, False)
+            fullToeName = f'{toeName}Toe'
 
             numToeLinks = self.numBigToeLinks if (toeType == ToeType.BIG) else self.numToeLinks
-            toeLinkSpecs = self.resizeSkeletonSpecs(numToeLinks, toeLinks)
+            *toeSpecs, toeTipSpec = self.resizeSkeletonSpecs(numToeLinks + 1, toeGroup)
 
-            for (j, toeLinkSpec) in enumerate(toeLinkSpecs, start=1):
+            for (j, toeSpec) in enumerate(toeSpecs, start=1):
 
-                toeLinkSpec.name = self.formatName(subname=f'{toeName}Toe', index=j)
-                toeLinkSpec.driver = self.formatName(subname=f'{toeName}Toe', index=j, type='control')
-                toeLinkSpec.enabled = toeFlags.get(toeType, False)
+                toeSpec.name = self.formatName(subname=fullToeName, index=j)
+                toeSpec.driver = self.formatName(subname=fullToeName, index=j, type='control')
+                toeSpec.enabled = toeEnabled
+
+            fullToeTipName = f'{fullToeName}Tip'
+            toeTipSpec.name = self.formatName(subname=fullToeTipName)
+            toeTipSpec.driver = self.formatName(subname=fullToeTipName, type='target')
+            toeTipSpec.enabled = toeEnabled
 
     def buildSkeleton(self):
         """
@@ -439,6 +521,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         footJoint = self.scene.createNode('joint', name=footSpec.name)
         footJoint.side = side
         footJoint.type = self.Type.FOOT
+        footJoint.displayLocalAxis = True
         footSpec.uuid = footJoint.uuid()
 
         footMatrix = footSpec.getMatrix(default=self.__default_component_matrices__[side][FootType.FOOT])
@@ -453,9 +536,10 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             ballJoint = self.scene.createNode('joint', name=ballSpec.name, parent=footJoint)
             ballJoint.side = side
             ballJoint.type = self.Type.NONE
+            ballJoint.displayLocalAxis = True
             ballSpec.uuid = ballJoint.uuid()
 
-            ballMatrix = ballSpec.getMatrix(self.__default_component_matrices__[side][FootType.BALL])
+            ballMatrix = ballSpec.getMatrix(default=self.__default_component_matrices__[side][FootType.BALL])
             ballJoint.setWorldMatrix(ballMatrix)
 
             # Create toe joints
@@ -491,6 +575,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
                     toeLink = self.scene.createNode('joint', name=toeLinkSpec.name, parent=parent)
                     toeLink.side = side
                     toeLink.type = jointTypes[i]
+                    toeLink.displayLocalAxis = True
                     toeLinkSpec.uuid = toeLink.uuid()
 
                     defaultToeLinkMatrix = transformutils.createTranslateMatrix([(self.__default_digit_spacing__ * j), 0.0, 0.0]) * defaultToeMatrix
@@ -507,15 +592,16 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
             # Create toe joint
             #
-            toeJoint = self.scene.createNode('joint', name=toesSpec.name, parent=footJoint)
-            toeJoint.side = side
-            toeJoint.type = self.Type.NONE
-            toesSpec.uuid = toeJoint.uuid()
+            toesJoint = self.scene.createNode('joint', name=toesSpec.name, parent=footJoint)
+            toesJoint.side = side
+            toesJoint.type = self.Type.NONE
+            toesJoint.displayLocalAxis = True
+            toesSpec.uuid = toesJoint.uuid()
 
-            toeMatrix = toesSpec.getMatrix(self.__default_component_matrices__[side][FootType.TOES])
-            toeJoint.setWorldMatrix(toeMatrix)
+            toeMatrix = toesSpec.getMatrix(default=self.__default_component_matrices__[side][FootType.TOES])
+            toesJoint.setWorldMatrix(toeMatrix)
 
-            return (footJoint, toeJoint)
+            return (footJoint, toesJoint)
 
     def buildRig(self):
         """
@@ -527,26 +613,13 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         # Get skeleton matrices
         #
         footSpec, ballSpec, toesSpec = self.skeletonSpecs()
+
         footExportJoint = footSpec.getNode()
-        ballExportJoint = ballSpec.getNode() if ballSpec.enabled else toesSpec.getNode()
+        footExportMatrix = footExportJoint.worldMatrix()
 
-        heelSpec, insideSpec, outsideSpec, tipSpec = self.pivotSpecs()
-        heelPoint = om.MVector(transformutils.breakMatrix(heelSpec.matrix)[3])
-        insidePoint = om.MVector(transformutils.breakMatrix(insideSpec.matrix)[3])
-        outsidePoint = om.MVector(transformutils.breakMatrix(outsideSpec.matrix)[3])
-        toeTipPoint = om.MVector(transformutils.breakMatrix(tipSpec.matrix)[3])
-
-        footMatrix = footExportJoint.worldMatrix()
-        ballMatrix = ballExportJoint.worldMatrix()
-        heelMatrix = transformutils.createRotationMatrix(footMatrix) * transformutils.createTranslateMatrix(heelPoint)
-        insideMatrix = transformutils.createRotationMatrix(footMatrix) * transformutils.createTranslateMatrix(insidePoint)
-        outsideMatrix = transformutils.createRotationMatrix(footMatrix) * transformutils.createTranslateMatrix(outsidePoint)
-        toeTipMatrix = transformutils.createRotationMatrix(ballMatrix) * transformutils.createTranslateMatrix(toeTipPoint)
-        rollMatrix = transformutils.createRotationMatrix(footMatrix) * transformutils.createTranslateMatrix(ballMatrix)
-
-        footLength = om.MPoint(heelPoint).distanceTo(om.MPoint(toeTipPoint))
-        footWidth = om.MPoint(insidePoint).distanceTo(om.MPoint(outsidePoint))
-        groundPoint = (heelPoint * 0.25) + (insidePoint * 0.25) + (outsidePoint * 0.25) + (toeTipPoint * 0.25)
+        ballEnabled = bool(ballSpec.enabled)
+        ballExportJoint = ballSpec.getNode() if ballEnabled else toesSpec.getNode()
+        ballExportMatrix = ballExportJoint.worldMatrix()
 
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
@@ -561,6 +634,8 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         colorRGB = Colour(*shapeutils.COLOUR_SIDE_RGB[componentSide])
         lightColorRGB = colorRGB.lighter()
         darkColorRGB = colorRGB.darker()
+
+        rigScale = self.findControlRig().getRigScale()
 
         # Get component dependencies
         #
@@ -578,7 +653,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             #
             limbComponent = limbComponents[0]
 
-            limbCtrl = self.scene(limbComponent.userProperties['ikControls'][0])
+            switchCtrl = self.scene(limbComponent.userProperties['switchControl'])
             limbFKCtrl = self.scene(limbComponent.userProperties['fkControls'][-1])
             limbIKCtrl = self.scene(limbComponent.userProperties['ikControls'][-1])
             limbIKOffset = self.scene(limbIKCtrl.userProperties['offset'])
@@ -587,11 +662,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
             # Create foot control
             #
-            footCtrlMatrix = mirrorMatrix * footMatrix
-            localPosition = om.MPoint(groundPoint) * footCtrlMatrix.inverse()
-            upperLimbName, lowerLimbName, limbTipName = limbComponent.__default_limb_names__
-            upperLimbAttr = f'{upperLimbName.lower()}Length'
-            lowerLimbAttr = f'{lowerLimbName.lower()}Length'
+            footCtrlMatrix = mirrorMatrix * footExportMatrix
 
             footSpaceName = self.formatName(type='space')
             footSpace = self.scene.createNode('transform', name=footSpaceName, parent=controlsGroup)
@@ -600,51 +671,193 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
             footCtrlName = self.formatName(type='control')
             footCtrl = self.scene.createNode('transform', name=footCtrlName, parent=footSpace)
-            footCtrl.addPointHelper('square', size=1.0, localPosition=localPosition, localScale=(1.0, footLength, footWidth), lineWidth=3.0, colorRGB=colorRGB)
-            footCtrl.addDivider('Settings')
-            footCtrl.addProxyAttr('mode', limbCtrl['mode'])
-            footCtrl.addProxyAttr(upperLimbAttr, limbCtrl[upperLimbAttr])
-            footCtrl.addProxyAttr(lowerLimbAttr, limbCtrl[lowerLimbAttr])
-            footCtrl.addProxyAttr('stretch', limbCtrl['stretch'])
-            footCtrl.addProxyAttr('pin', limbCtrl['pin'])
-            footCtrl.addProxyAttr('soften', limbCtrl['soften'])
-            footCtrl.addProxyAttr('twist', limbCtrl['twist'])
-            footCtrl.addProxyAttr('displayTwist', limbCtrl['displayTwist'])
             footCtrl.addDivider('Spaces')
             footCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
+            footCtrl.prepareChannelBoxForAnimation()
             self.publishNode(footCtrl, alias='Foot')
 
             footSpaceSwitch = footSpace.addSpaceSwitch([limbFKCtrl, limbIKOffset, motionCtrl], maintainOffset=True)
             footSpaceSwitch.weighted = True
             footSpaceSwitch.setAttr('target', [{'targetReverse': (True, True, True)}, {}, {'targetWeight': (0.0, 0.0, 0.0)}])
-            footSpaceSwitch.connectPlugs(footCtrl['mode'], 'target[0].targetWeight')
-            footSpaceSwitch.connectPlugs(footCtrl['mode'], 'target[1].targetWeight')
+            footSpaceSwitch.connectPlugs(switchCtrl['mode'], 'target[0].targetWeight')
+            footSpaceSwitch.connectPlugs(switchCtrl['mode'], 'target[1].targetWeight')
             footSpaceSwitch.connectPlugs(footCtrl['localOrGlobal'], 'target[2].targetRotateWeight')
 
-            # Override extremity-in control space
+            # Decompose foot pivot curve
             #
-            hingeCtrl = self.scene(limbComponent.userProperties['hingeControl'])
-            otherHandles = hingeCtrl.userProperties.get('otherHandles', [])
+            pivotSpec, = self.pivotSpecs()
+            pivotCurveData = mshapeparser.loads(pivotSpec.shapes)[0]
+            fnPivotCurve = om.MFnNurbsCurve(pivotCurveData)
 
-            hasOtherHandles = len(otherHandles) == 2
+            pivotCurvePoints = [om.MPoint(point) * pivotSpec.matrix for point in fnPivotCurve.cvPositions()]
 
-            if hasOtherHandles:
+            # Add intermediate shape to foot control
+            #
+            footIntermediatePoints = [point * footCtrlMatrix.inverse() for point in pivotCurvePoints]
 
-                extremityInCtrl = self.scene(otherHandles[-1])
+            footIntermediateObject = footCtrl.addCurve(footIntermediatePoints, degree=fnPivotCurve.degree, form=fnPivotCurve.form)
+            footIntermediateObject.isIntermediateObject = True
+            footIntermediateObject.setName(f'{footCtrl.name()}ShapeOrig')
 
-                extremityInSpace = self.scene(extremityInCtrl.userProperties['space'])
-                extremityInSpace.removeConstraints()
+            # Add foot control shape
+            #
+            localMin, localMax = om.MVector(footIntermediateObject.getAttr('boundingBoxMin')), om.MVector(footIntermediateObject.getAttr('boundingBoxMax'))
+            localCenter = (localMin * 0.5) + (localMax * 0.5)
+            localWidth, localHeight, localDepth = footIntermediateObject.getAttr('boundingBoxSize')
 
-                localCtrl = self.scene(limbComponent.userProperties['targetJoints'][-1])
-                insetNegate = self.scene(extremityInCtrl.userProperties['negate'])
+            footCtrl.addPointHelper(
+                'square',
+                size=1.0,
+                localPosition=localCenter,
+                localScale=(1.0, localHeight, localDepth),
+                colorRGB=colorRGB,
+                lineWidth=4.0
+            )
 
-                extremityInSpaceSwitch = extremityInSpace.addSpaceSwitch([localCtrl, footCtrl], maintainOffset=False)
-                extremityInSpaceSwitch.weighted = True
-                extremityInSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (True, True, True)}, {'targetWeight': (0.0, 0.0, 0.0)}])
-                extremityInSpaceSwitch.connectPlugs(extremityInCtrl['localOrGlobal'], 'target[0].targetWeight')
-                extremityInSpaceSwitch.connectPlugs(extremityInCtrl['localOrGlobal'], 'target[1].targetWeight')
-                extremityInSpaceSwitch.connectPlugs(insetNegate['outDistance'], 'target[0].targetOffsetTranslateX')
-                extremityInSpaceSwitch.connectPlugs(insetNegate['outDistance'], 'target[1].targetOffsetTranslateX')
+            # Setup foot pivot controls
+            #
+            localHalfDepth = localDepth * 0.5
+
+            footPivotCtrlName = self.formatName(subname='Pivot', type='control')
+            footPivotCtrl = self.scene.createNode('transform', name=footPivotCtrlName, parent=footCtrl)
+            footPivotCtrl.addCurve(
+                [
+                    (0.0, 0.0, 0.0),
+                    (0.0, 0.0, localHalfDepth),
+                    (0.0, -localHalfDepth, localHalfDepth),
+                    (0.0, 0.0, localDepth),
+                    (0.0, localHalfDepth, localHalfDepth),
+                    (0.0, 0.0, localHalfDepth),
+                    (0.0, 0.0, 0.0),
+                    (localHalfDepth, 0.0, 0.0),
+                    (-localHalfDepth, 0.0, 0.0),
+                    (0.0, 0.0, 0.0),
+                    (0.0, 0.0, -localHalfDepth),
+                    (0.0, -localHalfDepth, -localHalfDepth),
+                    (0.0, 0.0, -localDepth),
+                    (0.0, localHalfDepth, -localHalfDepth),
+                    (0.0, 0.0, -localHalfDepth),
+                    (0.0, 0.0, 0.0)
+                ],
+                degree=1,
+                form=om.MFnNurbsCurve.kClosed,
+                colorRGB=lightColorRGB
+            )
+            footPivotCtrl.prepareChannelBoxForAnimation()
+            self.publishNode(footPivotCtrl, alias='Foot_Pivot')
+
+            footCenterName = self.formatName(subname='Center', type='vectorMath')
+            footCenter = self.scene.createNode('vectorMath', name=footCenterName)
+            footCenter.operation = 9  # Average
+            footCenter.connectPlugs(footIntermediateObject['boundingBoxMin'], 'inFloatA')
+            footCenter.connectPlugs(footIntermediateObject['boundingBoxMax'], 'inFloatB')
+
+            footPivotMatrixName = self.formatName(subname='Pivot', type='composeMatrix')
+            footPivotMatrix = self.scene.createNode('composeMatrix', name=footPivotMatrixName)
+            footPivotMatrix.connectPlugs(footCenter['outFloat'], 'inputTranslate')
+            footPivotMatrix.connectPlugs('outputMatrix', footPivotCtrl['offsetParentMatrix'])
+
+            footPivotMultMatrixName = self.formatName(subname='Pivot', type='multMatrix')
+            footPivotMultMatrix = self.scene.createNode('multMatrix', name=footPivotMultMatrixName)
+            footPivotMultMatrix.connectPlugs(footPivotCtrl[f'worldMatrix[{footPivotCtrl.instanceNumber()}]'], 'matrixIn[0]')
+            footPivotMultMatrix.connectPlugs(footIntermediateObject[f'worldInverseMatrix[{footIntermediateObject.instanceNumber()}]'], 'matrixIn[1]')
+
+            footPivotName = self.formatName(subname='Normal', type='vectorProduct')
+            footPivot = self.scene.createNode('vectorProduct', name=footPivotName)
+            footPivot.operation = 3  # Vector matrix product
+            footPivot.input1 = (-1.0 * mirrorSign, 0.0, 0.0)
+            footPivot.connectPlugs(footPivotMultMatrix['matrixSum'], 'matrix')
+
+            footNormalName = self.formatName(subname='Normal', type='vectorProduct')
+            footNormal = self.scene.createNode('vectorProduct', name=footNormalName)
+            footNormal.operation = 3  # Vector matrix product
+            footNormal.input1 = (-1.0 * mirrorSign, 0.0, 0.0)
+            footNormal.connectPlugs(footIntermediateObject['matrix'], 'matrix')
+
+            footProjectedVectorName = self.formatName(subname='ProjectedVector', type='vectorMath')
+            footProjectedVector = self.scene.createNode('vectorMath', name=footProjectedVectorName)
+            footProjectedVector.operation = 18  # Project
+            footProjectedVector.normalize = True
+            footProjectedVector.connectPlugs(footNormal['output'], 'inFloatA')
+            footProjectedVector.connectPlugs(footPivot['output'], 'inFloatB')
+
+            footMaxSizeName = self.formatName(subname='MaxSize', type='max')
+            footMaxSize = self.scene.createNode('max', name=footMaxSizeName)
+            footMaxSize.connectPlugs(footIntermediateObject['boundingBoxSizeX'], 'input[0]')
+            footMaxSize.connectPlugs(footIntermediateObject['boundingBoxSizeY'], 'input[1]')
+            footMaxSize.connectPlugs(footIntermediateObject['boundingBoxSizeZ'], 'input[2]')
+
+            footScaledVectorName = self.formatName(subname='ScaledVector', type='vectorMath')
+            footScaledVector = self.scene.createNode('vectorMath', name=footScaledVectorName)
+            footScaledVector.operation = 2  # Multiply
+            footScaledVector.connectPlugs(footProjectedVector['outFloat'], 'inFloatA')
+            footScaledVector.connectPlugs(footMaxSize['output'], 'inFloatB')
+
+            footInputName = self.formatName(subname='Point', type='vectorMath')
+            footInput = self.scene.createNode('vectorMath', name=footInputName)
+            footInput.operation = 0  # Add
+            footInput.connectPlugs(footCenter['outFloat'], 'inFloatA')
+            footInput.connectPlugs(footScaledVector['outFloat'], 'inFloatB')
+
+            footPointOnCurveName = self.formatName(subname='Pivot', type='nearestPointOnCurve')
+            footPointOnCurve = self.scene.createNode('nearestPointOnCurve', name=footPointOnCurveName)
+            footPointOnCurve.connectPlugs(footIntermediateObject['local'], 'inputCurve')
+            footPointOnCurve.connectPlugs(footInput['outFloat'], 'inPosition')
+
+            footVectorLengthName = self.formatName(subname='VectorLength', type='length')
+            footVectorLength = self.scene.createNode('length', name=footVectorLengthName)
+            footVectorLength.connectPlugs(footProjectedVector['outFloat'], 'input')
+
+            footPivotConditionName = self.formatName(subname='Pivot', type='condition')
+            footPivotCondition = self.scene.createNode('condition', name=footPivotConditionName)
+            footPivotCondition.operation = 2  # Greater than
+            footPivotCondition.secondTerm = 0.001  # Super important!
+            footPivotCondition.connectPlugs(footVectorLength['output'], 'firstTerm')
+            footPivotCondition.connectPlugs(footPointOnCurve['result.position'], 'colorIfTrue')
+            footPivotCondition.connectPlugs(footCenter['outFloat'], 'colorIfFalse')
+
+            footPivotTargetName = self.formatName(subname='Pivot', type='target')
+            footPivotTarget = self.scene.createNode('transform', name=footPivotTargetName, parent=footCtrl)
+            footPivotTarget.displayLocalAxis = True
+            footPivotTarget.connectPlugs(footPivotCondition['outColor'], 'rotatePivot')
+            footPivotTarget.connectPlugs(footPivotCtrl['rotateOrder'], 'rotateOrder')
+            footPivotTarget.connectPlugs(footPivotCtrl['rotate'], 'rotate')
+            footPivotTarget.connectPlugs(footPivotCondition['outColor'], 'scalePivot')
+            footPivotTarget.connectPlugs(footPivotCtrl['scale'], 'scale')
+            footPivotTarget.connectPlugs(footPivotCtrl['translate'], 'translate')
+
+            # Compose heel and toe-tip matrices
+            #
+            forwardAxisVector = transformutils.breakMatrix(footExportMatrix)[1]
+            dotProducts = [forwardAxisVector * om.MVector(point) for point in pivotCurvePoints]
+            minPoint = pivotCurvePoints[dotProducts.index(min(dotProducts))] * footExportMatrix.inverse()
+            maxPoint = pivotCurvePoints[dotProducts.index(max(dotProducts))] * footExportMatrix.inverse()
+
+            toeTipPoint = om.MPoint(minPoint.x, minPoint.y, 0.0) * footExportMatrix
+            toeTipMatrix = transformutils.createRotationMatrix(footExportMatrix) * transformutils.createTranslateMatrix(toeTipPoint)
+
+            heelPoint = om.MPoint(maxPoint.x, maxPoint.y, 0.0) * footExportMatrix
+            heelMatrix = transformutils.createRotationMatrix(footExportMatrix) * transformutils.createTranslateMatrix(heelPoint)
+
+            # Create heel roll control
+            #
+            heelRollCtrlName = self.formatName(subname='Heel', type='control')
+            heelRollCtrl = self.scene.createNode('transform', name=heelRollCtrlName, parent=footPivotTarget)
+            heelRollCtrl.addPointHelper('triangle', size=localDepth, localPosition=(0.0, 0.0, localCenter.z), localRotate=(0.0, 0.0, 90.0 * mirrorSign), colorRGB=lightColorRGB)
+            heelRollCtrl.setWorldMatrix(heelMatrix, skipRotate=True, skipScale=True)
+            heelRollCtrl.freezeTransform()
+            heelRollCtrl.prepareChannelBoxForAnimation()
+            self.publishNode(heelRollCtrl, alias='Heel')
+
+            # Create toe-tip roll control
+            #
+            toeRollCtrlName = self.formatName(subname='ToeTip', type='control')
+            toeRollCtrl = self.scene.createNode('transform', name=toeRollCtrlName, parent=heelRollCtrl)
+            toeRollCtrl.addPointHelper('triangle', size=localDepth, localPosition=(0.0, 0.0, localCenter.z), localRotate=(0.0, 0.0, -90.0 * mirrorSign), colorRGB=lightColorRGB)
+            toeRollCtrl.setWorldMatrix(toeTipMatrix, skipRotate=True, skipScale=True)
+            toeRollCtrl.freezeTransform()
+            toeRollCtrl.prepareChannelBoxForAnimation()
+            self.publishNode(toeRollCtrl, alias='ToeTip')
 
             # Create kinematic foot joints
             #
@@ -654,7 +867,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             footFKJoints = [None] * 3
             footIKJoints = [None] * 3
             footBlendJoints = [None] * 3
-            footMatrices = (footMatrix, ballMatrix, toeTipMatrix)
+            footMatrices = (footExportMatrix, ballExportMatrix, toeTipMatrix)
             kinematicJoints = (footFKJoints, footIKJoints, footBlendJoints)
 
             for (i, kinematicType) in enumerate(kinematicTypes):
@@ -665,9 +878,9 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
                     jointName = self.formatName(subname=jointType, kinemat=kinematicType, type='joint')
                     joint = self.scene.createNode('joint', name=jointName, parent=parent)
-                    joint.segmentScaleCompensate = False
                     joint.displayLocalAxis = True
                     joint.setWorldMatrix(footMatrices[j])
+                    joint.freezeTransform()
 
                     kinematicJoints[i][j] = joint
 
@@ -675,7 +888,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             footIKJoint, ballIKJoint, toeTipIKJoint = footIKJoints
             footBlendJoint, ballBlendJoint, toeTipBlendJoint = footBlendJoints
 
-            blender = footCtrl['mode']
+            blender = switchCtrl['mode']
             footBlender = setuputils.createTransformBlends(footFKJoint, footIKJoint, footBlendJoint, blender=blender)
             ballBlender = setuputils.createTransformBlends(ballFKJoint, ballIKJoint, ballBlendJoint, blender=blender)
             toeTipBlender = setuputils.createTransformBlends(toeTipFKJoint, toeTipIKJoint, toeTipBlendJoint, blender=blender)
@@ -684,53 +897,22 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             ballBlender.setName(self.formatName(subname=jointTypes[1], type='blendTransform'))
             toeTipBlender.setName(self.formatName(subname=jointTypes[2], type='blendTransform'))
 
+            toesTarget = ballBlendJoint  # Specifies which node to attach the toes control to!
+
             # Constrain foot FK joints
             #
             footFKJoint.addConstraint('transformConstraint', [footCtrl], maintainOffset=requiresMirroring)
 
-            # Create foot roll controls
+            footFKJoint.connectPlugs('scale', ballFKJoint['scale'])
+            ballFKJoint.connectPlugs('scale', toeTipFKJoint['scale'])
+
+            # Create foot roll control
             #
-            outsideFootCtrlName = self.formatName(subname='Outside', type='control')
-            outsideFootCtrl = self.scene.createNode('transform', name=outsideFootCtrlName, parent=footCtrl)
-            outsideFootCtrl.addPointHelper('triangle', size=15.0, localRotate=(90.0, -90.0 * mirrorSign, 0.0), colorRGB=lightColorRGB)
-            outsideFootCtrl.setWorldMatrix(outsideMatrix, skipRotate=True, skipScale=True)
-            outsideFootCtrl.freezeTransform()
-            outsideFootCtrl.prepareChannelBoxForAnimation()
-            self.publishNode(outsideFootCtrl, alias='Outside')
-
-            insideFootCtrlName = self.formatName(subname='Inside', type='control')
-            insideFootCtrl = self.scene.createNode('transform', name=insideFootCtrlName, parent=outsideFootCtrl)
-            insideFootCtrl.addPointHelper('triangle', size=15.0, localRotate=(90.0, 90.0 * mirrorSign, 0.0), colorRGB=lightColorRGB)
-            insideFootCtrl.setWorldMatrix(insideMatrix, skipRotate=True, skipScale=True)
-            insideFootCtrl.freezeTransform()
-            insideFootCtrl.prepareChannelBoxForAnimation()
-            self.publishNode(insideFootCtrl, alias='Inside')
-
-            heelRollCtrlName = self.formatName(subname='Heel', type='control')
-            heelRollCtrl = self.scene.createNode('transform', name=heelRollCtrlName, parent=insideFootCtrl)
-            heelRollCtrl.addPointHelper('triangle', size=15.0, localRotate=(0.0, 0.0, 90.0 * mirrorSign), colorRGB=lightColorRGB)
-            heelRollCtrl.setWorldMatrix(heelMatrix, skipRotate=True, skipScale=True)
-            heelRollCtrl.freezeTransform()
-            heelRollCtrl.prepareChannelBoxForAnimation()
-            self.publishNode(heelRollCtrl, alias='Heel')
-
-            toeRollCtrlName = self.formatName(subname='ToeTip', type='control')
-            toeRollCtrl = self.scene.createNode('transform', name=toeRollCtrlName, parent=heelRollCtrl)
-            toeRollCtrl.addPointHelper('triangle', size=15.0, localRotate=(0.0, 0.0, -90.0 * mirrorSign), colorRGB=lightColorRGB)
-            toeRollCtrl.setWorldMatrix(toeTipMatrix, skipRotate=True, skipScale=True)
-            toeRollCtrl.freezeTransform()
-            toeRollCtrl.prepareChannelBoxForAnimation()
-            self.publishNode(toeRollCtrl, alias='ToeTip')
-
-            ballRollCtrlMatrix = mirrorMatrix * rollMatrix
-            footPoint = transformutils.breakMatrix(footMatrix)[3]
-            footDot = self.scene.upVector * om.MVector(footPoint)
-            localPosition = om.MPoint(heelPoint + (self.scene.upVector * footDot)) * ballRollCtrlMatrix.inverse()
-
             ballRollCtrlName = self.formatName(subname='Ball', type='control')
             ballRollCtrl = self.scene.createNode('transform', name=ballRollCtrlName, parent=toeRollCtrl)
-            ballRollCtrl.addPointHelper('tearDrop', size=10.0, localPosition=localPosition, localRotate=(45.0 * mirrorSign, 90.0 * mirrorSign, 0.0), colorRGB=lightColorRGB)
-            ballRollCtrl.setWorldMatrix(ballMatrix, skipRotate=True, skipScale=True)
+            ballRollCtrl.addShape('RoundLollipopCurve', size=(localHeight * 0.75), localScale=(mirrorSign, mirrorSign, 1.0), colorRGB=lightColorRGB, lineWidth=4.0)
+            ballRollCtrl.setWorldMatrix(ballExportMatrix, skipRotate=True, skipScale=True)
+            ballRollCtrl.hideAttr('scale', lock=True)
             ballRollCtrl.freezeTransform()
             ballRollCtrl.prepareChannelBoxForAnimation()
             self.publishNode(ballRollCtrl, alias='Ball')
@@ -738,47 +920,43 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             limbIKTarget.setParent(ballRollCtrl, absolute=True)
             limbIKTarget.freezeTransform()
 
-            # Apply single-chain solver to IK joints
+            # Constraint foot IK joints
             #
-            footIKHandle, footIKEffector = kinematicutils.applySingleChainSolver(footIKJoint, ballIKJoint)
-            footIKHandle.setName(self.formatName(type='ikHandle'))
-            footIKHandle.setParent(privateGroup)
-            footIKHandle.addConstraint('transformConstraint', [ballRollCtrl], maintainOffset=True)
-            footIKEffector.setName(self.formatName(type='ikEffector'))
-
-            ballIKHandle, ballIKEffector = kinematicutils.applySingleChainSolver(ballIKJoint, toeTipIKJoint)
-            ballIKHandle.setName(self.formatName(subname='Ball', type='ikHandle'))
-            ballIKHandle.setParent(privateGroup)
-            ballIKHandle.addConstraint('transformConstraint', [toeRollCtrl], maintainOffset=True)
-            ballIKEffector.setName(self.formatName(subname='Ball', type='ikEffector'))
-
             footIKJoint.addConstraint('pointConstraint', [limbIKJoint])
+            footIKJoint.addConstraint('aimConstraint', [ballRollCtrl], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpObject=ballRollCtrl, maintainOffset=True)
             footIKJoint.addConstraint('scaleConstraint', [footCtrl])
+            footIKJoint.connectPlugs('scale', ballIKJoint['scale'])
+
+            ballIKJoint.addConstraint('aimConstraint', [toeRollCtrl], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpObject=toeRollCtrl, maintainOffset=True)
+            ballIKJoint.connectPlugs('scale', toeTipIKJoint['scale'])
 
             # Add foot space to limb's pole-vector control
             #
             limbPVCtrl = self.scene(limbComponent.userProperties['pvControl'])
-            self.overrideLimbPVSpace(footCtrl, limbPVCtrl)
+            self.overrideLimbPoleVector(footCtrl, limbPVCtrl)
 
             # Override end-matrix on limb's twist solver
             #
             twistSolver = self.scene(limbComponent.userProperties['twistSolvers'][-1])
-            self.overrideLimbTwist(footCtrl, footExportJoint, twistSolver)
+            offsetMatrix = footExportJoint.worldMatrix() * footCtrl.worldInverseMatrix()
 
-            # Connect visibility
+            self.overrideLimbTwist(footCtrl, twistSolver, offsetMatrix=offsetMatrix)
+
+            # Override end-value on limb's scale remapper
             #
-            footCtrl.connectPlugs('mode', heelRollCtrl['visibility'])
-            footCtrl.connectPlugs('mode', ballRollCtrl['visibility'])
-            footCtrl.connectPlugs('mode', toeRollCtrl['visibility'])
-            footCtrl.connectPlugs('mode', insideFootCtrl['visibility'])
-            footCtrl.connectPlugs('mode', outsideFootCtrl['visibility'])
+            scaleRemapper = self.scene(limbComponent.userProperties['scaleRemappers'][-1])
+            self.overrideLimbRemapper(footCtrl, scaleRemapper)
 
-            # Constrain remaining joints
+            # Override extremity-in control space
             #
-            footExportJoint.addConstraint('transformConstraint', [footBlendJoints[0]])
-            ballExportJoint.addConstraint('transformConstraint', [footBlendJoints[1]])
+            hingeCtrl = self.scene(limbComponent.userProperties['hingeControl'])
+            otherHandles = hingeCtrl.userProperties.get('otherHandles', [])
 
-            toesTarget = footBlendJoints[1]
+            hasOtherHandles = len(otherHandles) == 2
+
+            if hasOtherHandles:
+
+                self.overrideLimbHandle(footCtrl, self.scene(otherHandles[-1]))
 
         else:
 
@@ -787,6 +965,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         # Create toes control
         #
         toesMatrix = mirrorMatrix * toesTarget.worldMatrix()
+        localScaleZ = footCtrl.shape().localScaleZ
 
         toesSpaceName = self.formatName(subname='Toes', type='space')
         toesSpace = self.scene.createNode('transform', name=toesSpaceName, parent=controlsGroup)
@@ -796,91 +975,201 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
         toesCtrlName = self.formatName(subname='Toes', type='control')
         toesCtrl = self.scene.createNode('transform', name=toesCtrlName, parent=toesSpace)
-        toesCtrl.addPointHelper('square', size=1.0, localScale=(1.0, (footWidth * 0.5), footWidth), colorRGB=colorRGB)
-        toesCtrl.addDivider('Settings')
-        toesCtrl.addProxyAttr('mode', limbCtrl['mode'])
-        toesCtrl.addProxyAttr('thighLength', limbCtrl['thighLength'])
-        toesCtrl.addProxyAttr('calfLength', limbCtrl['calfLength'])
-        toesCtrl.addProxyAttr('stretch', limbCtrl['stretch'])
-        toesCtrl.addProxyAttr('pin', limbCtrl['pin'])
-        toesCtrl.addProxyAttr('soften', limbCtrl['soften'])
-        toesCtrl.addProxyAttr('twist', limbCtrl['twist'])
+        toesCtrl.addPointHelper('square', size=1.0, localScale=(1.0, localScaleZ * 0.5, localScaleZ), colorRGB=colorRGB)
+        toesCtrl.prepareChannelBoxForAnimation()
         self.publishNode(toesCtrl, alias='Toes')
 
         if ballSpec.enabled:
 
+            # Add pose attributes
+            #
+            footCtrl.addDivider('Poses')
+            footCtrl.addAttr(longName='curl', attributeType='angle', keyable=True)
+            footCtrl.addAttr(longName='spread', attributeType='angle', keyable=True)
+            footCtrl.addAttr(longName='splay', attributeType='angle', keyable=True)
+
+            toesCtrl.addDivider('Poses')
+            toesCtrl.addProxyAttr('curl', footCtrl['curl'])
+            toesCtrl.addProxyAttr('spread', footCtrl['spread'])
+            toesCtrl.addProxyAttr('splay', footCtrl['splay'])
+
+            # Create pose driver negate nodes
+            #
+            toeHalfSpreadName = self.formatName(subname='HalfSpread', type='floatMath')
+            toeHalfSpread = self.scene.createNode('floatMath', name=toeHalfSpreadName)
+            toeHalfSpread.operation = 2  # Multiply
+            toeHalfSpread.connectPlugs(footCtrl['spread'], 'inAngleA')
+            toeHalfSpread.setAttr('inAngleB', 0.5)
+
+            toeNegateHalfSpreadName = self.formatName(subname='NegateHalfSpread', type='floatMath')
+            toeNegateHalfSpread = self.scene.createNode('floatMath', name=toeNegateHalfSpreadName)
+            toeNegateHalfSpread.operation = 2  # Multiply
+            toeNegateHalfSpread.connectPlugs(footCtrl['spread'], 'inAngleA')
+            toeNegateHalfSpread.setAttr('inAngleB', -0.5)
+
+            toeNegateSpreadName = self.formatName(subname='NegateSpread', type='floatMath')
+            toeNegateSpread = self.scene.createNode('floatMath', name=toeNegateSpreadName)
+            toeNegateSpread.operation = 2  # Multiply
+            toeNegateSpread.connectPlugs(footCtrl['spread'], 'inAngleA')
+            toeNegateSpread.setAttr('inAngleB', -1.0)
+
+            toeNegateSplayName = self.formatName(subname='NegateSplay', type='floatMath')
+            toeNegateSplay = self.scene.createNode('floatMath', name=toeNegateSplayName)
+            toeNegateSplay.operation = 2  # Multiply
+            toeNegateSplay.connectPlugs(footCtrl['splay'], 'inAngleA')
+            toeNegateSplay.setAttr('inAngleB', -1.0)
+
+            toeNegateHalfSplayName = self.formatName(subname='NegateHalfSplay', type='floatMath')
+            toeNegateHalfSplay = self.scene.createNode('floatMath', name=toeNegateHalfSplayName)
+            toeNegateHalfSplay.operation = 2  # Multiply
+            toeNegateHalfSplay.connectPlugs(footCtrl['splay'], 'inAngleA')
+            toeNegateHalfSplay.setAttr('inAngleB', -(1.0 / 3.0))
+
+            toeHalfSplayName = self.formatName(subname='HalfSplay', type='floatMath')
+            toeHalfSplay = self.scene.createNode('floatMath', name=toeHalfSplayName)
+            toeHalfSplay.operation = 2  # Multiply
+            toeHalfSplay.connectPlugs(footCtrl['splay'], 'inAngleA')
+            toeHalfSplay.setAttr('inAngleB', (1.0 / 3.0))
+
             # Iterate through toe groups
             #
-            for (toeType, toeGroup) in ballSpec.groups.items():
+            for (toeId, toeGroup) in ballSpec.groups.items():
 
                 # Check if toe group is enabled
                 #
-                toeSpec = toeGroup[0]
+                *toeSpecs, toeTipSpec = toeGroup
+                isEnabled = toeSpecs[0].enabled
 
-                if not toeSpec.enabled:
+                if not isEnabled:
 
                     continue
 
                 # Create toe master control
                 #
-                toeType = self.ToeType(toeType)
+                toeType = self.ToeType(toeId)
                 toeName = toeType.name.title()
-                toeJoint = self.scene(toeSpec.uuid)
+                fullToeName = f'{toeName}Toe'
+                firstToeExportJoint = self.scene(toeSpecs[0].uuid)
 
-                masterToeCtrlName = self.formatName(subname=f'{toeName}Toe', type='control')
+                masterToeCtrlName = self.formatName(subname=fullToeName, type='control')
                 masterToeCtrl = self.scene.createNode('transform', name=masterToeCtrlName, parent=toesCtrl)
-                masterToeCtrl.addPointHelper('square', size=5, localScale=(1.0, 2.0, 0.25))
-                masterToeCtrl.copyTransform(toeJoint)
+                masterToeCtrl.addPointHelper('square', size=(5.0 * rigScale), localScale=(1.0, 2.0, 0.25), colorRGB=lightColorRGB)
+                masterToeCtrl.copyTransform(firstToeExportJoint)
                 masterToeCtrl.freezeTransform()
+                masterToeCtrl.addDivider('Poses')
+                masterToeCtrl.addProxyAttr('curl', footCtrl['curl'])
+                masterToeCtrl.addProxyAttr('spread', footCtrl['spread'])
+                masterToeCtrl.addProxyAttr('splay', footCtrl['splay'])
+                masterToeCtrl.prepareChannelBoxForAnimation()
+                self.publishNode(masterToeCtrl, alias=fullToeName)
 
                 # Iterate through toe group
                 #
-                numToeLinks = len(toeGroup)
-                toeCtrls = [None] * numToeLinks
+                numToeCtrls = len(toeSpecs)
+                toeCtrls = [None] * numToeCtrls
 
-                for (i, toeLinkSpec) in enumerate(toeGroup):
+                for (i, toeSpec) in enumerate(toeSpecs):
 
                     # Create toe control
                     #
                     toeIndex = i + 1
-                    toeJoint = self.scene(toeLinkSpec.uuid)
+                    toeExportJoint = self.scene(toeSpec.uuid)
                     toeParent = toeCtrls[i - 1] if (i > 0) else masterToeCtrl
+                    toeAlias = f'{fullToeName}{str(toeIndex).zfill(2)}'
 
-                    toeCtrlName = self.formatName(subname=f'{toeName}Toe', index=toeIndex, type='control')
+                    toeCtrlName = self.formatName(subname=fullToeName, index=toeIndex, type='control')
                     toeCtrl = self.scene.createNode('transform', name=toeCtrlName, parent=toeParent)
-                    toeCtrl.addPointHelper('disc', size=5, localRotate=(0.0, 90.0, 0.0), side=componentSide)
-                    self.publishNode(toeCtrl, alias=f'{toeName}Toe{str(i + 1).zfill(2)}')
+                    toeCtrl.addPointHelper('disc', size=(5.0 * rigScale), localRotate=(0.0, 90.0, 0.0), colorRGB=colorRGB)
+                    toeCtrl.prepareChannelBoxForAnimation()
+                    self.publishNode(toeCtrl, alias=toeAlias)
 
                     toeCtrls[i] = toeCtrl
 
                     # Connect additives to toe control
                     #
-                    matrix = toeJoint.worldMatrix() * toeCtrl.parentInverseMatrix()
-                    translation, eulerRotation, scale = transformutils.decomposeTransformMatrix(matrix)
+                    toeMatrix = toeExportJoint.worldMatrix() * toeCtrl.parentInverseMatrix()
+                    translation, eulerRotation, scale = transformutils.decomposeTransformMatrix(toeMatrix)
 
-                    arrayMathName = self.formatName(subname=f'{toeName}Toe', index=toeIndex, type='arrayMath')
-                    arrayMath = self.scene.createNode('arrayMath', name=arrayMathName)
-                    arrayMath.setAttr('inDistance[0]', translation)
-                    arrayMath.setAttr('inAngle[0]', eulerRotation, convertUnits=False)
+                    toeComposeMatrixName = self.formatName(subname=fullToeName, index=toeIndex, type='composeMatrix')
+                    toeComposeMatrix = self.scene.createNode('composeMatrix', name=toeComposeMatrixName)
+                    toeComposeMatrix.setAttr('inputTranslate', translation)
+                    toeComposeMatrix.setAttr('inputRotate', eulerRotation, convertUnits=False)
+
+                    toeArrayMathName = self.formatName(subname=fullToeName, index=toeIndex, type='arrayMath')
+                    toeArrayMath = self.scene.createNode('arrayMath', name=toeArrayMathName)
 
                     if i > 0:
 
-                        arrayMath.connectPlugs(masterToeCtrl['translateX'], 'inDistance[1].inDistanceX')
-                        arrayMath.connectPlugs(masterToeCtrl['rotate'], 'inAngle[1]')
+                        toeArrayMath.connectPlugs(masterToeCtrl['translateX'], 'inDistance[0].inDistanceX')
+                        toeArrayMath.connectPlugs(masterToeCtrl['rotate'], 'inAngle[0]')
 
-                    composeMatrixName = self.formatName(subname=f'{toeName}Toe', index=toeIndex, type='composeMatrix')
-                    composeMatrix = self.scene.createNode('composeMatrix', name=composeMatrixName)
-                    composeMatrix.connectPlugs(arrayMath['outDistance'], 'inputTranslate')
-                    composeMatrix.connectPlugs(arrayMath['outAngle'], 'inputRotate')
-                    composeMatrix.connectPlugs('outputMatrix', toeCtrl['offsetParentMatrix'])
+                    toeOffsetComposeMatrixName = self.formatName(subname=fullToeName, index=toeIndex, kinemat='Offset', type='composeMatrix')
+                    toeOffsetComposeMatrix = self.scene.createNode('composeMatrix', name=toeOffsetComposeMatrixName)
+                    toeOffsetComposeMatrix.connectPlugs(toeArrayMath['outDistance'], 'inputTranslate')
+                    toeOffsetComposeMatrix.connectPlugs(toeArrayMath['outAngle'], 'inputRotate')
 
-                    # Constrain toe joint
+                    toeMultMatrixName = self.formatName(subname=fullToeName, index=toeIndex, type='multMatrix')
+                    toeMultMatrix = self.scene.createNode('multMatrix', name=toeMultMatrixName)
+                    toeMultMatrix.connectPlugs(toeOffsetComposeMatrix['outputMatrix'], 'matrixIn[0]')
+                    toeMultMatrix.connectPlugs(toeComposeMatrix['outputMatrix'], 'matrixIn[1]')
+                    toeMultMatrix.connectPlugs('matrixSum', toeCtrl['offsetParentMatrix'])
+
+                    toeCtrl.userProperties['type'] = toeType
+                    toeCtrl.userProperties['offset'] = toeArrayMath.uuid()
+
+                toeTipTargetName = self.formatName(subname=f'{fullToeName}Tip', type='target')
+                toeTipTarget = self.scene.createNode('transform', name=toeTipTargetName, parent=toeCtrls[-1])
+                toeTipTarget.displayLocalAxis = True
+                toeTipTarget.visibility = False
+                toeTipTarget.setWorldMatrix(toeTipSpec.worldMatrix)
+                toeTipTarget.freezeTransform()
+
+                # Connect pose drivers to toe offsets
+                #
+                for (i, toeCtrl) in enumerate(toeCtrls):
+
+                    # Connect curl driver
                     #
-                    toeJoint.addConstraint('transformConstraint', [toeCtrl])
+                    toeArrayMath = self.scene(toeCtrl.userProperties['offset'])
+                    toeArrayMath.connectPlugs(footCtrl['curl'], 'inAngle[1].inAngleZ')
 
-        else:
+                    # Connect spread driver
+                    #
+                    if i == 0 and toeType != ToeType.BIG:
 
-            # Constrain toes joint
-            #
-            ballExportJoint.addConstraint('transformConstraint', [toesCtrl])
+                        if toeType == ToeType.LONG:
+
+                            toeHalfSpread.connectPlugs('outAngle', toeArrayMath['inAngle[2].inAngleY'])
+
+                        elif toeType == ToeType.MIDDLE:
+
+                            pass
+
+                        elif toeType == ToeType.RING:
+
+                            toeNegateHalfSpread.connectPlugs('outAngle', toeArrayMath['inAngle[2].inAngleY'])
+
+                        else:
+
+                            toeNegateSpread.connectPlugs('outAngle', toeArrayMath['inAngle[2].inAngleY'])
+
+                    # Connect splay driver
+                    #
+                    if i == 0 and toeType != ToeType.BIG:
+
+                        if toeType == ToeType.LONG:
+
+                            toeNegateSplay.connectPlugs('outAngle', toeArrayMath['inAngle[2].inAngleZ'])
+
+                        elif toeType == ToeType.MIDDLE:
+
+                            toeNegateHalfSplay.connectPlugs('outAngle', toeArrayMath['inAngle[2].inAngleZ'])
+
+                        elif toeType == ToeType.RING:
+
+                            toeHalfSplay.connectPlugs('outAngle', toeArrayMath['inAngle[2].inAngleZ'])
+
+                        else:
+
+                            footCtrl.connectPlugs('splay', toeArrayMath['inAngle[2].inAngleZ'])
     # endregion

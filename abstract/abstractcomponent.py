@@ -10,7 +10,7 @@ from dcc.naming import namingutils
 from dcc.maya.libs import plugutils
 from mpy import mpynodeextension, mpyattribute
 from mpy.abstract import mabcmeta
-from ..libs import Side, Type, Style, Status, componentfactory
+from ..libs import Side, Type, Style, Status, componentfactory, interfacefactory
 
 import logging
 logging.basicConfig()
@@ -66,6 +66,7 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
         # Declare class variables
         #
         self._componentManager = componentfactory.ComponentFactory.getInstance(asWeakReference=True)
+        self._interfaceManager = interfacefactory.InterfaceFactory.getInstance(asWeakReference=True)
     # endregion
 
     # region Attributes
@@ -78,6 +79,7 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
     controlsGroup = mpyattribute.MPyAttribute('controlsGroup', attributeType='message')
     privateGroup = mpyattribute.MPyAttribute('privateGroup', attributeType='message')
     jointsGroup = mpyattribute.MPyAttribute('jointsGroup', attributeType='message')
+    attachmentId = mpyattribute.MPyAttribute('attachmentId', attributeType='int', min=0)
     # endregion
 
     # region Properties
@@ -173,7 +175,9 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
         # Update user properties
         #
+        component.userProperties[cls.SKELETON_DIRTY_KEY] = True
         component.userProperties[cls.SKELETON_KEY] = []
+        component.userProperties[cls.PIVOTS_DIRTY_KEY] = True
         component.userProperties[cls.PIVOTS_KEY] = []
 
         return component
@@ -233,7 +237,7 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
         :rtype: AbstractComponent
         """
 
-        # Iterate through destination plugs
+        # Iterate through message destinations
         #
         plug = self.findPlug('message')
         otherPlugs = plug.destinations()
@@ -242,11 +246,18 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
             # Check if this a rig component
             #
-            otherNode = self.scene(otherPlug.node())
+            plugName = otherPlug.partialName(
+                includeNodeName=False,
+                useLongNames=True,
+                includeNonMandatoryIndices=True,
+                useFullAttributePath=True
+            )
 
-            if isinstance(otherNode, AbstractComponent) and re.fullmatch(r'^[a-zA-Z0-9_]+\.componentChildren\[[0-9]+\]$', otherPlug.info):
+            isComponent = re.fullmatch(r'^componentChildren\[[0-9]+]$', plugName)
 
-                return otherNode
+            if isComponent:
+
+                return self.scene(otherPlug.node())
 
             else:
 
@@ -258,7 +269,7 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
         """
         Returns a generator that iterates over all the parents relative to this node.
 
-        :rtype: iter
+        :rtype: Iterator[AbstractComponent]
         """
 
         ancestor = self.componentParent()
@@ -278,6 +289,25 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
         return [component for component in self.iterComponentAncestors() if any(cls.__name__.endswith(typeName) for cls in component.iterBases())]
 
+    def traceComponent(self):
+        """
+        Returns a generator that iterates from the root to this component.
+
+        :rtype: Iterator[AbstractComponent]
+        """
+
+        yield from reversed(list(self.iterComponentAncestors()))
+        yield self
+
+    def componentChildCount(self):
+        """
+        Evaluates the number of component children.
+
+        :rtype: int
+        """
+
+        return self.findPlug('componentChildren').numConnectedElements()
+
     def iterComponentChildren(self):
         """
         Returns a generator that yields components that are parented to this component.
@@ -285,24 +315,15 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
         :rtype: Iterator[AbstractComponent]
         """
 
-        # Iterate through destination plugs
+        # Iterate through connected elements
         #
         plug = self.findPlug('componentChildren')
-        elementCount = plug.numElements()
+        elementCount = plug.numConnectedElements()
 
         for i in range(elementCount):
 
-            # Check if element is connected
-            #
-            element = plug.elementByPhysicalIndex(i)
-
-            if element.isDestination:
-
-                yield self.scene(element.source().node())
-
-            else:
-
-                continue
+            element = plug.connectionByPhysicalIndex(i)
+            yield self.scene(element.source().node())
 
     def popComponentChild(self, index):
         """
@@ -485,6 +506,21 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
         return [component for component in self.iterComponentDescendants() if any(cls.__name__.endswith(typeName) for cls in component.iterBases())]
 
+    def walkComponents(self, includeSelf=True):
+        """
+        Returns a generator that yields the component hierarchy.
+        Unlike `iterComponentDescendants` this generator will also yield this component!
+
+        :type includeSelf: bool
+        :rtype: Iterator[AbstractComponent]
+        """
+
+        if includeSelf:
+
+            yield self
+
+        yield from self.iterComponentDescendants()
+
     def findComponents(self, typeName, upstream=True, downstream=True):
         """
         Collects any components that match the specified criteria.
@@ -519,12 +555,6 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
         :rtype: rigotron.components.rootcomponent.RootComponent
         """
 
-        # Redundancy check
-        #
-        if self.className == 'RootComponent':
-
-            return self
-
         # Collect ancestors derived from root
         #
         components = self.findComponents('RootComponent', upstream=True, downstream=False)
@@ -546,7 +576,7 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
         """
         Returns the control rig associated with this component.
 
-        :rtype: rigotron.interops.controlrig.ControlRig
+        :rtype: rigotron.interfaces.controlrig.ControlRig
         """
 
         # Get root component

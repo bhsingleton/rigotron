@@ -108,10 +108,9 @@ class ClavicleComponent(basecomponent.BaseComponent):
         privateGroup = self.scene(self.privateGroup)
         jointsGroup = self.scene(self.jointsGroup)
 
-        # Get space switch options
-        #
-        spineComponent = self.findComponentAncestors('SpineComponent')[0]
-        chestCtrl = spineComponent.getPublishedNode('Chest')
+        rigScale = self.findControlRig().getRigScale()
+
+        parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
 
         # Create clavicle control
         #
@@ -123,18 +122,14 @@ class ClavicleComponent(basecomponent.BaseComponent):
         clavicleSpace = self.scene.createNode('transform', name=clavicleSpaceName, parent=controlsGroup)
         clavicleSpace.setWorldMatrix(mirrorMatrix * clavicleMatrix)
         clavicleSpace.freezeTransform()
-        clavicleSpace.addConstraint('transformConstraint', [chestCtrl], maintainOffset=True)
+        clavicleSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
 
         clavicleCtrlName = self.formatName(type='control')
         clavicleCtrl = self.scene.createNode('transform', name=clavicleCtrlName, parent=clavicleSpace)
-        clavicleCtrl.addShape('LollipopCurve', size=30.0, localRotate=(45.0 * mirrorSign, 0.0, 90.0 * mirrorSign), side=componentSide, lineWidth=4.0)
+        clavicleCtrl.addShape('LollipopCurve', size=(30.0 * rigScale), localRotate=(45.0 * mirrorSign, 0.0, 90.0 * mirrorSign), side=componentSide, lineWidth=4.0)
         clavicleCtrl.prepareChannelBoxForAnimation()
         clavicleCtrl.tagAsController()
         self.publishNode(clavicleCtrl, alias='Clavicle')
 
         clavicleCtrl.userProperties['space'] = clavicleSpace.uuid()
-
-        # Constraint export joint
-        #
-        clavicleExportJoint.addConstraint('transformConstraint', [clavicleCtrl], maintainOffset=requiresMirroring)
     # endregion

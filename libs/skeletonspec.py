@@ -1,7 +1,7 @@
-from dcc.json import psonobject
-from six import string_types
 from maya.api import OpenMaya as om
 from mpy import mpyscene
+from dcc.maya.json import melsonobject
+from six import string_types
 
 import logging
 logging.basicConfig()
@@ -9,13 +9,23 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-class SkeletonSpec(psonobject.PSONObject):
+class SkeletonSpec(melsonobject.MELSONObject):
     """
-    Overload of `PSONObject` that outlines skeleton specifications.
+    Overload of `MELSONObject` that outlines skeleton specifications.
     """
 
     # region Dunderscores
-    __slots__ = ('_scene', '_name', '_uuid', '_matrix', '_driver', '_children', '_groups', '_enabled')
+    __slots__ = (
+        '_scene',
+        '_name',
+        '_uuid',
+        '_matrix',
+        '_worldMatrix',
+        '_driver',
+        '_children',
+        '_groups',
+        '_enabled'
+    )
 
     def __init__(self, *args, **kwargs):
         """
@@ -34,6 +44,7 @@ class SkeletonSpec(psonobject.PSONObject):
         self._name = kwargs.get('name', '')
         self._uuid = kwargs.get('uuid', om.MUuid())
         self._matrix = kwargs.get('matrix', None)
+        self._worldMatrix = kwargs.get('worldMatrix', None)
         self._driver = kwargs.get('driver', '')
         self._children = kwargs.get('children', [])
         self._groups = kwargs.get('groups', {})
@@ -98,7 +109,7 @@ class SkeletonSpec(psonobject.PSONObject):
         """
         Getter method that returns the matrix.
 
-        :rtype: Union[om.MMatrix, None]
+        :rtype: Union[om.MTransformationMatrix, None]
         """
 
         return self._matrix
@@ -108,11 +119,32 @@ class SkeletonSpec(psonobject.PSONObject):
         """
         Setter method that updates the matrix.
 
-        :type matrix: Union[om.MMatrix, None]
+        :type matrix: Union[om.MTransformationMatrix, None]
         :rtype: None
         """
 
         self._matrix = matrix
+
+    @property
+    def worldMatrix(self):
+        """
+        Getter method that returns the world matrix.
+
+        :rtype: Union[om.MMatrix, None]
+        """
+
+        return self._worldMatrix
+
+    @worldMatrix.setter
+    def worldMatrix(self, worldMatrix):
+        """
+        Setter method that updates the world matrix.
+
+        :type worldMatrix: Union[om.MMatrix, None]
+        :rtype: None
+        """
+
+        self._worldMatrix = worldMatrix
 
     @property
     def driver(self):
@@ -202,23 +234,6 @@ class SkeletonSpec(psonobject.PSONObject):
     # endregion
 
     # region Methods
-    @classmethod
-    def isJsonCompatible(cls, T):
-        """
-        Evaluates whether the given type is json compatible.
-
-        :type T: Union[Callable, Tuple[Callable]]
-        :rtype: bool
-        """
-
-        if T.__module__ == 'OpenMaya':
-
-            return True
-
-        else:
-
-            return super(SkeletonSpec, cls).isJsonCompatible(T)
-
     def enable(self):
         """
         Enables this skeleton component.
@@ -244,10 +259,14 @@ class SkeletonSpec(psonobject.PSONObject):
         :rtype: mpynode.MPyNode
         """
 
+        # Check if UUID exists
+        #
         if not isinstance(self.uuid, om.MUuid):
 
             return None
 
+        # Check if UUID is valid
+        #
         if self.uuid.valid():
 
             return self.scene(self.uuid)
@@ -292,22 +311,39 @@ class SkeletonSpec(psonobject.PSONObject):
 
             return None
 
-    def getMatrix(self, default=om.MMatrix.kIdentity):
+    def getMatrix(self, asTransformationMatrix=False, default=None):
         """
-        Returns the transform matrix from this skeleton spec.
+        Returns the transform matrix from this pivot spec.
         If no matrix exists then the default matrix is returned instead.
 
-        :type default: om.MMatrix
-        :rtype: om.MMatrix
+        :type asTransformationMatrix: bool
+        :type default: Union[om.MTransformationMatrix, om.MMatrix]
+        :rtype: Union[om.MTransformationMatrix, om.MMatrix]
         """
 
-        if isinstance(self.matrix, om.MMatrix):
+        if asTransformationMatrix:
 
-            return self.matrix
+            defaultTransform = default if isinstance(default, om.MTransformationMatrix) else om.MTransformationMatrix.kIdentity
+
+            if isinstance(self.matrix, om.MTransformationMatrix):
+
+                return self.matrix
+
+            else:
+
+                return defaultTransform
 
         else:
 
-            return default
+            defaultMatrix = default if isinstance(default, om.MMatrix) else om.MMatrix.kIdentity
+
+            if isinstance(self.worldMatrix, om.MMatrix):
+
+                return self.worldMatrix
+
+            else:
+
+                return defaultMatrix
 
     def cacheMatrix(self, delete=False):
         """
@@ -329,7 +365,8 @@ class SkeletonSpec(psonobject.PSONObject):
 
         if node is not None:
 
-            self.matrix = node.worldMatrix()
+            self.matrix = node.matrix(asTransformationMatrix=True)
+            self.worldMatrix = node.worldMatrix()
 
             if delete:
 

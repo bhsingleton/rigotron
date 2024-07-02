@@ -10,40 +10,46 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-def createTransformBlends(fkJoint, ikJoint, blendJoint, blender=None):
+def createTransformBlends(fkJoint, ikJoint, blendJoint, name=None, blender=None):
     """
     Create the appropriate nodes needed to blend two kinematic chains.
 
-    :type fkJoint: mpynode.MPyNode
-    :type ikJoint: mpynode.MPyNode
+    :type fkJoint: Union[mpynode.MPyNode, None]
+    :type ikJoint: Union[mpynode.MPyNode, None]
     :type blendJoint: mpynode.MPyNode
+    :type name: Union[str, None]
     :type blender: om.MPlug
     :rtype: mpynode.MPyNode
     """
 
-    # Create color blend nodes
+    # Create transform blend
     #
     scene = mpyscene.MPyScene()
-    transformBlend = scene.createNode('blendTransform')
+    transformBlend = scene.createNode('blendTransform', name=name)
 
-    fkJoint.connectPlugs('translate', transformBlend['inTranslate1'])
-    fkJoint.connectPlugs('rotateOrder', transformBlend['inRotateOrder1'])
-    fkJoint.connectPlugs('rotate', transformBlend['inRotate1'])
-    fkJoint.connectPlugs('jointOrient', transformBlend['inJointOrient1'])
-    fkJoint.connectPlugs('scale', transformBlend['inScale1'])
+    # Check if FK joint is valid
+    #
+    if fkJoint is not None:
 
-    ikJoint.connectPlugs('translate', transformBlend['inTranslate2'])
-    ikJoint.connectPlugs('rotateOrder', transformBlend['inRotateOrder2'])
-    ikJoint.connectPlugs('rotate', transformBlend['inRotate2'])
-    ikJoint.connectPlugs('jointOrient', transformBlend['inJointOrient2'])
-    ikJoint.connectPlugs('scale', transformBlend['inScale2'])
+        fkJoint.connectPlugs('translate', transformBlend['inTranslate1'])
+        fkJoint.connectPlugs('rotateOrder', transformBlend['inRotateOrder1'])
+        fkJoint.connectPlugs('rotate', transformBlend['inRotate1'])
+        fkJoint.connectPlugs('scale', transformBlend['inScale1'])
 
-    # Connect result
+    # Check if IK joint is valid
+    #
+    if ikJoint is not None:
+
+        ikJoint.connectPlugs('translate', transformBlend['inTranslate2'])
+        ikJoint.connectPlugs('rotateOrder', transformBlend['inRotateOrder2'])
+        ikJoint.connectPlugs('rotate', transformBlend['inRotate2'])
+        ikJoint.connectPlugs('scale', transformBlend['inScale2'])
+
+    # Connect output
     #
     transformBlend.connectPlugs('outTranslate', blendJoint['translate'])
     transformBlend.connectPlugs(blendJoint['rotateOrder'], 'outRotateOrder')
     transformBlend.connectPlugs('outRotate', blendJoint['rotate'])
-    transformBlend.connectPlugs('outJointOrient', blendJoint['jointOrient'])
     transformBlend.connectPlugs('outScale', blendJoint['scale'])
 
     # Check if blend plug was supplied

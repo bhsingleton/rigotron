@@ -3,7 +3,7 @@ import math
 
 from maya.api import OpenMaya as om
 from mpy import mpyattribute
-from ..abstract import abstractinterop
+from ..abstract import abstractinterface
 from ..libs import Side
 
 import logging
@@ -12,9 +12,9 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-class ReferencedPropRig(abstractinterop.AbstractInterop):
+class ReferencedPropRig(abstractinterface.AbstractInterface):
     """
-    Overload of `AbstractInterop` that interfaces with referenced prop rigs.
+    Overload of `AbstractInterface` that interfaces with referenced prop rigs.
     """
 
     # region Attributes
@@ -39,13 +39,9 @@ class ReferencedPropRig(abstractinterop.AbstractInterop):
         :rtype: PropRig
         """
 
-        # Call parent method
-        #
-        referencedPropRig = super(ReferencedPropRig, cls).create(*args, **kwargs)
-
         # Check if a reference path was supplied
         #
-        filePath = kwargs.get('filePath', '')
+        filePath = kwargs.pop('filePath', '')
         exists = os.path.isfile(filePath)
 
         if not exists:
@@ -55,16 +51,25 @@ class ReferencedPropRig(abstractinterop.AbstractInterop):
 
             filePath = cls.__default_prop_path__
 
+        # Call parent method
+        #
+        directory, filename = os.path.split(filePath)
+        defaultName = os.path.splitext(filename)[0]
+
+        namespace = kwargs.get('namespace', defaultName)
+        name = kwargs.pop('name', f'{namespace}_PROP')
+        parent = kwargs.pop('parent', None)
+
+        referencedPropRig = super(ReferencedPropRig, cls).create('transform', name=name, parent=parent)
+
         # Create reference to prop
         #
-        namespace = kwargs.get('namespace', '')
         reference = cls.scene.createReference(filePath, namespace=namespace)
-
         referencedPropRig.referenceNode = reference.object()
 
         # Check if a prop component was supplied
         #
-        propComponent = kwargs.get('propComponent', None)
+        propComponent = kwargs.pop('propComponent', None)
 
         if propComponent is not None:
 
@@ -72,7 +77,7 @@ class ReferencedPropRig(abstractinterop.AbstractInterop):
 
         # Check if a stowed component was supplied
         #
-        stowedComponent = kwargs.get('stowedComponent', None)
+        stowedComponent = kwargs.pop('stowedComponent', None)
 
         if stowedComponent is not None:
 
@@ -80,29 +85,31 @@ class ReferencedPropRig(abstractinterop.AbstractInterop):
 
         return referencedPropRig
 
-    def findReferencedProp(self):
+    def findReferencedPropRig(self):
         """
         Returns the referenced prop associated with this component.
 
-        :rtype: Tuple[mpy.builtins.referencemixin.ReferenceMixin, rigotron.components.rootcomponent.RootComponent]
+        :rtype: Tuple[mpy.builtins.referencemixin.ReferenceMixin, rigotron.interfaces.controlrig.ControlRig]
         """
-
-        controlRig = self.findControlRig()
-        cls = type(controlRig)
 
         referenceNode = self.scene(self.referenceNode)
         referencedNodes = list(map(self.scene.__call__, referenceNode.nodes()))
 
+        cls = self.rigManager.getClass('ControlRig')
         controlRigs = [node for node in referencedNodes if isinstance(node, cls)]
-        hasControlRig = len(controlRigs) == 1
+        numControlRigs = len(controlRigs)
 
-        if hasControlRig:
+        if numControlRigs == 0:
 
-            return referenceNode, self.scene(controlRigs[0].rootComponent)
+            return None
+
+        elif numControlRigs == 1:
+
+            return referenceNode, self.scene(controlRigs[0])
 
         else:
 
-            return None
+            raise TypeError(f'findReferencedPropRig() expects 1 unique control rig ({numControlRigs} found)!')
 
     def invalidate(self):
         """
@@ -113,7 +120,10 @@ class ReferencedPropRig(abstractinterop.AbstractInterop):
 
         # Find referenced prop
         #
-        referenceNode, rootComponent = self.findReferencedProp()
+        referenceNode, referencedRig = self.findReferencedPropRig()
+        referencedRig.setParent(self)
+
+        rootComponent = self.scene(referencedRig.rootComponent)
         masterCtrl = rootComponent.getPublishedNode('Master')
 
         masterSpaceSwitchUuid = masterCtrl.userProperties['spaceSwitch']

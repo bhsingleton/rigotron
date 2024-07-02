@@ -1,10 +1,9 @@
 from maya.api import OpenMaya as om
 from mpy import mpyattribute
-from enum import IntEnum
 from dcc.dataclasses.colour import Colour
-from dcc.maya.libs import dagutils, transformutils, shapeutils
+from dcc.maya.libs import shapeutils
 from . import basecomponent
-from ..libs import Side, Type
+from ..libs import Side
 
 import logging
 logging.basicConfig()
@@ -16,6 +15,10 @@ class StowedComponent(basecomponent.BaseComponent):
     """
     Overload of `BaseComponent` that implements stowed prop components.
     """
+
+    # region Dunderscores
+    __default_component_name__ = 'StowedProp'
+    # endregion
 
     # region Methods
     def invalidateSkeletonSpecs(self, skeletonSpecs):
@@ -29,8 +32,8 @@ class StowedComponent(basecomponent.BaseComponent):
         # Edit skeleton specs
         #
         stowedSpec, = self.resizeSkeletonSpecs(1, skeletonSpecs)
-        stowedSpec.name = self.formatName(subname='Stowed')
-        stowedSpec.driver = self.formatName(subname='Stowed', type='control')
+        stowedSpec.name = self.formatName()
+        stowedSpec.driver = self.formatName(type='control')
 
         # Call parent method
         #
@@ -85,26 +88,22 @@ class StowedComponent(basecomponent.BaseComponent):
         privateGroup = self.scene(self.privateGroup)
         jointsGroup = self.scene(self.jointsGroup)
 
-        componentSide = self.Side(self.componentSide)
-        colorRGB = Colour(*shapeutils.COLOUR_SIDE_RGB[componentSide])
+        parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
 
         # Create stow control
         #
-        stowMatrix = mirrorMatrix * stowExportJoint.worldMatrix()
+        stowCtrlMatrix = mirrorMatrix * stowExportJoint.worldMatrix()
 
-        stowSpaceName = self.formatName(name='Stow', type='space')
+        stowSpaceName = self.formatName(type='space')
         stowSpace = self.scene.createNode('transform', name=stowSpaceName, parent=controlsGroup)
-        stowSpace.setWorldMatrix(stowMatrix)
+        stowSpace.setWorldMatrix(stowCtrlMatrix)
         stowSpace.freezeTransform()
+        stowSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
 
-        stowCtrlName = self.formatName(name='Stow', type='control')
+        stowCtrlName = self.formatName(type='control')
         stowCtrl = self.scene.createNode('transform', name=stowCtrlName, parent=stowSpace)
-        stowCtrl.addPointHelper('box', size=10, colorRGB=colorRGB, lineWidth=1.0)
+        stowCtrl.addPointHelper('box', size=5.0, side=componentSide, lineWidth=1.0)
         stowCtrl.tagAsController()
         stowCtrl.prepareChannelBoxForAnimation()
         self.publishNode(stowCtrl, alias='Stowed')
-
-        # Constrain export joint
-        #
-        stowExportJoint.addConstraint('transformConstraint', [stowCtrl])
     # endregion

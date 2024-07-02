@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from maya.api import OpenMaya as om
 from mpy import mpyattribute
 from . import basecomponent
 
@@ -19,7 +19,7 @@ class ExtremityComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Methods
-    def overrideLimbPVSpace(self, extremityCtrl, limbPVCtrl):
+    def overrideLimbPoleVector(self, extremityCtrl, limbPVCtrl):
         """
         Overrides the space switch options on the supplied limb PV control.
 
@@ -28,8 +28,12 @@ class ExtremityComponent(basecomponent.BaseComponent):
         :rtype: None
         """
 
+        limbPVSpaceSwitch = self.scene(limbPVCtrl.userProperties['spaceSwitch'])
+        index = limbPVSpaceSwitch.addSpace(extremityCtrl)
+        attributeName = f'transformSpaceW{index}'
+
         limbPVCtrl.addAttr(
-            longName='transformSpaceW5',
+            longName=attributeName,
             niceName=f'Transform Space ({self.componentName})',
             attributeType='float',
             min=0.0,
@@ -37,20 +41,58 @@ class ExtremityComponent(basecomponent.BaseComponent):
             keyable=True
         )
 
-        limbPVSpaceSwitch = self.scene(limbPVCtrl.userProperties['spaceSwitch'])
-        limbPVSpaceSwitch.addSpace(extremityCtrl)
-        limbPVSpaceSwitch.connectPlugs(limbPVCtrl['transformSpaceW5'], 'target[5].targetWeight')
+        limbPVSpaceSwitch.connectPlugs(limbPVCtrl[attributeName], f'target[{index}].targetWeight')
 
-    def overrideLimbTwist(self, extremityCtrl, extremityJoint, twistSolver):
+    def overrideLimbHandle(self, extremityCtrl, inHandleCtrl):
+        """
+        Overrides the space switch on the supplied limb in-handle control.
+
+        :type extremityCtrl: mpynode.MPyNode
+        :type inHandleCtrl: mpynode.MPyNode
+        :rtype: None
+        """
+
+        inHandleSpaceSwitch = self.scene(inHandleCtrl.userProperties['spaceSwitch'])
+        insetNegate = self.scene(inHandleCtrl.userProperties['negate'])
+
+        index = inHandleSpaceSwitch.addSpace(extremityCtrl, maintainOffset=False)
+        inHandleSpaceSwitch.setAttr(f'target[{index}]', {'targetWeight': (0.0, 0.0, 0.0)})
+        inHandleSpaceSwitch.connectPlugs(inHandleCtrl['localOrGlobal'], f'target[{index}].targetWeight')
+        inHandleSpaceSwitch.connectPlugs(insetNegate['outDistance'], f'target[{index}].targetOffsetTranslateX')
+
+    def overrideLimbTwist(self, extremityCtrl, twistSolver, offsetMatrix=om.MMatrix.kIdentity):
         """
         Overrides the end-twist matrix on the supplied twist solver.
 
         :type extremityCtrl: mpynode.MPyNode
-        :type extremityJoint: mpynode.MPyNode
         :type twistSolver: mpynode.MPyNode
+        :type offsetMatrix: om.MMatrix
         :rtype: None
         """
 
-        twistSolver.endOffsetMatrix = extremityJoint.worldMatrix() * extremityCtrl.worldInverseMatrix()
+        twistSolver.endOffsetMatrix = offsetMatrix
         twistSolver.connectPlugs(extremityCtrl[f'worldMatrix[{extremityCtrl.instanceNumber()}]'], 'endMatrix', force=True)
+
+    def overrideLimbRemapper(self, extremityCtrl, scaleRemapper):
+        """
+        Overrides the end-value on the supplied scale remapper.
+
+        :type extremityCtrl: mpynode.MPyNode
+        :type scaleRemapper: mpynode.MPyNode
+        :rtype: None
+        """
+
+        limbTipCtrl = self.scene(scaleRemapper['outputMaxX'].source().node())
+
+        multMatrixName = self.formatName(subname='Scale', type='multMatrix')
+        multMatrix = self.scene.createNode('multMatrix', name=multMatrixName)
+        multMatrix.connectPlugs(extremityCtrl['worldMatrix[0]'], 'matrixIn[0]')
+        multMatrix.connectPlugs(limbTipCtrl['parentInverseMatrix[0]'], 'matrixIn[1]')
+
+        decomposeMatrixName = self.formatName(subname='Scale', type='decomposeMatrix')
+        decomposeMatrix = self.scene.createNode('decomposeMatrix', name=decomposeMatrixName)
+        decomposeMatrix.connectPlugs(extremityCtrl['rotateOrder'], 'inputRotateOrder')
+        decomposeMatrix.connectPlugs(multMatrix['matrixSum'], 'inputMatrix')
+
+        scaleRemapper.connectPlugs(decomposeMatrix['outputScale'], 'outputMax', force=True)
     # endregion

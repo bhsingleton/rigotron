@@ -1,7 +1,7 @@
 from maya.api import OpenMaya as om
 from mpy import mpyattribute
 from dcc.naming import namingutils
-from ..abstract import abstractinterop, abstractcomponent
+from ..abstract import abstractinterface, abstractcomponent
 from ..libs import Status
 
 import logging
@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-class ControlRig(abstractinterop.AbstractInterop):
+class ControlRig(abstractinterface.AbstractInterface):
     """
     Overload of `AbstractInterop` that interfaces with control rigs.
     """
@@ -88,6 +88,16 @@ class ControlRig(abstractinterop.AbstractInterop):
             boundingBox.expand(mesh.boundingBox)
 
         return max([boundingBox.height, boundingBox.width, boundingBox.depth])
+
+    def getRigScale(self, decimals=2):
+        """
+        Returns the scalar difference for this rig.
+
+        :type decimals: bool
+        :rtype: float
+        """
+
+        return round(self.rigHeight / 221.51626014709473, decimals)  # This value comes from the first rig I built!
 
     def getRigStatus(self):
         """
