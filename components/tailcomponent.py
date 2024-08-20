@@ -171,7 +171,7 @@ class TailComponent(basecomponent.BaseComponent):
 
         baseSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
 
-        # Create FK controls
+        # Create tail FK controls
         #
         rootComponent = self.findRootComponent()
         worldSpaceCtrl = rootComponent.getPublishedNode('Motion')
@@ -192,7 +192,7 @@ class TailComponent(basecomponent.BaseComponent):
             tailFKSpace.copyTransform(tailExportJoint)
             tailFKSpace.freezeTransform()
 
-            tailFKOffsetName = self.formatName(subname='FK', index=index, kinemat='Rot', type='offset')
+            tailFKOffsetName = self.formatName(subname='FK', index=index, kinemat='Rot', type='transform')
             tailFKOffset = self.scene.createNode('transform', name=tailFKOffsetName, parent=tailFKSpace)
 
             tailFKRotCtrlName = self.formatName(subname='FK', index=index, kinemat='Rot', type='control')
@@ -277,13 +277,15 @@ class TailComponent(basecomponent.BaseComponent):
         #
         tailIKBaseJointName = self.formatName(subname='IK', kinemat='Base', type='joint')
         tailIKBaseJoint = self.scene.createNode('joint', name=tailIKBaseJointName, parent=jointsGroup)
-        tailIKBaseJoint.copyTransform(tailExportJoints[0])
-        tailIKBaseJoint.addConstraint('transformConstraint', [tailIKBaseCtrl])
+        tailIKBaseJoint.copyTransform(firstTailExportJoint)
+        tailIKBaseJoint.addConstraint('parentConstraint', [tailIKBaseCtrl])
+        tailIKBaseJoint.addConstraint('scaleConstraint', [baseCtrl])
 
         tailIKTipJointName = self.formatName(subname='IK', kinemat='Tip', type='joint')
         tailIKTipJoint = self.scene.createNode('joint', name=tailIKTipJointName, parent=jointsGroup)
-        tailIKTipJoint.copyTransform(tailExportJoints[-1])
-        tailIKTipJoint.addConstraint('transformConstraint', [tailIKTipCtrl])
+        tailIKTipJoint.copyTransform(lastTailExportJoint)
+        tailIKTipJoint.addConstraint('parentConstraint', [tailIKTipCtrl])
+        tailIKTipJoint.addConstraint('scaleConstraint', [baseCtrl])
 
         # Create curve from points
         #
@@ -295,6 +297,7 @@ class TailComponent(basecomponent.BaseComponent):
         curveName = self.formatName(type='nurbsCurve')
         curve = self.scene.createNode('transform', name=curveName, parent=privateGroup)
         curve.inheritsTransform = False
+        curve.template = True
         curve.lockAttr('translate', 'rotate', 'scale')
 
         curveShape = self.scene.createNode('bezierCurve', name=f'{curveName}Shape', parent=curve)
@@ -318,11 +321,12 @@ class TailComponent(basecomponent.BaseComponent):
         #
         weightRemapName = self.formatName(subname='Weights', type='remapArray')
         weightRemap = self.scene.createNode('remapArray', name=weightRemapName)
+        weightRemap.clamp = True
         weightRemap.setAttr('value', [{'value_FloatValue': 1.0, 'value_Interp': 2}, {'value_FloatValue': 0.0,'value_Interp': 2}])
 
         intermediateCurve = skinCluster.intermediateObject()
         curveLength = intermediateCurve.length()
-        controlNodes = [tailFKTransCtrl if (tailFKTransCtrl is not None) else tailFKRotCtrl for (tailFKRotCtrl, tailFKTransCtrl) in tailFKCtrls]
+        controlNodes = [tailFKTransCtrl for (tailFKRotCtrl, tailFKTransCtrl) in tailFKCtrls] + [tailIKTipTarget]
 
         parameters = [None] * numControlPoints
 
@@ -346,28 +350,25 @@ class TailComponent(basecomponent.BaseComponent):
             #
             index = i + 1
 
-            weightRemap.setAttr(f'parameter[{i}]', parameter)
+            weightRemap.connectPlugs(controlNode['parameter'], f'parameter[{i}]')
             weightRemap.connectPlugs(f'outValue[{i}].outValueX', skinCluster[f'weightList[{i}].weights[0]'])
 
-            reverseWeightName = self.formatName(subname='Weights', index=index, type='revDoubleLinear')
+            reverseWeightName = self.formatName(subname='Weight', index=index, type='revDoubleLinear')
             reverseWeight = self.scene.createNode('revDoubleLinear', name=reverseWeightName)
             reverseWeight.connectPlugs(weightRemap[f'outValue[{i}].outValueX'], 'input')
             reverseWeight.connectPlugs('output', skinCluster[f'weightList[{i}].weights[1]'])
 
         # Override control-points on intermediate-object
         #
-        nodes = [tailFKTransCtrl for (tailFKRotCtrl, tailFKTransCtrl) in tailFKCtrls]
-        nodes.append(tailIKTipTarget)
-
         matrices = [None] * numControlPoints
 
-        for (i, node) in enumerate(nodes):
+        for (i, controlNode) in enumerate(controlNodes):
 
             index = i + 1
 
             multMatrixName = self.formatName(subname='ControlPoint', index=index, type='multMatrix')
             multMatrix = self.scene.createNode('multMatrix', name=multMatrixName)
-            multMatrix.connectPlugs(node[f'worldMatrix[{node.instanceNumber()}]'], 'matrixIn[0]')
+            multMatrix.connectPlugs(controlNode[f'worldMatrix[{controlNode.instanceNumber()}]'], 'matrixIn[0]')
             multMatrix.connectPlugs(intermediateCurve[f'parentInverseMatrix[{intermediateCurve.instanceNumber()}]'], 'matrixIn[1]')
 
             breakMatrixName = self.formatName(subname='ControlPoint', index=index, type='breakMatrix')
@@ -387,17 +388,18 @@ class TailComponent(basecomponent.BaseComponent):
         for (i, tailExportJoint) in enumerate(tailExportJoints):
 
             index = i + 1
+            name = self.formatName(kinemat='IK', index=index, type='joint') if (i > 0) else self.formatName(kinemat='IK', subname='Tip', type='joint')
             parent = tailIKJoints[i - 1] if (i > 0) else jointsGroup
 
-            tailIKJointName = self.formatName(subname='IK', index=index, type='joint')
-            tailIKJoint = self.scene.createNode('joint', name=tailIKJointName, parent=parent)
+            tailIKJoint = self.scene.createNode('joint', name=name, parent=parent)
             tailIKJoint.copyTransform(tailExportJoint)
-
             tailIKJoints[i] = tailIKJoint
 
         # Setup spline IK solver
         #
         splineIKHandle, splineIKEffector = kinematicutils.applySplineSolver(tailIKJoints[0], tailIKJoints[-1], curveShape)
+        splineIKHandle.setName(self.formatName(type='ikHandle'))
+        splineIKEffector.setName(self.formatName(type='ikEffector'))
         splineIKHandle.setParent(privateGroup)
         splineIKHandle.rootOnCurve = True
         splineIKHandle.rootTwistMode = True
@@ -491,36 +493,31 @@ class TailComponent(basecomponent.BaseComponent):
         tailScaleRemap.connectPlugs(tailRotateBaseCtrl['scale'], tailScaleRemap['outputMin'])
         tailScaleRemap.connectPlugs(tailRotateTipCtrl['scale'], tailScaleRemap['outputMax'])
 
-        nodes = [self.scene(tailFKRotCtrl.userProperties['offset']) for (tailFKRotCtrl, tailFKTransCtrl) in tailFKCtrls]
-        nodes.append(tailIKTipTarget)
+        for (i, (tailFKRotCtrl, tailFKTransCtrl)) in enumerate(tailFKCtrls):
 
-        for (i, node) in enumerate(nodes):
+            tailTranslateRemap.connectPlugs(tailFKTransCtrl['parameter'], f'parameter[{i}]')
+            tailRotateRemap.connectPlugs(tailFKTransCtrl['parameter'], f'parameter[{i}]')
+            tailScaleRemap.connectPlugs(tailFKTransCtrl['parameter'], f'parameter[{i}]')
 
-            parameter = parameters[i]
-
-            tailTranslateRemap.setAttr(f'parameter[{i}]', parameter)
-            tailRotateRemap.setAttr(f'parameter[{i}]', parameter)
-            tailScaleRemap.setAttr(f'parameter[{i}]', parameter)
-
-            tailTranslateRemap.connectPlugs(f'outValue[{i}]', node['translate'])
-            tailRotateRemap.connectPlugs(f'outValue[{i}]', node['rotate'])
-            tailScaleRemap.connectPlugs(f'outValue[{i}]', node['scale'])
+            tailFKOffset = self.scene(tailFKRotCtrl.userProperties['offset'])
+            tailTranslateRemap.connectPlugs(f'outValue[{i}]', tailFKOffset['translate'])
+            tailRotateRemap.connectPlugs(f'outValue[{i}]', tailFKOffset['rotate'])
+            tailScaleRemap.connectPlugs(f'outValue[{i}]', tailFKOffset['scale'])
 
         # Create micro controls
         #
-        for (i, tailIKJoint) in enumerate(tailIKJoints[:-1]):
+        for (i, (controlNode, tailIKJoint)) in enumerate(zip(controlNodes[:-1], tailIKJoints[:-1]), start=1):
 
-            index = i + 1
-
-            tailSpaceName = self.formatName(index=index, type='space')
+            tailSpaceName = self.formatName(index=i, type='space')
             tailSpace = self.scene.createNode('transform', name=tailSpaceName, parent=controlsGroup)
             tailSpace.copyTransform(tailIKJoint)
             tailSpace.freezeTransform()
-            tailSpace.addConstraint('transformConstraint', [tailIKJoint])
+            tailSpace.addConstraint('parentConstraint', [tailIKJoint])
+            tailSpace.addConstraint('scaleConstraint', [controlNode])
 
-            tailCtrlName = self.formatName(index=index, type='control')
+            tailCtrlName = self.formatName(index=i, type='control')
             tailCtrl = self.scene.createNode('transform', name=tailCtrlName, parent=tailSpace)
             tailCtrl.addPointHelper('tearDrop', size=(20.0 * rigScale), localRotate=(-90.0, 0.0, 0.0), colorRGB=darkColorRGB)
             tailCtrl.prepareChannelBoxForAnimation()
-            self.publishNode(tailCtrl, alias=f'{self.componentName}{index}')
+            self.publishNode(tailCtrl, alias=f'{self.componentName}{str(i).zfill(2)}')
     # endregion
