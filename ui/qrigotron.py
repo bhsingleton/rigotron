@@ -1,12 +1,14 @@
-from Qt import QtCore, QtWidgets, QtGui, QtCompat
-from itertools import chain
+from maya import cmds as mc
 from maya.api import OpenMaya as om
 from mpy import mpyscene, mpynode
-from dcc.ui import quicwindow, qsignalblocker
+from dcc.ui import qsingletonwindow, qsignalblocker
 from dcc.python import stringutils
 from dcc.maya.libs import transformutils
 from dcc.maya.models import qplugitemmodel, qplugstyleditemdelegate, qplugitemfiltermodel
-from dcc.maya.decorators.undo import undo
+from dcc.maya.decorators import undo
+from Qt import QtCore, QtWidgets, QtGui, QtCompat
+from functools import partial
+from itertools import chain
 from . import resources
 from .models import qcomponentitemmodel, qpropertyitemmodel
 from ..libs import Status, Side, componentfactory, interfacefactory, stateutils, layerutils
@@ -17,9 +19,9 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-def onSceneChanged(*args, **kwargs):
+def onSceneOpening(*args, **kwargs):
     """
-    Callback method after a scene IO operation has occurred.
+    Callback method for any pre-scene open delegation.
 
     :rtype: None
     """
@@ -36,14 +38,40 @@ def onSceneChanged(*args, **kwargs):
     #
     if QtCompat.isValid(instance):
 
-        instance.sceneChanged(*args, **kwargs)
+        instance.sceneOpening(*args, **kwargs)
 
     else:
 
         log.warning('Unable to process scene changed callback!')
 
 
-class QRigotron(quicwindow.QUicWindow):
+def onSceneOpened(*args, **kwargs):
+    """
+    Callback method for any post-scene openi delegation.
+
+    :rtype: None
+    """
+
+    # Check if instance exists
+    #
+    instance = QRigotron.getInstance()
+
+    if instance is None:
+
+        return
+
+    # Evaluate if instance is still valid
+    #
+    if QtCompat.isValid(instance):
+
+        mc.evalDeferred(partial(instance.sceneOpened, *args, **kwargs))  # Allows scene to fully load before processing changes!
+
+    else:
+
+        log.warning('Unable to process scene changed callback!')
+
+
+class QRigotron(qsingletonwindow.QSingletonWindow):
     """
     Overload of `QUicWindow` that interfaces with control rigs.
     """
@@ -72,48 +100,387 @@ class QRigotron(quicwindow.QUicWindow):
         self._currentStatus = 0
         self._callbackIds = om.MCallbackIdArray()
 
-        # Declare public variables
+    def __setup_ui__(self, *args, **kwargs):
+        """
+        Private method that initializes the user interface.
+
+        :rtype: None
+        """
+
+        # Call parent method
         #
-        self.mainSplitter = None
-        self.outlinerWidget = None
-        self.outlinerHeader = None
-        self.nameLineEdit = None
-        self.outlinerTreeView = None
-        self.outlinerModel = None  # type: qcomponentitemmodel.QComponentItemModel
-        self.deleteShortcut = None
-        self.attachmentComboBox = None
+        super(QRigotron, self).__setup_ui__(*args, **kwargs)
 
-        self.propertyWidget = None
-        self.propertyHeader = None
-        self.filterPropertyLineEdit = None
-        self.propertyTreeView = None
-        self.propertyModel = None  # type: qpropertyitemmodel.QPropertyItemModel
-        self.propertyItemDelegate = None  # type: qplugstyleditemdelegate.QPlugStyledItemDelegate
-        self.propertyFilterModel = None  # type: qplugitemfiltermodel.QPlugItemFilterModel
+        # Initialize main window
+        #
+        self.setWindowTitle("|| Rig o'Tron")
+        self.setMinimumSize(QtCore.QSize(600, 400))
 
-        self.interopWidget = None
-        self.alignPushButton = None
-        self.mirrorPushButton = None
-        self.sanitizePushButton = None
-        self.organizePushButton = None
-        self.detectPushButton = None
-        self.blackBoxPushButton = None
+        # Initialize main toolbar
+        #
+        self.mainToolBar = QtWidgets.QToolBar(parent=self)
+        self.mainToolBar.setObjectName('mainToolBar')
+        self.mainToolBar.setAllowedAreas(QtCore.Qt.TopToolBarArea)
+        self.mainToolBar.setMovable(False)
+        self.mainToolBar.setOrientation(QtCore.Qt.Horizontal)
+        self.mainToolBar.setIconSize(QtCore.QSize(24, 24))
+        self.mainToolBar.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
+        self.mainToolBar.setFloatable(True)
 
-        self.statusWidget = None
-        self.metaStatusPushButton = None
-        self.skeletonStatusPushButton = None
-        self.rigStatusPushButton = None
-        self.statusButtonGroup = None
+        self.addRootComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/RootComponent.svg'), 'Root', parent=self.mainToolBar)
+        self.addRootComponentAction.setObjectName('addRootComponentAction')
+        self.addRootComponentAction.setWhatsThis('RootComponent')
+        self.addRootComponentAction.setToolTip('Adds a root to the selected component.')
+        self.addRootComponentAction.triggered.connect(self.on_addRootComponentAction_triggered)
 
-        self.addSpineComponentAction = None
-        self.addLegComponentAction = None
-        self.addFootComponentAction = None
-        self.addArmComponentAction = None
-        self.addHandComponentAction = None
-        self.addHeadComponentAction = None
-        self.addTailComponentAction = None
-        self.addPropComponentAction = None
-        self.addStowedComponentAction = None
+        self.addSpineComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/SpineComponent.svg'), 'Spine', parent=self.mainToolBar)
+        self.addSpineComponentAction.setObjectName('addSpineComponentAction')
+        self.addSpineComponentAction.setWhatsThis('SpineComponent')
+        self.addSpineComponentAction.setToolTip('Adds a spine to the selected component.')
+        self.addSpineComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addTailComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/TailComponent.svg'), 'Tail', parent=self.mainToolBar)
+        self.addTailComponentAction.setObjectName('addTailComponentAction')
+        self.addTailComponentAction.setWhatsThis('TailComponent')
+        self.addTailComponentAction.setToolTip('Adds a tail to the selected component.')
+        self.addTailComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addLegComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/LegComponent.svg'), 'Leg', parent=self.mainToolBar)
+        self.addLegComponentAction.setObjectName('addLegComponentAction')
+        self.addLegComponentAction.setWhatsThis('LegComponent')
+        self.addLegComponentAction.setToolTip('Adds a leg to the selected component.')
+        self.addLegComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addFootComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/SpineComponent.svg'), 'Foot', parent=self.mainToolBar)
+        self.addFootComponentAction.setObjectName('addFootComponentAction')
+        self.addFootComponentAction.setWhatsThis('SpineComponent')
+        self.addFootComponentAction.setToolTip('Adds a foot to the selected component.')
+        self.addFootComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addClavicleComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/ClavicleComponent.svg'), 'Clavicle', parent=self.mainToolBar)
+        self.addClavicleComponentAction.setObjectName('addClavicleComponentAction')
+        self.addClavicleComponentAction.setWhatsThis('ClavicleComponent')
+        self.addClavicleComponentAction.setToolTip('Adds a clavicle to the selected component.')
+        self.addClavicleComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addArmComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/ArmComponent.svg'), 'Arm', parent=self.mainToolBar)
+        self.addArmComponentAction.setObjectName('addArmComponentAction')
+        self.addArmComponentAction.setWhatsThis('ArmComponent')
+        self.addArmComponentAction.setToolTip('Adds an arm to the selected component.')
+        self.addArmComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addHandComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/HandComponent.svg'), 'Hand', parent=self.mainToolBar)
+        self.addHandComponentAction.setObjectName('addHandComponentAction')
+        self.addHandComponentAction.setWhatsThis('HandComponent')
+        self.addHandComponentAction.setToolTip('Adds a hand to the selected component.')
+        self.addHandComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addHeadComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/HeadComponent.svg'), 'Head', parent=self.mainToolBar)
+        self.addHeadComponentAction.setObjectName('addHeadComponentAction')
+        self.addHeadComponentAction.setWhatsThis('HeadComponent')
+        self.addHeadComponentAction.setToolTip('Adds a head to the selected component.')
+        self.addHeadComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addJawComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/JawComponent.svg'), 'Jaw', parent=self.mainToolBar)
+        self.addJawComponentAction.setObjectName('addJawComponentAction')
+        self.addJawComponentAction.setWhatsThis('JawComponent')
+        self.addJawComponentAction.setToolTip('Adds a jaw to the selected component.')
+        self.addJawComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addPropComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/PropComponent.svg'), 'Prop', parent=self.mainToolBar)
+        self.addPropComponentAction.setObjectName('addPropComponentAction')
+        self.addPropComponentAction.setWhatsThis('PropComponent')
+        self.addPropComponentAction.setToolTip('Adds a prop to the selected component.')
+        self.addPropComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addStowComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/StowComponent.svg'), 'Stow', parent=self.mainToolBar)
+        self.addStowComponentAction.setObjectName('addStowComponentAction')
+        self.addStowComponentAction.setWhatsThis('StowComponent')
+        self.addStowComponentAction.setToolTip('Adds a stow to the selected component.')
+        self.addStowComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addLeafComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/LeafComponent.svg'), 'Leaf', parent=self.mainToolBar)
+        self.addLeafComponentAction.setObjectName('addLeafComponentAction')
+        self.addLeafComponentAction.setWhatsThis('LeafComponent')
+        self.addLeafComponentAction.setToolTip('Adds a leaf to the selected component.')
+        self.addLeafComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addChainComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/ChainComponent.svg'), 'Stow', parent=self.mainToolBar)
+        self.addChainComponentAction.setObjectName('addChainComponentAction')
+        self.addChainComponentAction.setWhatsThis('ChainComponent')
+        self.addChainComponentAction.setToolTip('Adds a chain to the selected component.')
+        self.addChainComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.mainToolBar.addAction(self.addRootComponentAction)
+        self.mainToolBar.addSeparator()
+        self.mainToolBar.addAction(self.addSpineComponentAction)
+        self.mainToolBar.addAction(self.addTailComponentAction)
+        self.mainToolBar.addSeparator()
+        self.mainToolBar.addAction(self.addLegComponentAction)
+        self.mainToolBar.addAction(self.addFootComponentAction)
+        self.mainToolBar.addSeparator()
+        self.mainToolBar.addAction(self.addClavicleComponentAction)
+        self.mainToolBar.addAction(self.addArmComponentAction)
+        self.mainToolBar.addAction(self.addHandComponentAction)
+        self.mainToolBar.addSeparator()
+        self.mainToolBar.addAction(self.addHeadComponentAction)
+        self.mainToolBar.addAction(self.addJawComponentAction)
+        self.mainToolBar.addSeparator()
+        self.mainToolBar.addAction(self.addPropComponentAction)
+        self.mainToolBar.addAction(self.addStowComponentAction)
+        self.mainToolBar.addSeparator()
+        self.mainToolBar.addAction(self.addLeafComponentAction)
+        self.mainToolBar.addAction(self.addChainComponentAction)
+
+        self.addToolBar(QtCore.Qt.TopToolBarArea, self.mainToolBar)
+
+        # Initialize central widget
+        #
+        centralLayout = QtWidgets.QVBoxLayout()
+        centralLayout.setObjectName('centralLayout')
+
+        centralWidget = QtWidgets.QWidget(parent=self)
+        centralWidget.setObjectName('centralWidget')
+        centralWidget.setLayout(centralLayout)
+
+        self.setCentralWidget(centralWidget)
+
+        # Initialize outliner widget
+        #
+        self.outlinerLayout = QtWidgets.QVBoxLayout()
+        self.outlinerLayout.setObjectName('outlinerLayout')
+        self.outlinerLayout.setContentsMargins(0, 0, 0, 0)
+
+        self.outlinerWidget = QtWidgets.QWidget()
+        self.outlinerWidget.setObjectName('outlinerWidget')
+        self.outlinerWidget.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding))
+        self.outlinerWidget.setLayout(self.outlinerLayout)
+
+        self.outlinerHeader = QtWidgets.QGroupBox('Outliner')
+        self.outlinerHeader.setObjectName('outlinerHeader')
+        self.outlinerHeader.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.outlinerHeader.setAlignment(QtCore.Qt.AlignCenter)
+        self.outlinerHeader.setFlat(True)
+
+        self.nameLineEdit = QtWidgets.QLineEdit()
+        self.nameLineEdit.setObjectName('nameLineEdit')
+        self.nameLineEdit.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.nameLineEdit.setFixedHeight(24)
+        self.nameLineEdit.setReadOnly(True)
+        self.nameLineEdit.setPlaceholderText('Click Root to Create a New Rig!')
+
+        self.outlinerTreeView = QtWidgets.QTreeView()
+        self.outlinerTreeView.setObjectName('outlinerTreeView')
+        self.outlinerTreeView.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding))
+        self.outlinerTreeView.setStyleSheet('QTreeView::item { height: 24px; }')
+        self.outlinerTreeView.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.outlinerTreeView.setDragEnabled(True)
+        self.outlinerTreeView.setDragDropOverwriteMode(False)
+        self.outlinerTreeView.setDragDropMode(QtWidgets.QAbstractItemView.InternalMove)
+        self.outlinerTreeView.setDefaultDropAction(QtCore.Qt.MoveAction)
+        self.outlinerTreeView.setAlternatingRowColors(True)
+        self.outlinerTreeView.setRootIsDecorated(True)
+        self.outlinerTreeView.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.outlinerTreeView.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.outlinerTreeView.setUniformRowHeights(True)
+        self.outlinerTreeView.clicked.connect(self.on_outlinerTreeView_clicked)
+
+        headerView = self.outlinerTreeView.header()  # type: QtWidgets.QHeaderView
+        headerView.setDefaultSectionSize(200)
+        headerView.setMinimumSectionSize(50)
+        headerView.setStretchLastSection(True)
+
+        self.outlinerModel = qcomponentitemmodel.QComponentItemModel(parent=self.outlinerTreeView)
+        self.outlinerModel.setObjectName('outlinerModel')
+
+        self.outlinerTreeView.setModel(self.outlinerModel)
+
+        self.deleteShortcut = QtWidgets.QShortcut(QtGui.QKeySequence('delete'), self.outlinerTreeView, self.on_outlinerTreeView_deleteKeyPressed)
+
+        self.attachmentComboBox = QtWidgets.QComboBox()
+        self.attachmentComboBox.setObjectName('attachmentComboBox')
+        self.attachmentComboBox.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.attachmentComboBox.setFixedHeight(24)
+        self.attachmentComboBox.currentIndexChanged.connect(self.on_attachmentComboBox_currentIndexChanged)
+
+        self.outlinerLayout.addWidget(self.outlinerHeader)
+        self.outlinerLayout.addWidget(self.nameLineEdit)
+        self.outlinerLayout.addWidget(self.outlinerTreeView)
+        self.outlinerLayout.addWidget(self.attachmentComboBox)
+
+        # Initialize property widget
+        #
+        self.propertyLayout = QtWidgets.QVBoxLayout()
+        self.propertyLayout.setObjectName('propertyLayout')
+        self.propertyLayout.setContentsMargins(0, 0, 0, 0)
+
+        self.propertyWidget = QtWidgets.QWidget()
+        self.propertyWidget.setObjectName('propertyWidget')
+        self.propertyWidget.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding))
+        self.propertyWidget.setLayout(self.propertyLayout)
+
+        self.propertyHeader = QtWidgets.QGroupBox('Outliner')
+        self.propertyHeader.setObjectName('propertyHeader')
+        self.propertyHeader.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.propertyHeader.setAlignment(QtCore.Qt.AlignCenter)
+        self.propertyHeader.setFlat(True)
+
+        self.filterPropertyLineEdit = QtWidgets.QLineEdit()
+        self.filterPropertyLineEdit.setObjectName('filterPropertyLineEdit')
+        self.filterPropertyLineEdit.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.filterPropertyLineEdit.setFixedHeight(24)
+        self.filterPropertyLineEdit.setPlaceholderText('Filter Properties...')
+
+        self.propertyTreeView = QtWidgets.QTreeView()
+        self.propertyTreeView.setObjectName('propertyTreeView')
+        self.propertyTreeView.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding))
+        self.propertyTreeView.setStyleSheet('QTreeView::item { height: 24px; }')
+        self.propertyTreeView.setEditTriggers(QtWidgets.QAbstractItemView.DoubleClicked | QtWidgets.QAbstractItemView.EditKeyPressed)
+        self.propertyTreeView.setDragEnabled(False)
+        self.propertyTreeView.setDefaultDropAction(QtCore.Qt.MoveAction)
+        self.propertyTreeView.setAlternatingRowColors(True)
+        self.propertyTreeView.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.propertyTreeView.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.propertyTreeView.setUniformRowHeights(True)
+
+        headerView = self.propertyTreeView.header()  # type: QtWidgets.QHeaderView
+        headerView.setDefaultSectionSize(200)
+        headerView.setMinimumSectionSize(50)
+        headerView.setStretchLastSection(True)
+
+        self.propertyModel = qpropertyitemmodel.QPropertyItemModel(parent=self.propertyTreeView)
+        self.propertyModel.setObjectName('propertyModel')
+
+        self.propertyItemDelegate = qplugstyleditemdelegate.QPlugStyledItemDelegate(parent=self.propertyTreeView)
+        self.propertyItemDelegate.setObjectName('propertyItemDelegate')
+
+        self.propertyFilterModel = qplugitemfiltermodel.QPlugItemFilterModel(parent=self.propertyTreeView)
+        self.propertyFilterModel.setObjectName('propertyFilterModel')
+        self.propertyFilterModel.setSourceModel(self.propertyModel)
+        self.propertyFilterModel.setHideStaticAttributes(True)
+
+        self.propertyTreeView.setModel(self.propertyFilterModel)
+        self.propertyTreeView.setItemDelegate(self.propertyItemDelegate)
+
+        self.propertyLayout.addWidget(self.propertyHeader)
+        self.propertyLayout.addWidget(self.filterPropertyLineEdit)
+        self.propertyLayout.addWidget(self.propertyTreeView)
+
+        # Initialize main splitter
+        #
+        self.mainSplitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        self.mainSplitter.setObjectName('mainSplitter')
+        self.mainSplitter.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding))
+        self.mainSplitter.addWidget(self.outlinerWidget)
+        self.mainSplitter.addWidget(self.propertyWidget)
+
+        centralLayout.addWidget(self.mainSplitter)
+
+        # Initialize button layout
+        #
+        self.buttonLayout = QtWidgets.QGridLayout()
+        self.buttonLayout.setObjectName('buttonLayout')
+        self.buttonLayout.setContentsMargins(0, 0, 0, 0)
+
+        self.alignPushButton = QtWidgets.QPushButton('Align Joints')
+        self.alignPushButton.setObjectName('alignPushButton')
+        self.alignPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.alignPushButton.setFixedHeight(24)
+        self.alignPushButton.clicked.connect(self.on_alignPushButton_clicked)
+
+        self.mirrorPushButton = QtWidgets.QPushButton('Mirror Joint(s)')
+        self.mirrorPushButton.setObjectName('mirrorPushButton')
+        self.mirrorPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.mirrorPushButton.setFixedHeight(24)
+        self.mirrorPushButton.clicked.connect(self.on_mirrorPushButton_clicked)
+
+        self.sanitizePushButton = QtWidgets.QPushButton('Sanitize Joint(s)')
+        self.sanitizePushButton.setObjectName('sanitizePushButton')
+        self.sanitizePushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.sanitizePushButton.setFixedHeight(24)
+        self.sanitizePushButton.clicked.connect(self.on_sanitizePushButton_clicked)
+
+        self.organizePushButton = QtWidgets.QPushButton('Organize Layers')
+        self.organizePushButton.setObjectName('organizePushButton')
+        self.organizePushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.organizePushButton.setFixedHeight(24)
+        self.organizePushButton.clicked.connect(self.on_organizePushButton_clicked)
+
+        self.detectPushButton = QtWidgets.QPushButton('Detect Mirroring')
+        self.detectPushButton.setObjectName('alignPushButton')
+        self.detectPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.detectPushButton.setFixedHeight(24)
+        self.detectPushButton.clicked.connect(self.on_detectPushButton_clicked)
+
+        self.blackBoxPushButton = QtWidgets.QPushButton('Black-Box')
+        self.blackBoxPushButton.setObjectName('blackBoxPushButton')
+        self.blackBoxPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.blackBoxPushButton.setFixedHeight(24)
+        self.blackBoxPushButton.clicked.connect(self.on_blackBoxPushButton_clicked)
+
+        self.buttonLayout.addWidget(self.alignPushButton, 0, 0)
+        self.buttonLayout.addWidget(self.mirrorPushButton, 0, 1)
+        self.buttonLayout.addWidget(self.sanitizePushButton, 0, 2)
+        self.buttonLayout.addWidget(self.organizePushButton, 1, 0)
+        self.buttonLayout.addWidget(self.detectPushButton, 1, 1)
+        self.buttonLayout.addWidget(self.blackBoxPushButton, 1, 2)
+
+        centralLayout.addLayout(self.buttonLayout)
+
+        # Initialize status widget
+        #
+        self.statusLayout = QtWidgets.QGridLayout()
+        self.statusLayout.setObjectName('statusLayout')
+        self.statusLayout.setContentsMargins(0, 0, 0, 0)
+
+        self.statusWidget = QtWidgets.QWidget()
+        self.statusWidget.setObjectName('interopWidget')
+        self.statusWidget.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.statusWidget.setLayout(self.statusLayout)
+
+        self.statusHeader = QtWidgets.QGroupBox('Status:')
+        self.statusHeader.setObjectName('statusHeader')
+        self.statusHeader.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.statusHeader.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        self.statusHeader.setFlat(True)
+
+        self.metaStatusPushButton = QtWidgets.QPushButton('Meta')
+        self.metaStatusPushButton.setObjectName('metaStatusPushButton')
+        self.metaStatusPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.metaStatusPushButton.setFixedHeight(24)
+        self.metaStatusPushButton.setStyleSheet('QPushButton:hover:checked { background-color: green; }\nQPushButton:checked { background-color: darkgreen; border: none; }')
+        self.metaStatusPushButton.setCheckable(True)
+        self.metaStatusPushButton.setChecked(True)
+
+        self.skeletonStatusPushButton = QtWidgets.QPushButton('Skeleton')
+        self.skeletonStatusPushButton.setObjectName('skeletonStatusPushButton')
+        self.skeletonStatusPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.skeletonStatusPushButton.setFixedHeight(24)
+        self.skeletonStatusPushButton.setStyleSheet('QPushButton:hover:checked { background-color: green; }\nQPushButton:checked { background-color: darkgreen; border: none; }')
+        self.skeletonStatusPushButton.setCheckable(True)
+        self.skeletonStatusPushButton.setChecked(True)
+
+        self.rigStatusPushButton = QtWidgets.QPushButton('Rig')
+        self.rigStatusPushButton.setObjectName('rigStatusPushButton')
+        self.rigStatusPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.rigStatusPushButton.setFixedHeight(24)
+        self.rigStatusPushButton.setStyleSheet('QPushButton:hover:checked { background-color: green; }\nQPushButton:checked { background-color: darkgreen; border: none; }')
+        self.rigStatusPushButton.setCheckable(True)
+        self.rigStatusPushButton.setChecked(True)
+
+        self.statusButtonGroup = QtWidgets.QButtonGroup(self.statusWidget)
+        self.statusButtonGroup.setExclusive(True)
+        self.statusButtonGroup.addButton(self.metaStatusPushButton, id=0)
+        self.statusButtonGroup.addButton(self.skeletonStatusPushButton, id=1)
+        self.statusButtonGroup.addButton(self.rigStatusPushButton, id=2)
+        self.statusButtonGroup.idClicked.connect(self.on_statusButtonGroup_idClicked)
+
+        self.statusLayout.addWidget(self.statusHeader, 0, 0, 1, 3)
+        self.statusLayout.addWidget(self.metaStatusPushButton, 1, 0)
+        self.statusLayout.addWidget(self.skeletonStatusPushButton, 1, 1)
+        self.statusLayout.addWidget(self.rigStatusPushButton, 1, 2)
+
+        centralLayout.addWidget(self.statusWidget)
     # endregion
 
     # region Properties
@@ -179,9 +546,19 @@ class QRigotron(quicwindow.QUicWindow):
     # endregion
 
     # region Callbacks
-    def sceneChanged(self, *args, **kwargs):
+    def sceneOpening(self, *args, **kwargs):
         """
-        Callback method that notifies the window of a scene change.
+        Notifies the component item model a scene is being opened.
+
+        :key clientData: Any
+        :rtype: None
+        """
+
+        self.clearControlRig()
+
+    def sceneOpened(self, *args, **kwargs):
+        """
+        Notifies the component item model a scene has been opened.
 
         :key clientData: Any
         :rtype: None
@@ -190,82 +567,48 @@ class QRigotron(quicwindow.QUicWindow):
         self.invalidateControlRig()
     # endregion
 
-    # region Events
-    def closeEvent(self, event):
-        """
-        Event method called after the window has been closed.
-
-        :type event: QtGui.QCloseEvent
-        :rtype: None
-        """
-
-        # Call parent method
-        #
-        super(QRigotron, self).closeEvent(event)
-
-        # Remove scene callback
-        #
-        om.MSceneMessage.removeCallbacks(self._callbackIds)
-    # endregion
-
     # region Methods
-    def postLoad(self, *args, **kwargs):
+    def addCallbacks(self):
         """
-        Called after the user interface has been loaded.
+        Adds any callbacks required by this window.
 
         :rtype: None
         """
 
-        # Call parent method
+        # Add callbacks
         #
-        super(QRigotron, self).postLoad(*args, **kwargs)
+        hasCallbacks = len(self._callbackIds) > 0
 
-        # Initialize outliner tree view
+        if not hasCallbacks:
+
+            callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kBeforeNew, onSceneOpening)
+            self._callbackIds.append(callbackId)
+
+            callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kBeforeOpen, onSceneOpening)
+            self._callbackIds.append(callbackId)
+
+            callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kSceneUpdate, onSceneOpened)
+            self._callbackIds.append(callbackId)
+
+        # Force scene update
         #
-        self.outlinerModel = qcomponentitemmodel.QComponentItemModel(parent=self.outlinerTreeView)
-        self.outlinerModel.setObjectName('outlinerModel')
+        self.sceneOpened()
 
-        self.outlinerTreeView.setModel(self.outlinerModel)
+    def removeCallbacks(self):
+        """
+        Removes any callbacks created by this window.
 
-        # Add shortcuts to outliner tree view
+        :rtype: None
+        """
+
+        # Remove callbacks
         #
-        self.deleteShortcut = QtWidgets.QShortcut(QtGui.QKeySequence('delete'), self.outlinerTreeView, self.on_outlinerTreeView_deleteKeyPressed)
+        hasCallbacks = len(self._callbackIds) > 0
 
-        # Initialize property tree view
-        #
-        self.propertyModel = qpropertyitemmodel.QPropertyItemModel(parent=self.propertyTreeView)
-        self.propertyModel.setObjectName('propertyModel')
+        if hasCallbacks:
 
-        self.propertyItemDelegate = qplugstyleditemdelegate.QPlugStyledItemDelegate(parent=self.propertyTreeView)
-        self.propertyItemDelegate.setObjectName('propertyItemDelegate')
-
-        self.propertyFilterModel = qplugitemfiltermodel.QPlugItemFilterModel(parent=self.propertyTreeView)
-        self.propertyFilterModel.setObjectName('propertyFilterModel')
-        self.propertyFilterModel.setSourceModel(self.propertyModel)
-        self.propertyFilterModel.setHideStaticAttributes(True)
-
-        self.propertyTreeView.setModel(self.propertyFilterModel)
-        self.propertyTreeView.setItemDelegate(self.propertyItemDelegate)
-
-        # Initialize status button group
-        #
-        self.statusButtonGroup = QtWidgets.QButtonGroup(self.statusWidget)
-        self.statusButtonGroup.addButton(self.metaStatusPushButton, id=0)
-        self.statusButtonGroup.addButton(self.skeletonStatusPushButton, id=1)
-        self.statusButtonGroup.addButton(self.rigStatusPushButton, id=2)
-        self.statusButtonGroup.idClicked.connect(self.on_statusButtonGroup_idClicked)
-
-        # Add scene changed callbacks
-        #
-        callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen, onSceneChanged)
-        self._callbackIds.append(callbackId)
-
-        callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kAfterNew, onSceneChanged)
-        self._callbackIds.append(callbackId)
-
-        # Force scene change
-        #
-        self.sceneChanged()
+            om.MMessage.removeCallbacks(self._callbackIds)
+            self._callbackIds.clear()
 
     def selectedComponent(self):
         """
@@ -299,7 +642,7 @@ class QRigotron(quicwindow.QUicWindow):
         """
 
         controlRig = self.rigManager.createControlRig(name)
-        self.sceneChanged()
+        self.sceneOpened()
 
         return controlRig
 
@@ -351,9 +694,30 @@ class QRigotron(quicwindow.QUicWindow):
             log.warning(f'Unable to locate "{typeName}" constructor!')
             return None
 
+    def clearControlRig(self):
+        """
+        Resets the user interface.
+
+        :rtype: None
+        """
+
+        # Reset internal trackers
+        #
+        self._controlRig = self.nullWeakReference
+        self._currentComponent = self.nullWeakReference
+
+        self.nameLineEdit.setText('')
+        self.outlinerModel.rootComponent = None
+
+        # Update component status
+        #
+        self.invalidateProperties()
+        self.invalidateAttachments()
+        self.invalidateStatus()
+
     def invalidateControlRig(self):
         """
-        Invalidates the control rig related widgets.
+        Updates all control-rig related widgets.
 
         :rtype: None
         """
@@ -363,25 +727,17 @@ class QRigotron(quicwindow.QUicWindow):
         controlRigs = self.rigManager.controlRigs()
         numControlRigs = len(controlRigs)
 
-        if numControlRigs == 1:
+        if numControlRigs == 0:
 
-            # Update user interface
-            #
-            self._controlRig = controlRigs[0].weakReference()
-            self._currentComponent = self.nullWeakReference
+            return
 
-            self.nameLineEdit.setText(self.controlRig.rigName)
-            self.outlinerModel.rootComponent = self.scene(self.controlRig.rootComponent)
+        # Update user interface
+        #
+        self._controlRig = controlRigs[0].weakReference()
+        self._currentComponent = self.nullWeakReference
 
-        else:
-
-            # Reset user interface
-            #
-            self._controlRig = self.nullWeakReference
-            self._currentComponent = self.nullWeakReference
-
-            self.nameLineEdit.setText('')
-            self.outlinerModel.rootComponent = None
+        self.nameLineEdit.setText(self.controlRig.rigName)
+        self.outlinerModel.rootComponent = self.scene(self.controlRig.rootComponent)
 
         # Update component status
         #
@@ -454,7 +810,7 @@ class QRigotron(quicwindow.QUicWindow):
             buttons = self.statusButtonGroup.buttons()
             buttons[self._currentStatus].setChecked(True)
 
-    @undo(name='Align Nodes')
+    @undo.Undo(name='Align Nodes')
     def alignNodes(self, *nodes):
         """
         Aligns the transforms on the supplied nodes.
@@ -494,7 +850,7 @@ class QRigotron(quicwindow.QUicWindow):
 
             lastNode.setWorldMatrix(averagedMatrix, skipScale=True)
 
-    @undo(name='Mirror Joints')
+    @undo.Undo(name='Mirror Joints')
     def mirrorJoints(self, *joints):
         """
         Mirrors the transforms on the supplied joints.
@@ -556,7 +912,7 @@ class QRigotron(quicwindow.QUicWindow):
                 oppositeJoint = joint.getOppositeNode()
                 oppositeJoint.setMatrix(mirrorMatrix, skipScale=True)
 
-    @undo(name='Sanitize Joints')
+    @undo.Undo(name='Sanitize Joints')
     def sanitizeJoints(self, *joints):
         """
         Sanitizes the transform on the supplied joints.
@@ -657,12 +1013,11 @@ class QRigotron(quicwindow.QUicWindow):
 
             self.currentComponent.attachmentId = index
 
-    @QtCore.Slot(bool)
-    def on_addRootComponentAction_triggered(self, checked=False):
+    @QtCore.Slot()
+    def on_addRootComponentAction_triggered(self):
         """
         Slot method for the `addRootComponentAction` widget's `triggered` signal.
 
-        :type checked: bool
         :rtype: None
         """
 
@@ -689,111 +1044,11 @@ class QRigotron(quicwindow.QUicWindow):
 
             log.info('Operation aborted...')
 
-    @QtCore.Slot(bool)
-    def on_addSpineComponentAction_triggered(self, checked=False):
+    @QtCore.Slot()
+    def on_addComponentAction_triggered(self):
         """
-        Slot method for the `addSpineComponentAction` widget's `triggered` signal.
+        Slot method for the `addComponentAction` widget's `triggered` signal.
 
-        :type checked: bool
-        :rtype: None
-        """
-
-        self.addComponent(self.sender().whatsThis())
-
-    @QtCore.Slot(bool)
-    def on_addLegComponentAction_triggered(self, checked=False):
-        """
-        Slot method for the `addLegComponentAction` widget's `triggered` signal.
-
-        :type checked: bool
-        :rtype: None
-        """
-
-        self.addComponent(self.sender().whatsThis())
-
-    @QtCore.Slot(bool)
-    def on_addFootComponentAction_triggered(self, checked=False):
-        """
-        Slot method for the `addFootComponentAction` widget's `triggered` signal.
-
-        :type checked: bool
-        :rtype: None
-        """
-
-        self.addComponent(self.sender().whatsThis())
-
-    @QtCore.Slot(bool)
-    def on_addClavicleComponentAction_triggered(self, checked=False):
-        """
-        Slot method for the `addClavicleComponentAction` widget's `triggered` signal.
-
-        :type checked: bool
-        :rtype: None
-        """
-
-        self.addComponent(self.sender().whatsThis())
-
-    @QtCore.Slot(bool)
-    def on_addArmComponentAction_triggered(self, checked=False):
-        """
-        Slot method for the `addArmComponentAction` widget's `triggered` signal.
-
-        :type checked: bool
-        :rtype: None
-        """
-
-        self.addComponent(self.sender().whatsThis())
-
-    @QtCore.Slot(bool)
-    def on_addHandComponentAction_triggered(self, checked=False):
-        """
-        Slot method for the `addHandComponentAction` widget's `triggered` signal.
-
-        :type checked: bool
-        :rtype: None
-        """
-
-        self.addComponent(self.sender().whatsThis())
-
-    @QtCore.Slot(bool)
-    def on_addHeadComponentAction_triggered(self, checked=False):
-        """
-        Slot method for the `addHeadComponentAction` widget's `triggered` signal.
-
-        :type checked: bool
-        :rtype: None
-        """
-
-        self.addComponent(self.sender().whatsThis())
-
-    @QtCore.Slot(bool)
-    def on_addTailComponentAction_triggered(self, checked=False):
-        """
-        Slot method for the `addTailComponentAction` widget's `triggered` signal.
-
-        :type checked: bool
-        :rtype: None
-        """
-
-        self.addComponent(self.sender().whatsThis())
-
-    @QtCore.Slot(bool)
-    def on_addPropComponentAction_triggered(self, checked=False):
-        """
-        Slot method for the `addPropComponentAction` widget's `triggered` signal.
-
-        :type checked: bool
-        :rtype: None
-        """
-
-        self.addComponent(self.sender().whatsThis())
-
-    @QtCore.Slot(bool)
-    def on_addStowedComponentAction_triggered(self, checked=False):
-        """
-        Slot method for the `addStowedComponentAction` widget's `triggered` signal.
-
-        :type checked: bool
         :rtype: None
         """
 
@@ -862,9 +1117,9 @@ class QRigotron(quicwindow.QUicWindow):
         :rtype: None
         """
 
-        for container in self.scene.iterNodesByApiType(om.MFn.kDagContainer):
+        for component in self.controlRig.walkComponents():
 
-            for node in container.publishedNodes():
+            for node in component.publishedNodes():
 
                 node.detectMirroring()
 

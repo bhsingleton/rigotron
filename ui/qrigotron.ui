@@ -464,9 +464,13 @@
    <addaction name="addHandComponentAction"/>
    <addaction name="separator"/>
    <addaction name="addHeadComponentAction"/>
+   <addaction name="addJawComponentAction"/>
    <addaction name="separator"/>
    <addaction name="addPropComponentAction"/>
    <addaction name="addStowedComponentAction"/>
+   <addaction name="separator"/>
+   <addaction name="addLeafComponentAction"/>
+   <addaction name="addChainComponentAction"/>
   </widget>
   <action name="addRootComponentAction">
    <property name="icon">
@@ -665,7 +669,7 @@
   <action name="addStowedComponentAction">
    <property name="icon">
     <iconset resource="resources.qrc">
-     <normaloff>:/rigotron/icons/StowedComponent.svg</normaloff>:/rigotron/icons/StowedComponent.svg</iconset>
+     <normaloff>:/rigotron/icons/StowComponent.svg</normaloff>:/rigotron/icons/StowComponent.svg</iconset>
    </property>
    <property name="text">
     <string>Stow</string>
@@ -675,6 +679,48 @@
    </property>
    <property name="whatsThis">
     <string>StowedComponent</string>
+   </property>
+  </action>
+  <action name="addLeafComponentAction">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/rigotron/icons/LeafComponent.svg</normaloff>:/rigotron/icons/LeafComponent.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Leaf</string>
+   </property>
+   <property name="toolTip">
+    <string>Adds a leaf to the selected component.</string>
+   </property>
+   <property name="whatsThis">
+    <string>LeafComponent</string>
+   </property>
+  </action>
+  <action name="addChainComponentAction">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/rigotron/icons/ChainComponent.svg</normaloff>:/rigotron/icons/ChainComponent.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Chain</string>
+   </property>
+   <property name="toolTip">
+    <string>Adds a chain to the selected component.</string>
+   </property>
+   <property name="whatsThis">
+    <string>ChainComponent</string>
+   </property>
+  </action>
+  <action name="addJawComponentAction">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/rigotron/icons/JawComponent.svg</normaloff>:/rigotron/icons/JawComponent.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Jaw</string>
+   </property>
+   <property name="toolTip">
+    <string>Adds a jaw to the selected component.</string>
    </property>
   </action>
  </widget>
