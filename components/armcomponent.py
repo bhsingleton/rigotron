@@ -1,4 +1,5 @@
 from maya.api import OpenMaya as om
+from dcc.maya.libs import transformutils
 from .twobonelimbcomponent import TwoBoneLimbComponent, LimbType
 from ..libs import Side, Type
 
@@ -107,4 +108,68 @@ class ArmComponent(TwoBoneLimbComponent):
             {'sampleName': 'Down', 'sampleInputTranslate': om.MVector.kYaxisVector, 'sampleOutputTranslate': (0.0, 0.0, -1.0)}
         ]
     }
+    # endregion
+
+    # region Methods
+    def finalizeRig(self):
+        """
+        Notifies the component that the rig requires finalizing.
+
+        :rtype: None
+        """
+
+        # Check if hand component exists
+        #
+        handComponents = self.findComponentDescendants('HandComponent')
+        hasHandComponent = len(handComponents)
+
+        if not hasHandComponent:
+
+            return
+
+        # Evaluate handedness
+        #
+        handComponent = handComponents[0]
+        isPreferred = bool(handComponent.preferredHand)
+
+        if not isPreferred:
+
+            return
+
+        # Get opposite hand control
+        #
+        wristIKCtrl = self.getPublishedNode(f'Wrist_IK')
+        handCtrl = handComponent.getPublishedNode('Hand')
+
+        otherWristIKCtrl = wristIKCtrl.getOppositeNode()
+
+        if otherWristIKCtrl is None:
+
+            return
+
+        # Append control to opposite space switch targets
+        #
+        otherSpaceSwitch = self.scene(otherWristIKCtrl.userProperties['spaceSwitch'])
+        index = otherSpaceSwitch.addSpace(handCtrl, maintainOffset=False)
+
+        side = self.Side(self.componentSide)
+        sidePrefix = side.name[0].upper()
+        otherWristIKCtrl.addDivider('Extras')
+        otherWristIKCtrl.addAttr(longName=f'positionSpaceW{index}', niceName=f'Position Space ({sidePrefix}_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
+        otherWristIKCtrl.addAttr(longName=f'rotationSpaceW{index}', niceName=f'Rotation Space ({sidePrefix}_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
+
+        otherSpaceSwitch.connectPlugs(otherWristIKCtrl[f'positionSpaceW{index}'], f'target[{index}].targetTranslateWeight')
+        otherSpaceSwitch.connectPlugs(otherWristIKCtrl[f'rotationSpaceW{index}'], f'target[{index}].targetRotateWeight')
+
+        # Edit target offsets
+        #
+        otherSpace = self.scene(otherWristIKCtrl.userProperties['space'])
+        offsetMatrix = otherSpace.worldMatrix() * otherWristIKCtrl.worldInverseMatrix()
+        mirrorMatrix = self.__default_mirror_matrices__[self.Side.RIGHT]
+        twistMatrix = transformutils.createRotationMatrix([180.0, 0.0, 0.0])
+
+        targetMatrix = (offsetMatrix * (twistMatrix * (mirrorMatrix * wristIKCtrl.worldMatrix()))) * handCtrl.worldInverseMatrix()  # Trust the math
+        offsetRotate = transformutils.decomposeTransformMatrix(targetMatrix)[1]
+
+        otherSpaceSwitch.setAttr(f'target[{index}]', {'targetScaleWeight': 0.0, 'targetOffsetRotate': offsetRotate}, convertUnits=False)
     # endregion
