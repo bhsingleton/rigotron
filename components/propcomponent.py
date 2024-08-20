@@ -153,7 +153,7 @@ class PropComponent(basecomponent.BaseComponent):
 
         propOffsetCtrlName = self.formatName(subname='Offset', type='control')
         propOffsetCtrl = self.scene.createNode('transform', name=propOffsetCtrlName, parent=propCtrl)
-        propOffsetCtrl.addPointHelper('cylinder', size=15.0, colorRGB=colorRGB, lineWidth=2.0)
+        propOffsetCtrl.addPointHelper('cylinder', size=15.0, colorRGB=lightColorRGB, lineWidth=2.0)
         propOffsetCtrl.addDivider('Space')
         propOffsetCtrl.prepareChannelBoxForAnimation()
         self.publishNode(propOffsetCtrl, alias='Offset')
