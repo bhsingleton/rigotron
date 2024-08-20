@@ -166,7 +166,7 @@ class HeadComponent(basecomponent.BaseComponent):
         :rtype: None
         """
 
-        # Get component properties
+        # Decompose component
         #
         *neckSpecs, headSpec = self.skeletonSpecs()
         neckExportJoints = [self.scene(neckSpec.uuid) for neckSpec in neckSpecs]
@@ -205,7 +205,7 @@ class HeadComponent(basecomponent.BaseComponent):
 
         headCtrlName = self.formatName(type='control')
         headCtrl = self.scene.createNode('transform', name=headCtrlName, parent=headSpace)
-        headCtrl.addShape('MeltedCircleCurve', size=(30.0 * rigScale), colorRGB=colorRGB, lineWidth=4.0)
+        headCtrl.addShape('CrownCurve', localPosition=(15.0 * rigScale, 0.0, 0.0), size=(15.0 * rigScale), colorRGB=colorRGB, lineWidth=4.0)
         headCtrl.addDivider('Settings')
         headCtrl.addAttr(longName='stretch', attributeType='float', min=0.0, max=1.0, keyable=True)
         headCtrl.addAttr(longName='lookAtOffset', niceName='Look-At Offset', attributeType='distance', min=1.0, default=100.0, channelBox=True)
@@ -294,129 +294,137 @@ class HeadComponent(basecomponent.BaseComponent):
 
         # Check if neck was enabled
         #
-        if not neckEnabled:
+        if neckEnabled:
 
-            raise NotImplementedError()
-
-        # Evaluate neck links
-        #
-        neckCount = len(neckSpecs)
-
-        if neckCount == 1:
-
-            # Decompose neck spec
+            # Evaluate neck links
             #
-            neckSpec = neckSpecs[0]
-            neckExportJoint = self.scene(neckSpec.uuid)
+            neckCount = len(neckSpecs)
 
-            # Create neck control
-            #
-            neckSpaceName = self.formatName(name='Neck', type='space')
-            neckSpace = self.scene.createNode('transform', name=neckSpaceName, parent=controlsGroup)
-            neckSpace.copyTransform(neckExportJoint)
-            neckSpace.freezeTransform()
+            if neckCount == 1:
 
-            neckCtrlName = self.formatName(name='Neck', type='control')
-            neckCtrl = self.scene.createNode('transform', name=neckCtrlName, parent=neckSpace)
-            neckCtrl.addPointHelper('disc', size=(15.0 * rigScale), colorRGB=lightColorRGB, lineWidth=2.0)
-            neckCtrl.addDivider('Settings')
-            neckCtrl.addAttr(longName='inheritsTwist', attributeType='angle', min=0.0, max=1.0, default=0.5, keyable=True)
-            neckCtrl.addDivider('Spaces')
-            neckCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
-            neckCtrl.prepareChannelBoxForAnimation()
-            self.publishNode(neckCtrl, alias='Neck')
+                # Create neck control
+                #
+                neckExportJoint = neckExportJoints[0]
 
-            neckSpaceSwitch = neckSpace.addSpaceSwitch([parentExportCtrl, worldCtrl], maintainOffset=True)
-            neckSpaceSwitch.weighted = True
-            neckSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
-            neckSpaceSwitch.connectPlugs(neckCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
-            neckSpaceSwitch.connectPlugs(neckCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
+                neckSpaceName = self.formatName(name='Neck', type='space')
+                neckSpace = self.scene.createNode('transform', name=neckSpaceName, parent=controlsGroup)
+                neckSpace.copyTransform(neckExportJoint)
+                neckSpace.freezeTransform()
 
-            neckCtrl.userProperties['space'] = neckSpace.uuid()
-            neckCtrl.userProperties['spaceSwitch'] = neckSpaceSwitch.uuid()
+                neckCtrlName = self.formatName(name='Neck', type='control')
+                neckCtrl = self.scene.createNode('transform', name=neckCtrlName, parent=neckSpace)
+                neckCtrl.addPointHelper('disc', size=(15.0 * rigScale), colorRGB=lightColorRGB, lineWidth=2.0)
+                neckCtrl.addDivider('Settings')
+                neckCtrl.addAttr(longName='inheritsTwist', attributeType='angle', min=0.0, max=1.0, default=0.5, keyable=True)
+                neckCtrl.addDivider('Spaces')
+                neckCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
+                neckCtrl.prepareChannelBoxForAnimation()
+                self.publishNode(neckCtrl, alias='Neck')
 
-            # Connect head look-at to neck control
-            #
-            headLookAtSpaceSwitch = headLookAtSpace.addSpaceSwitch([worldCtrl, cogCtrl, parentExportCtrl, neckCtrl], maintainOffset=True)
-            headLookAtSpaceSwitch.weighted = True
-            headLookAtSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (1.0, 0.0, 1.0)}])
-            headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW0'], 'target[0].targetRotateWeight')
-            headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW1'], 'target[1].targetRotateWeight')
-            headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW2'], 'target[2].targetRotateWeight')
-            headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW3'], 'target[3].targetRotateWeight')
+                neckSpaceSwitch = neckSpace.addSpaceSwitch([parentExportCtrl, worldCtrl], maintainOffset=True)
+                neckSpaceSwitch.weighted = True
+                neckSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
+                neckSpaceSwitch.connectPlugs(neckCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
+                neckSpaceSwitch.connectPlugs(neckCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
 
-            headLookAtTarget.addConstraint('scaleConstraint', [neckCtrl])
+                neckCtrl.userProperties['space'] = neckSpace.uuid()
+                neckCtrl.userProperties['spaceSwitch'] = neckSpaceSwitch.uuid()
 
-            # Create neck IK joints
-            #
-            neckIKJointName = self.formatName(name='Neck', kinemat='IK', type='joint')
-            neckIKJoint = self.scene.createNode('joint', name=neckIKJointName, parent=jointsGroup)
-            neckIKJoint.copyTransform(neckExportJoint)
-            neckIKJoint.freezePivots(includeTranslate=False, includeScale=False)
+                # Connect head look-at to neck control
+                #
+                headLookAtSpaceSwitch = headLookAtSpace.addSpaceSwitch([worldCtrl, cogCtrl, parentExportCtrl, neckCtrl], maintainOffset=True)
+                headLookAtSpaceSwitch.weighted = True
+                headLookAtSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (1.0, 0.0, 1.0)}])
+                headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW0'], 'target[0].targetRotateWeight')
+                headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW1'], 'target[1].targetRotateWeight')
+                headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW2'], 'target[2].targetRotateWeight')
+                headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW3'], 'target[3].targetRotateWeight')
 
-            neckIKTipJointName = self.formatName(name='Neck', kinemat='IK', subname='Tip', type='joint')
-            neckIKTipJoint = self.scene.createNode('joint', name=neckIKTipJointName, parent=neckIKJoint)
-            neckIKTipJoint.copyTransform(headExportJoint)
-            neckIKTipJoint.freezePivots(includeTranslate=False, includeScale=False)
+                headLookAtTarget.addConstraint('scaleConstraint', [neckCtrl])
 
-            neckIKJoint.addConstraint('pointConstraint', [neckCtrl])
-            constraint = neckIKJoint.addConstraint('aimConstraint', [headCtrl], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 1.0, 0.0), worldUpType=2, worldUpVector=(0.0, 1.0, 0.0), worldUpObject=neckCtrl)
-            neckIKJoint.addConstraint('scaleConstraint', [neckCtrl])
+                # Create neck IK joints
+                #
+                neckIKJointName = self.formatName(name='Neck', kinemat='IK', type='joint')
+                neckIKJoint = self.scene.createNode('joint', name=neckIKJointName, parent=jointsGroup)
+                neckIKJoint.copyTransform(neckExportJoint)
+                neckIKJoint.freezePivots(includeTranslate=False, includeScale=False)
 
-            # Setup neck stretch
-            #
-            neckLengthMultMatrixName = self.formatName(subname='Length', type='multMatrix')
-            neckLengthMultMatrix = self.scene.createNode('multMatrix', name=neckLengthMultMatrixName)
-            neckLengthMultMatrix.connectPlugs(headCtrl[f'parentMatrix[{headCtrl.instanceNumber()}]'], 'matrixIn[0]')
-            neckLengthMultMatrix.connectPlugs(neckCtrl[f'parentInverseMatrix[{neckCtrl.instanceNumber()}]'], 'matrixIn[1]')
+                neckIKTipJointName = self.formatName(name='Neck', kinemat='IK', subname='Tip', type='joint')
+                neckIKTipJoint = self.scene.createNode('joint', name=neckIKTipJointName, parent=neckIKJoint)
+                neckIKTipJoint.copyTransform(headExportJoint)
+                neckIKTipJoint.freezePivots(includeTranslate=False, includeScale=False)
 
-            neckLengthName = self.formatName(subname='Length', type='distanceBetween')
-            neckLength = self.scene.createNode('distanceBetween', name=neckLengthName)
-            neckLength.connectPlugs(neckCtrl['matrix'], 'inMatrix1')
-            neckLength.connectPlugs(neckLengthMultMatrix['matrixSum'], 'inMatrix2')
+                neckIKJoint.addConstraint('pointConstraint', [neckCtrl])
+                constraint = neckIKJoint.addConstraint('aimConstraint', [headCtrl], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 1.0, 0.0), worldUpType=2, worldUpVector=(0.0, 1.0, 0.0), worldUpObject=neckCtrl)
+                neckIKJoint.addConstraint('scaleConstraint', [neckCtrl])
 
-            headDistanceMultMatrixName = self.formatName(subname='Distance', type='multMatrix')
-            headDistanceMultMatrix = self.scene.createNode('multMatrix', name=headDistanceMultMatrixName)
-            headDistanceMultMatrix.connectPlugs(headCtrl[f'worldMatrix[{headCtrl.instanceNumber()}]'], 'matrixIn[0]')
-            headDistanceMultMatrix.connectPlugs(neckCtrl[f'parentInverseMatrix[{neckCtrl.instanceNumber()}]'], 'matrixIn[1]')
+                # Setup neck stretch
+                #
+                neckLengthMultMatrixName = self.formatName(subname='Length', type='multMatrix')
+                neckLengthMultMatrix = self.scene.createNode('multMatrix', name=neckLengthMultMatrixName)
+                neckLengthMultMatrix.connectPlugs(headCtrl[f'parentMatrix[{headCtrl.instanceNumber()}]'], 'matrixIn[0]')
+                neckLengthMultMatrix.connectPlugs(neckCtrl[f'parentInverseMatrix[{neckCtrl.instanceNumber()}]'], 'matrixIn[1]')
 
-            headDistanceName = self.formatName(subname='Distance', type='distanceBetween')
-            headDistance = self.scene.createNode('distanceBetween', name=headDistanceName)
-            headDistance.connectPlugs(neckCtrl['matrix'], 'inMatrix1')
-            headDistance.connectPlugs(headDistanceMultMatrix['matrixSum'], 'inMatrix2')
+                neckLengthName = self.formatName(subname='Length', type='distanceBetween')
+                neckLength = self.scene.createNode('distanceBetween', name=neckLengthName)
+                neckLength.connectPlugs(neckCtrl['matrix'], 'inMatrix1')
+                neckLength.connectPlugs(neckLengthMultMatrix['matrixSum'], 'inMatrix2')
 
-            headStretchBlendName = self.formatName(subname='Stretch', type='blendTwoAttr')
-            headStretchBlend = self.scene.createNode('blendTwoAttr', name=headStretchBlendName)
-            headStretchBlend.connectPlugs(headCtrl['stretch'], 'attributesBlender')
-            headStretchBlend.connectPlugs(neckLength['distance'], 'input[0]')
-            headStretchBlend.connectPlugs(headDistance['distance'], 'input[1]')
-            headStretchBlend.connectPlugs('output', neckIKTipJoint['translateX'])
+                headDistanceMultMatrixName = self.formatName(subname='Distance', type='multMatrix')
+                headDistanceMultMatrix = self.scene.createNode('multMatrix', name=headDistanceMultMatrixName)
+                headDistanceMultMatrix.connectPlugs(headCtrl[f'worldMatrix[{headCtrl.instanceNumber()}]'], 'matrixIn[0]')
+                headDistanceMultMatrix.connectPlugs(neckCtrl[f'parentInverseMatrix[{neckCtrl.instanceNumber()}]'], 'matrixIn[1]')
 
-            # Setup neck twist
-            #
-            neckTwistSolverName = self.formatName(name='Neck', subname='Twist', type='twistSolver')
-            neckTwistSolver = self.scene.createNode('twistSolver', name=neckTwistSolverName)
-            neckTwistSolver.forwardAxis = 0  # X
-            neckTwistSolver.upAxis = 2  # Z
-            neckTwistSolver.segments = 2
-            neckTwistSolver.connectPlugs(neckCtrl[f'worldMatrix[{neckCtrl.instanceNumber()}]'], 'startMatrix')
-            neckTwistSolver.connectPlugs(headCtrl[f'worldMatrix[{headCtrl.instanceNumber()}]'], 'endMatrix')
+                headDistanceName = self.formatName(subname='Distance', type='distanceBetween')
+                headDistance = self.scene.createNode('distanceBetween', name=headDistanceName)
+                headDistance.connectPlugs(neckCtrl['matrix'], 'inMatrix1')
+                headDistance.connectPlugs(headDistanceMultMatrix['matrixSum'], 'inMatrix2')
 
-            neckTwistEnvelopeName = self.formatName(name='Neck', subname='TwistEnvelope', type='floatMath')
-            neckTwistEnvelope = self.scene.createNode('floatMath', name=neckTwistEnvelopeName)
-            neckTwistEnvelope.operation = 2  # Multiply
-            neckTwistEnvelope.connectPlugs(neckTwistSolver['roll'], 'inAngleA')
-            neckTwistEnvelope.connectPlugs(neckCtrl['inheritsTwist'], 'inAngleB')
+                headStretchBlendName = self.formatName(subname='Stretch', type='blendTwoAttr')
+                headStretchBlend = self.scene.createNode('blendTwoAttr', name=headStretchBlendName)
+                headStretchBlend.connectPlugs(headCtrl['stretch'], 'attributesBlender')
+                headStretchBlend.connectPlugs(neckLength['distance'], 'input[0]')
+                headStretchBlend.connectPlugs(headDistance['distance'], 'input[1]')
+                headStretchBlend.connectPlugs('output', neckIKTipJoint['translateX'])
 
-            constraint.connectPlugs(neckTwistEnvelope['outAngle'], 'offsetX')
+                # Setup neck twist
+                #
+                neckTwistSolverName = self.formatName(name='Neck', subname='Twist', type='twistSolver')
+                neckTwistSolver = self.scene.createNode('twistSolver', name=neckTwistSolverName)
+                neckTwistSolver.forwardAxis = 0  # X
+                neckTwistSolver.upAxis = 2  # Z
+                neckTwistSolver.segments = 2
+                neckTwistSolver.connectPlugs(neckCtrl[f'worldMatrix[{neckCtrl.instanceNumber()}]'], 'startMatrix')
+                neckTwistSolver.connectPlugs(headCtrl[f'worldMatrix[{headCtrl.instanceNumber()}]'], 'endMatrix')
 
-            # Tag controllers
-            #
-            neckCtrl.tagAsController(children=[headCtrl])
-            headCtrl.tagAsController(parent=neckCtrl, children=[headLookAtCtrl])
-            headLookAtCtrl.tagAsController(parent=headCtrl)
+                neckTwistEnvelopeName = self.formatName(name='Neck', subname='TwistEnvelope', type='floatMath')
+                neckTwistEnvelope = self.scene.createNode('floatMath', name=neckTwistEnvelopeName)
+                neckTwistEnvelope.operation = 2  # Multiply
+                neckTwistEnvelope.connectPlugs(neckTwistSolver['roll'], 'inAngleA')
+                neckTwistEnvelope.connectPlugs(neckCtrl['inheritsTwist'], 'inAngleB')
+
+                constraint.connectPlugs(neckTwistEnvelope['outAngle'], 'offsetX')
+
+                # Tag controllers
+                #
+                neckCtrl.tagAsController(children=[headCtrl])
+                headCtrl.tagAsController(parent=neckCtrl, children=[headLookAtCtrl])
+                headLookAtCtrl.tagAsController(parent=headCtrl)
+
+            else:
+
+                raise NotImplementedError()
 
         else:
 
-            raise NotImplementedError()
+            # Connect head look-at to parent control
+            #
+            headLookAtSpaceSwitch = headLookAtSpace.addSpaceSwitch([worldCtrl, cogCtrl, parentExportCtrl], maintainOffset=True)
+            headLookAtSpaceSwitch.weighted = True
+            headLookAtSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 1.0)}])
+            headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW0'], 'target[0].targetRotateWeight')
+            headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW1'], 'target[1].targetRotateWeight')
+            headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['positionSpaceW2'], 'target[2].targetRotateWeight')
+
+            headLookAtTarget.addConstraint('scaleConstraint', [parentExportCtrl])
     # endregion
