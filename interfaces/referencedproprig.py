@@ -20,7 +20,7 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
     # region Attributes
     referenceNode = mpyattribute.MPyAttribute('referenceNode', attributeType='message')
     propComponent = mpyattribute.MPyAttribute('propComponent', attributeType='message')
-    stowedComponent = mpyattribute.MPyAttribute('stowedComponent', attributeType='message')
+    stowComponent = mpyattribute.MPyAttribute('stowComponent', attributeType='message')
     # endregion
 
     # region Dunderscores
@@ -77,11 +77,11 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
 
         # Check if a stowed component was supplied
         #
-        stowedComponent = kwargs.pop('stowedComponent', None)
+        stowComponent = kwargs.pop('stowComponent', None)
 
-        if stowedComponent is not None:
+        if stowComponent is not None:
 
-            referencedPropRig.stowedComponent = stowedComponent.object()
+            referencedPropRig.stowComponent = stowComponent.object()
 
         return referencedPropRig
 
@@ -124,10 +124,10 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
         referencedRig.setParent(self)
 
         rootComponent = self.scene(referencedRig.rootComponent)
-        masterCtrl = rootComponent.getPublishedNode('Master')
+        rootCtrl = rootComponent.getPublishedNode('Root')
 
-        masterSpaceSwitchUuid = masterCtrl.userProperties['spaceSwitch']
-        masterSpaceSwitch = self.scene.getNodeByUuid(masterSpaceSwitchUuid, referenceNode=referenceNode)
+        rootSpaceSwitchUuid = rootCtrl.userProperties['spaceSwitch']
+        rootSpaceSwitch = self.scene.getNodeByUuid(rootSpaceSwitchUuid, referenceNode=referenceNode)
 
         # Connect prop control to space switch
         #
@@ -136,22 +136,26 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
         if propComponent is not None:
 
             propCtrl = propComponent.getPublishedNode('Offset')
-            masterSpaceSwitch.connectPlugs(propCtrl[f'worldMatrix[{propCtrl.instanceNumber()}]'], 'target[0].targetMatrix')
+            rootSpaceSwitch.connectPlugs(propCtrl[f'worldMatrix[{propCtrl.instanceNumber()}]'], 'target[0].targetMatrix', force=True)
 
             propSide = Side(propComponent.componentSide)
             offsetEulerRotation = om.MEulerRotation(0.0, 0.0, math.pi) if (propSide == Side.RIGHT) else om.MEulerRotation.kIdentity
-            masterSpaceSwitch.setAttr('target[0].targetOffsetRotate', offsetEulerRotation, convertUnits=False)
+            rootSpaceSwitch.setAttr('target[0].targetOffsetRotate', offsetEulerRotation, convertUnits=False)
 
         # Connect stowed control to space switch
         #
-        stowedComponent = self.scene(self.stowedComponent)
+        stowComponent = self.scene(self.stowComponent)
 
-        if stowedComponent is not None:
+        if stowComponent is not None:
 
-            stowCtrl = stowedComponent.getPublishedNode('Stowed')
-            masterSpaceSwitch.connectPlugs(stowCtrl[f'worldMatrix[{stowCtrl.instanceNumber()}]'], 'target[1].targetMatrix')
+            stowCtrl = stowComponent.getPublishedNode('Stow')
+            stowOffsetCtrl = stowComponent.getPublishedNode('Offset')
 
-            stowedSide = Side(stowedComponent.componentSide)
-            offsetEulerRotation = om.MEulerRotation(0.0, 0.0, math.pi) if (stowedSide == Side.RIGHT) else om.MEulerRotation.kIdentity
-            masterSpaceSwitch.setAttr('target[1].targetOffsetRotate', offsetEulerRotation, convertUnits=False)
+            rootSpaceSwitch.connectPlugs(stowCtrl['stowed'], 'target[0].targetWeight')
+            rootSpaceSwitch.connectPlugs(stowCtrl['stowed'], 'target[1].targetWeight')
+            rootSpaceSwitch.connectPlugs(stowOffsetCtrl[f'worldMatrix[{stowOffsetCtrl.instanceNumber()}]'], 'target[1].targetMatrix', force=True)
+
+            stowSide = Side(stowComponent.componentSide)
+            offsetEulerRotation = om.MEulerRotation(0.0, 0.0, math.pi) if (stowSide == Side.RIGHT) else om.MEulerRotation.kIdentity
+            rootSpaceSwitch.setAttr('target[1].targetOffsetRotate', offsetEulerRotation, convertUnits=False)
     # endregion

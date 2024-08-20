@@ -120,18 +120,16 @@ class RootComponent(basecomponent.BaseComponent):
             rootCtrlName = self.formatName(name='Root', type='control')
             rootCtrl = self.scene.createNode('transform', name=rootCtrlName, parent=rootSpace)
             rootCtrl.addPointHelper('sphere', size=(5.0 * rigScale), colorRGB=darkColorRGB)
-            rootCtrl.addAttr(longName='stowed', attributeType='float', min=0.0, max=1.0, keyable=True)
             rootCtrl.prepareChannelBoxForAnimation()
             rootCtrl.tagAsController()
             self.publishNode(rootCtrl, alias='Root')
 
-            # Setup space switching placeholder
+            # Add space switch placeholder
+            # Connections will be handled by the referenced prop interface!
             #
             rootSpaceSwitch = rootSpace.addSpaceSwitch([])
             rootSpaceSwitch.weighted = True
-            rootSpaceSwitch.setAttr('target', [{'targetName': 'Default', 'targetReverse': (True, True, True)}, {'targetName': 'Stowed'}])
-            rootSpaceSwitch.connectPlugs(rootCtrl['stowed'], 'target[0].targetWeight')
-            rootSpaceSwitch.connectPlugs(rootCtrl['stowed'], 'target[1].targetWeight')
+            rootSpaceSwitch.setAttr('target', [{'targetName': 'Default', 'targetReverse': (True, True, True)}, {'targetName': 'Stow'}])
 
             rootCtrl.userProperties['space'] = rootSpace.uuid()
             rootCtrl.userProperties['spaceSwitch'] = rootSpaceSwitch.uuid()
