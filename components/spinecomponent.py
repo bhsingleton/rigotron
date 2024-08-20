@@ -193,7 +193,7 @@ class SpineComponent(basecomponent.BaseComponent):
         :rtype: None
         """
 
-        # Get component properties
+        # Decompose component
         #
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
@@ -496,14 +496,13 @@ class SpineComponent(basecomponent.BaseComponent):
 
         curveData = shapeutils.createCurveFromPoints(controlPoints, degree=1)
 
-        curveName = self.formatName(name='Spine', type='nurbsCurve')
+        curveName = self.formatName(type='nurbsCurve')
         curve = self.scene.createNode('transform', name=curveName, parent=privateGroup)
         curve.inheritsTransform = False
         curve.template = True
         curve.lockAttr('translate', 'rotate', 'scale')
 
         curveShape = self.scene.createNode('nurbsCurve', name=f'{curveName}Shape', parent=curve)
-        curveShape.setAttr('cached', curveData)
         curveShape.setAttr('cached', curveData)
 
         # Add skin deformer to curve
