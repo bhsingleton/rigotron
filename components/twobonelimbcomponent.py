@@ -606,7 +606,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         extremityIKOffsetCtrlName = self.formatName(name=extremityName, kinemat='IK', subname='Offset', type='control')
         extremityIKOffsetCtrl = self.scene.createNode('transform', name=extremityIKOffsetCtrlName, parent=extremityIKCtrl)
-        extremityIKOffsetCtrl.addPointHelper('axisView', size=10.0, localScale=(3.0, 3.0, 3.0), colorRGB=lightColorRGB)
+        extremityIKOffsetCtrl.addPointHelper('axisView', size=10.0, localScale=(3.0 * rigScale, 3.0 * rigScale, 3.0 * rigScale), colorRGB=lightColorRGB)
         extremityIKOffsetCtrl.prepareChannelBoxForAnimation()
         self.publishNode(extremityIKOffsetCtrl, alias=f'{extremityName}_IK_Offset')
 
@@ -1220,6 +1220,12 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
                     scaleRemapper.setAttr(f'parameter[{j}]', parameter)
                     scaleRemapper.connectPlugs(f'outValue[{j}]', scaleConstraint['offset'])
+
+                    # Finally, align export joint to control
+                    # This will ensure there are no unwanted offsets when binding the skeleton!
+                    #
+                    twistExportJoint = self.scene(twistSpec.uuid)
+                    twistExportJoint.copyTransform(twistCtrl)
 
             # Cache twist components
             #
