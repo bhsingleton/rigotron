@@ -387,9 +387,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
         # Concatenate pivot name
         #
-        pivotSpecs = self.resizePivotSpecs(1, pivotSpecs)
-
-        pivotSpec = pivotSpecs[0]
+        pivotSpec, = self.resizePivotSpecs(1, pivotSpecs)
         pivotSpec.name = self.formatName(subname='Pivot', type='nurbsCurve')
 
         # Call parent method
@@ -610,7 +608,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         :rtype: None
         """
 
-        # Get skeleton matrices
+        # Decompose component
         #
         footSpec, ballSpec, toesSpec = self.skeletonSpecs()
 
@@ -818,7 +816,6 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
             footPivotTargetName = self.formatName(subname='Pivot', type='target')
             footPivotTarget = self.scene.createNode('transform', name=footPivotTargetName, parent=footCtrl)
-            footPivotTarget.displayLocalAxis = True
             footPivotTarget.connectPlugs(footPivotCondition['outColor'], 'rotatePivot')
             footPivotTarget.connectPlugs(footPivotCtrl['rotateOrder'], 'rotateOrder')
             footPivotTarget.connectPlugs(footPivotCtrl['rotate'], 'rotate')
