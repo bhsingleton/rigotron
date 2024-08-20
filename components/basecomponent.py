@@ -297,7 +297,9 @@ class BaseComponent(abstractcomponent.AbstractComponent):
             # Constrain export joint
             #
             log.info(f'Constraining "{skeletonSpec.driver}" > "{skeletonSpec.name}"')
-            exportJoint.addConstraint('transformConstraint', [exportDriver], maintainOffset=maintainOffset)
+
+            constraint = exportJoint.addConstraint('transformConstraint', [exportDriver], maintainOffset=maintainOffset)
+            constraint.hiddenInOutliner = True
 
     def unbindSkeleton(self):
         """
@@ -579,9 +581,6 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         # Create organizational groups
         #
-        name = self.formatName(type='dagContainer')
-        self.setName(name)
-
         if self.controlsGroup.isNull():
 
             controlsGroupName = self.formatName(subname='Controls', type='transform')
@@ -622,8 +621,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         self.removeNodeAddedCallback()
         self.organizeNodes()
         self.bindSkeleton()
-
-        self.componentStatus = self.Status.RIG
+        self.cacheSkeleton(delete=False)
 
     def finalizeRig(self):
         """

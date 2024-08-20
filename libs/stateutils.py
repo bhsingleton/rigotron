@@ -33,6 +33,8 @@ def metaToSkeleton(component):
         childComponent.buildPivots()
         childComponent.pivotsCompleted()
 
+        childComponent.componentStatus = Status.SKELETON
+
 
 def skeletonToRig(component):
     """
@@ -50,7 +52,7 @@ def skeletonToRig(component):
         childComponent.buildRig()
         childComponent.rigCompleted()
 
-        childComponent.cacheSkeleton(delete=False)
+        childComponent.componentStatus = Status.RIG
 
     for childComponent in component.walkComponents():
 
