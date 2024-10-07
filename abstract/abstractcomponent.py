@@ -40,17 +40,6 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
     # region Dunderscores
     __version__ = 1.0
     __default_component_name__ = ''
-    __default_mirror_matrices__ = {
-        Side.LEFT: om.MMatrix.kIdentity,
-        Side.RIGHT: om.MMatrix(
-            [
-                (-1.0, 0.0, 0.0, 0.0),
-                (0.0, -1.0, 0.0, 0.0),
-                (0.0, 0.0, 1.0, 0.0),
-                (0.0, 0.0, 0.0, 1.0)
-            ]
-        )
-    }
 
     def __init__(self, *args, **kwargs):
         """

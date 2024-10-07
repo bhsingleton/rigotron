@@ -2,7 +2,7 @@ from maya.api import OpenMaya as om
 from abc import abstractmethod
 from collections import deque
 from ..abstract import abstractcomponent
-from ..libs import skeletonspec, pivotspec
+from ..libs import Side, skeletonspec, pivotspec
 
 import logging
 logging.basicConfig()
@@ -16,6 +16,20 @@ class BaseComponent(abstractcomponent.AbstractComponent):
     """
 
     # region Dunderscores
+    __default_mirror_matrices__ = {
+        Side.CENTER: om.MMatrix.kIdentity,
+        Side.LEFT: om.MMatrix.kIdentity,
+        Side.RIGHT: om.MMatrix(
+            [
+                (-1.0, 0.0, 0.0, 0.0),
+                (0.0, -1.0, 0.0, 0.0),
+                (0.0, 0.0, 1.0, 0.0),
+                (0.0, 0.0, 0.0, 1.0)
+            ]
+        ),
+        Side.NONE: om.MMatrix.kIdentity
+    }
+
     def __init__(self, *args, **kwargs):
         """
         Private method called after a new instance has been created.
@@ -240,9 +254,17 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         #
         skeletonSpecs = self.skeletonSpecs(flatten=True, skipDisabled=True)
 
-        for skeletonSpec in reversed(skeletonSpecs):
+        for skeletonSpec in skeletonSpecs:
 
-            skeletonSpec.cacheMatrix(delete=delete)
+            skeletonSpec.cacheMatrix()
+
+        # Check if skeleton should be deleted
+        #
+        if delete:
+
+            for skeletonSpec in reversed(skeletonSpecs):
+
+                skeletonSpec.deleteNode()
 
         # Save changes
         #
@@ -283,6 +305,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
             # Remove any pre-rotations
             #
+            exportJoint.removeConstraints()
             exportJoint.unfreezePivots()
 
             # Check if export driver exists
@@ -422,11 +445,11 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         # Update pivot matrices
         #
-        specs = self.pivotSpecs()
+        pivotSpecs = self.pivotSpecs()
 
-        for spec in specs:
+        for pivotSpec in pivotSpecs:
 
-            spec.cacheMatrix(delete=delete)
+            pivotSpec.cacheMatrix(delete=delete)
 
         # Save changes
         #
