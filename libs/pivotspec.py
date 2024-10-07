@@ -259,15 +259,12 @@ class PivotSpec(melsonobject.MELSONObject):
 
         # Cache any customizable shapes
         #
-        shapes = node.shapes()
-        hasShapes = len(shapes)
+        nurbsCurves = node.shapes(apiType=om.MFn.kNurbsCurve)
+        hasNurbsCurves = len(nurbsCurves) > 0
 
-        if hasShapes:
+        if hasNurbsCurves:
 
-            shape = shapes[0]
-            hasNurbsCurve = shape.hasFn(om.MFn.kNurbsCurve)
-
-            self.shapes = node.dumpShapes() if hasNurbsCurve else None
+            self.shapes = node.dumpShapes() if hasNurbsCurves else None
 
         # Check if pivot requires deleting
         #
