@@ -22,10 +22,25 @@ class ControlRig(abstractinterface.AbstractInterface):
     # region Attributes
     rigName = mpyattribute.MPyAttribute('rigName', attributeType='str')
     rigHeight = mpyattribute.MPyAttribute('rigHeight', attributeType='float')
+    rigRadius = mpyattribute.MPyAttribute('rigRadius', attributeType='float')
     rootComponent = mpyattribute.MPyAttribute('rootComponent', attributeType='message')
     componentsGroup = mpyattribute.MPyAttribute('componentsGroup', attributeType='message')
     propsGroup = mpyattribute.MPyAttribute('propsGroup', attributeType='message')
     meshesGroup = mpyattribute.MPyAttribute('meshesGroup', attributeType='message')
+    # endregion
+
+    # region Properties
+    @rigName.changed
+    def rigName(self, rigName):
+        """
+        Changed method that notifies any rig name changes.
+
+        :type rigName: str
+        :rtype: None
+        """
+
+        name = namingutils.formatName(name=rigName, type='transform')
+        self.setName(name)
     # endregion
 
     # region Methods
@@ -42,30 +57,33 @@ class ControlRig(abstractinterface.AbstractInterface):
 
         # Call parent method
         #
-        name = kwargs.get('name', '')
-        fullName = namingutils.formatName(name=name, type='transform')
         parent = kwargs.get('parent', None)
 
-        controlRig = super(ControlRig, cls).create('transform', name=fullName, parent=parent)
+        controlRig = super(ControlRig, cls).create('transform', parent=parent)
+        controlRig.rigName = kwargs.get('rigName', '')
 
-        # Create transform nodes
+        # Create organizational groups and lock them
+        # Locking them will prevent Maya from deleting any empty groups!
         #
         componentsGroup = cls.scene.createNode('transform', name='Components_GRP', parent=controlRig)
         propsGroup = cls.scene.createNode('transform', name='Props_GRP', parent=controlRig)
         meshesGroup = cls.scene.createNode('transform', name='Meshes_GRP', parent=controlRig)
 
-        controlRig.rigName = name
-        controlRig.rigHeight = cls.guessRigHeight()
         controlRig.componentsGroup = componentsGroup.object()
         controlRig.propsGroup = propsGroup.object()
         controlRig.meshesGroup = meshesGroup.object()
 
-        # Make sure to lock these transforms
-        # This will prevent maya from deleting any empty groups!
-        #
         componentsGroup.lock()
         propsGroup.lock()
         meshesGroup.lock()
+
+        # Cache rig bounds for component use
+        # We can use these values to derive the scale factor for controller shapes!
+        #
+        rigBounds = cls.getRigBounds()
+
+        controlRig.rigHeight = rigBounds.depth
+        controlRig.rigRadius = max(rigBounds.width, rigBounds.height) * 0.5
 
         # Create root component
         #
@@ -74,20 +92,20 @@ class ControlRig(abstractinterface.AbstractInterface):
         return controlRig
 
     @classmethod
-    def guessRigHeight(cls):
+    def getRigBounds(cls):
         """
         Estimates the size of the rig based on the global bounding-box.
 
-        :rtype: float
+        :rtype: om.MBoundingBox
         """
 
-        boundingBox = om.MBoundingBox()
+        boundingBox = om.MBoundingBox(om.MPoint(-0.5, -0.5, -0.5), om.MPoint(0.5, 0.5, 0.5))
 
         for mesh in cls.scene.iterNodesByTypeName('mesh'):
 
             boundingBox.expand(mesh.boundingBox)
 
-        return max([boundingBox.height, boundingBox.width, boundingBox.depth])
+        return boundingBox
 
     def getRigScale(self, decimals=2):
         """
@@ -97,7 +115,15 @@ class ControlRig(abstractinterface.AbstractInterface):
         :rtype: float
         """
 
-        return round(self.rigHeight / 221.51626014709473, decimals)  # This value comes from the first rig I built!
+        scale = round(self.rigHeight / 221.51626014709473, decimals)  # This value comes from the first rig I built!
+
+        if scale > 0.0:
+
+            return scale
+
+        else:
+
+            return 1.0
 
     def getRigStatus(self):
         """
