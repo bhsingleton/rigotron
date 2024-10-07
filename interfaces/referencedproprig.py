@@ -151,8 +151,8 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
             stowCtrl = stowComponent.getPublishedNode('Stow')
             stowOffsetCtrl = stowComponent.getPublishedNode('Offset')
 
-            rootSpaceSwitch.connectPlugs(stowCtrl['stowed'], 'target[0].targetWeight')
-            rootSpaceSwitch.connectPlugs(stowCtrl['stowed'], 'target[1].targetWeight')
+            rootSpaceSwitch.connectPlugs(stowCtrl['stowed'], 'target[0].targetWeight', force=True)
+            rootSpaceSwitch.connectPlugs(stowCtrl['stowed'], 'target[1].targetWeight', force=True)
             rootSpaceSwitch.connectPlugs(stowOffsetCtrl[f'worldMatrix[{stowOffsetCtrl.instanceNumber()}]'], 'target[1].targetMatrix', force=True)
 
             stowSide = Side(stowComponent.componentSide)
