@@ -1,5 +1,7 @@
 <RCC>
   <qresource prefix="rigotron">
+    <file>icons/DynamicPivotComponent.svg</file>
+    <file>icons/PlayerAlignComponent.svg</file>
     <file>icons/JawComponent.svg</file>
     <file>icons/ChainComponent.svg</file>
     <file>icons/LeafComponent.svg</file>
