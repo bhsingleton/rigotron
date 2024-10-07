@@ -1,18 +1,11 @@
 from . import Side, Status
 from ..components import basecomponent
+from dcc.maya.decorators import undo
 
 import logging
 logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
-
-
-class StateError(Exception):
-    """
-    Overload of `Exception` for processing state change conflicts.
-    """
-
-    pass
 
 
 def metaToSkeleton(component):
@@ -94,13 +87,14 @@ def skeletonToMeta(component):
         childComponent.componentStatus = Status.META
 
 
+@undo.Undo(state=False)
 def changeState(component, state):
     """
     Changes the state on the supplied control rig.
 
     :type component: basecomponent.BaseComponent
     :type state: Status
-    :rtype: None
+    :rtype: bool
     """
 
     # Redundancy check
@@ -113,11 +107,11 @@ def changeState(component, state):
     # We must ensure the parent components are already at the requested state!
     #
     currentState = Status(component.componentStatus)
-    isValid = all([Status(ancestor.componentStatus) >= state for ancestor in component.iterComponentAncestors()])
+    isValid = all([ancestor.componentStatus >= state for ancestor in component.iterComponentAncestors()])
 
     if not isValid:
 
-        raise StateError('changeState() cannot process state change with current parent component status!')
+        return False
 
     # Process state change
     #
@@ -138,6 +132,8 @@ def changeState(component, state):
             metaToSkeleton(component)
             skeletonToRig(component)
 
+        return True
+
     elif currentState == Status.SKELETON:
 
         # Evaluate requested state change
@@ -153,6 +149,8 @@ def changeState(component, state):
         else:
 
             skeletonToRig(component)
+
+        return True
 
     elif currentState == Status.RIG:
 
@@ -171,6 +169,8 @@ def changeState(component, state):
 
             pass
 
+        return True
+
     else:
 
-        raise StateError(f'changeState() expects a valid state ({state} given)!')
+        return False
