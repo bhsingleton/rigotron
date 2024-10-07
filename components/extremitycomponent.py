@@ -29,7 +29,7 @@ class ExtremityComponent(basecomponent.BaseComponent):
         """
 
         limbPVSpaceSwitch = self.scene(limbPVCtrl.userProperties['spaceSwitch'])
-        index = limbPVSpaceSwitch.addSpace(extremityCtrl)
+        index = limbPVSpaceSwitch.addTarget(extremityCtrl)
         attributeName = f'transformSpaceW{index}'
 
         limbPVCtrl.addAttr(
@@ -55,7 +55,7 @@ class ExtremityComponent(basecomponent.BaseComponent):
         inHandleSpaceSwitch = self.scene(inHandleCtrl.userProperties['spaceSwitch'])
         insetNegate = self.scene(inHandleCtrl.userProperties['negate'])
 
-        index = inHandleSpaceSwitch.addSpace(extremityCtrl, maintainOffset=False)
+        index = inHandleSpaceSwitch.addTarget(extremityCtrl, maintainOffset=False)
         inHandleSpaceSwitch.setAttr(f'target[{index}]', {'targetWeight': (0.0, 0.0, 0.0)})
         inHandleSpaceSwitch.connectPlugs(inHandleCtrl['localOrGlobal'], f'target[{index}].targetWeight')
         inHandleSpaceSwitch.connectPlugs(insetNegate['outDistance'], f'target[{index}].targetOffsetTranslateX')
