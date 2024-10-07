@@ -186,7 +186,7 @@ class StowComponent(basecomponent.BaseComponent):
             handComponent = propComponent.componentParent()
             handCtrl = handComponent.getPublishedNode('Hand')
 
-            index = spaceSwitch.addSpace(handCtrl)
+            index = spaceSwitch.addTarget(handCtrl)
             spaceSwitch.connectPlugs(stowCtrl['positionSpaceW1'], f'target[{index}].targetTranslateWeight')
             spaceSwitch.connectPlugs(stowCtrl['rotationSpaceW1'], f'target[{index}].targetRotateWeight')
 
@@ -201,7 +201,7 @@ class StowComponent(basecomponent.BaseComponent):
             handComponent = propComponent.componentParent()
             handCtrl = handComponent.getPublishedNode('Hand')
 
-            index = spaceSwitch.addSpace(handCtrl)
+            index = spaceSwitch.addTarget(handCtrl)
             spaceSwitch.connectPlugs(stowCtrl['positionSpaceW2'], f'target[{index}].targetTranslateWeight')
             spaceSwitch.connectPlugs(stowCtrl['rotationSpaceW2'], f'target[{index}].targetRotateWeight')
 
