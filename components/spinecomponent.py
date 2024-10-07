@@ -18,7 +18,7 @@ SpineFKPair = namedtuple('SpineFKPair', ('rot', 'trans'))
 
 class SpineComponent(basecomponent.BaseComponent):
     """
-    Overload of `AbstractComponent` that implements root components.
+    Overload of `AbstractComponent` that implements spine components.
     """
 
     # region Attributes
@@ -193,6 +193,23 @@ class SpineComponent(basecomponent.BaseComponent):
         :rtype: None
         """
 
+        spineEnabled = bool(self.spineEnabled)
+
+        if spineEnabled:
+
+            return self.buildFullRig()
+
+        else:
+
+            return self.buildPartialRig()
+
+    def buildFullRig(self):
+        """
+        Builds the full spine rig for this component.
+
+        :rtype: None
+        """
+
         # Decompose component
         #
         controlsGroup = self.scene(self.controlsGroup)
@@ -303,8 +320,7 @@ class SpineComponent(basecomponent.BaseComponent):
         hipsCtrl.prepareChannelBoxForAnimation()
         self.publishNode(hipsCtrl, alias='Hips')
 
-        hipsSpaceSwitch = hipsSpace.addSpaceSwitch([waistCtrl, worldSpaceCtrl], maintainOffset=True)
-        hipsSpaceSwitch.weighted = True
+        hipsSpaceSwitch = hipsSpace.addSpaceSwitch([waistCtrl, worldSpaceCtrl], weighted=True, maintainOffset=True)
         hipsSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (True, True, True)}, {'targetWeight': (0.0, 0.0, 0.0)}])
         hipsSpaceSwitch.connectPlugs(hipsCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
         hipsSpaceSwitch.connectPlugs(hipsCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
@@ -363,8 +379,7 @@ class SpineComponent(basecomponent.BaseComponent):
                 localSpaceCtrl = spineFKCtrls[i - 1].rot if (i > 0) else waistCtrl
                 targets = (localSpaceCtrl, worldSpaceCtrl)
 
-                spineFKRotSpaceSwitch = spineFKRotSpace.addSpaceSwitch(targets)
-                spineFKRotSpaceSwitch.weighted = True
+                spineFKRotSpaceSwitch = spineFKRotSpace.addSpaceSwitch(targets, weighted=True)
                 spineFKRotSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (True, True, True)}, {'targetWeight': (0.0, 0.0, 0.0)}])
                 spineFKRotSpaceSwitch.connectPlugs(spineFKRotCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
                 spineFKRotSpaceSwitch.connectPlugs(spineFKRotCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
@@ -414,8 +429,7 @@ class SpineComponent(basecomponent.BaseComponent):
                 localSpaceCtrl = spineFKCtrls[i - 1].rot
                 targets = (localSpaceCtrl, worldSpaceCtrl)
 
-                chestFKSpaceSwitch = chestFKSpace.addSpaceSwitch(targets)
-                chestFKSpaceSwitch.weighted = True
+                chestFKSpaceSwitch = chestFKSpace.addSpaceSwitch(targets, weighted=True)
                 chestFKSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 1.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
                 chestFKSpaceSwitch.connectPlugs(chestFKCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
                 chestFKSpaceSwitch.connectPlugs(chestFKCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
@@ -752,8 +766,7 @@ class SpineComponent(basecomponent.BaseComponent):
         upperBodyCtrl.prepareChannelBoxForAnimation()
         self.publishNode(upperBodyCtrl, alias='UpperBody_Align')
 
-        upperBodySpaceSwitch = upperBodySpace.addSpaceSwitch([firstSpineCtrl, hipsCtrl, worldSpaceCtrl])
-        upperBodySpaceSwitch.weighted = True
+        upperBodySpaceSwitch = upperBodySpace.addSpaceSwitch([firstSpineCtrl, hipsCtrl, worldSpaceCtrl], weighted=True)
         upperBodySpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (False, False, False)}, {'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
         upperBodySpaceSwitch.connectPlugs(upperBodyCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
         upperBodySpaceSwitch.connectPlugs(upperBodyCtrl['localOrGlobal'], 'target[2].targetRotateWeight')
@@ -797,4 +810,273 @@ class SpineComponent(basecomponent.BaseComponent):
             else:
 
                 spineCtrl.tagAsController(parent=parent)
+
+    def buildPartialRig(self):
+        """
+        Builds just the pelvis rig for this component.
+
+        :rtype: None
+        """
+
+        # Decompose component
+        #
+        controlsGroup = self.scene(self.controlsGroup)
+        privateGroup = self.scene(self.privateGroup)
+        jointsGroup = self.scene(self.jointsGroup)
+
+        pelvisSpec, nullSpec, *spineSpecs = self.skeletonSpecs()
+        pelvisExportJoint = self.scene(pelvisSpec.uuid)
+        pelvisMatrix = pelvisExportJoint.worldMatrix()
+
+        componentSide = self.Side(self.componentSide)
+        colorRGB = Colour(*shapeutils.COLOUR_SIDE_RGB[componentSide])
+        lightColorRGB = colorRGB.lighter()
+        darkColorRGB = colorRGB.darker()
+
+        controlRig = self.findControlRig()
+        rigDiameter = float(controlRig.rigRadius) * 2.0
+        rigScale = controlRig.getRigScale()
+
+        parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
+
+        # Find world-space control
+        #
+        rootComponent = self.findRootComponent()
+        motionCtrl = rootComponent.getPublishedNode('Motion')
+
+        # Create COG controller
+        #
+        cogMatrix = transformutils.createTranslateMatrix(pelvisMatrix)
+
+        cogSpaceName = self.formatName(name='COG', type='space')
+        cogSpace = self.scene.createNode('transform', name=cogSpaceName, parent=controlsGroup)
+        cogSpace.setWorldMatrix(cogMatrix)
+        cogSpace.freezeTransform()
+        cogSpace.addConstraint('transformConstraint', [motionCtrl], maintainOffset=True)
+
+        cogCtrlName = self.formatName(name='COG', type='control')
+        cogCtrl = self.scene.createNode('transform', name=cogCtrlName, parent=cogSpace)
+        cogCtrl.addPointHelper('square', size=(50.0 * rigScale), localRotate=(45.0, 90.0, 0.0), lineWidth=4.0, colorRGB=colorRGB)
+        cogCtrl.prepareChannelBoxForAnimation()
+        self.publishNode(cogCtrl, alias='COG')
+
+        cogPivotCtrlName = self.formatName(name='COG', subname='Pivot', type='control')
+        cogPivotCtrl = self.scene.createNode('transform', name=cogPivotCtrlName, parent=cogSpace)
+        cogPivotCtrl.addPointHelper('axisTripod', 'cross', size=(10.0 * rigScale), colorRGB=darkColorRGB)
+        cogPivotCtrl.connectPlugs('translate', cogCtrl['rotatePivot'])
+        cogPivotCtrl.connectPlugs('translate', cogCtrl['scalePivot'])
+        cogPivotCtrl.hideAttr('rotate', 'scale', lock=True)
+        cogPivotCtrl.prepareChannelBoxForAnimation()
+
+        cogPivotMatrixName = self.formatName(name='COG', subname='Pivot', type='composeMatrix')
+        cogPivotMatrix = self.scene.createNode('composeMatrix', name=cogPivotMatrixName)
+        cogPivotMatrix.connectPlugs(cogCtrl['translate'], 'inputTranslate')
+        cogPivotMatrix.connectPlugs('outputMatrix', cogPivotCtrl['offsetParentMatrix'])
+
+        cogCtrl.userProperties['space'] = cogSpace.uuid()
+        cogCtrl.userProperties['pivot'] = cogPivotCtrl.uuid()
+
+        # Create waist control
+        #
+        legComponents = self.findComponentDescendants('LegComponent')
+        numLegComponents = len(legComponents)
+        hasLegComponents = numLegComponents >= 2
+
+        waistMatrix = self.__default_spine_matrix__ * transformutils.createTranslateMatrix(pelvisExportJoint.worldMatrix())
+
+        if hasLegComponents:
+
+            weight = 1.0 / numLegComponents
+            waistCenter = sum([self.scene(legComponent.skeletonSpecs()[0].uuid).translation(space=om.MSpace.kWorld) * weight for legComponent in legComponents], start=om.MVector.kZeroVector)
+            waistMatrix = self.__default_spine_matrix__ * transformutils.createTranslateMatrix([0.0, waistCenter.y, waistCenter.z])
+
+        preEulerRotation = transformutils.decomposeTransformMatrix(waistMatrix)[1]
+
+        waistSpaceName = self.formatName(name='Waist', type='space')
+        waistSpace = self.scene.createNode('transform', name=waistSpaceName, parent=controlsGroup)
+        waistSpace.setWorldMatrix(waistMatrix, skipRotate=True)
+        waistSpace.freezeTransform()
+        waistSpace.addConstraint('transformConstraint', [cogCtrl], maintainOffset=True)
+
+        waistCtrlName = self.formatName(name='Waist', type='control')
+        waistCtrl = self.scene.createNode('freeform', name=waistCtrlName, parent=waistSpace)
+        waistCtrl.addShape('CradleCurve', size=(40.0 * rigScale), localScale=(1.0, 1.0, 1.25), lineWidth=4.0, colorRGB=colorRGB)
+        waistCtrl.setPreEulerRotation(preEulerRotation)
+        waistCtrl.prepareChannelBoxForAnimation()
+        self.publishNode(waistCtrl, alias='Waist')
+
+        waistCtrl.userProperties['space'] = waistSpace.uuid()
+
+        # Create hips control
+        #
+        pelvisShapeMatrix = waistMatrix * pelvisMatrix.inverse()
+        localPosition, localRotate, localScale = transformutils.decomposeTransformMatrix(pelvisShapeMatrix)
+
+        pelvisSpaceName = self.formatName(name='pelvis', type='space')
+        pelvisSpace = self.scene.createNode('transform', name=pelvisSpaceName, parent=controlsGroup)
+        pelvisSpace.setWorldMatrix(pelvisMatrix)
+        pelvisSpace.freezeTransform()
+
+        pelvisCtrlName = self.formatName(name='pelvis', type='control')
+        pelvisCtrl = self.scene.createNode('transform', name=pelvisCtrlName, parent=pelvisSpace)
+        pelvisCtrl.addShape('HandleBarCurve', size=(45.0 * rigScale), localPosition=localPosition, localRotate=localRotate, localScale=(0.25, 0.25, 1.25), colorRGB=lightColorRGB)
+        pelvisCtrl.addDivider('Settings')
+        pelvisCtrl.addAttr(longName='lookAt', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+        pelvisCtrl.addAttr(longName='lookAtOffset', niceName='Look-At Offset', attributeType='distance', min=1.0, default=rigDiameter, channelBox=True)
+        pelvisCtrl.addDivider('Spaces')
+        pelvisCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
+        pelvisCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
+        pelvisCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True, default=1.0)
+        pelvisCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
+        pelvisCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
+        pelvisCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True, default=1.0)
+        pelvisCtrl.prepareChannelBoxForAnimation()
+        self.publishNode(pelvisCtrl, alias='pelvis')
+
+        pelvisDefaultTargetName = self.formatName(name='Pelvis', subname='Default', type='target')
+        pelvisDefaultTarget = self.scene.createNode('transform', name=pelvisDefaultTargetName, parent=privateGroup)
+        pelvisDefaultTarget.displayLocalAxis = True
+        pelvisDefaultTarget.visibility = False
+        pelvisDefaultTarget.setWorldMatrix(pelvisMatrix)
+        pelvisDefaultTarget.freezeTransform()
+
+        pelvisDefaultSpaceSwitch = pelvisDefaultTarget.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl], weighted=True, maintainOffset=True)
+        pelvisDefaultSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (1.0, 1.0, 1.0)}])
+        pelvisDefaultSpaceSwitch.connectPlugs(pelvisCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
+        pelvisDefaultSpaceSwitch.connectPlugs(pelvisCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
+        pelvisDefaultSpaceSwitch.connectPlugs(pelvisCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
+        pelvisDefaultSpaceSwitch.connectPlugs(pelvisCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
+        pelvisDefaultSpaceSwitch.connectPlugs(pelvisCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
+        pelvisDefaultSpaceSwitch.connectPlugs(pelvisCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
+
+        pelvisCtrl.userProperties['space'] = pelvisSpace.uuid()
+        pelvisCtrl.userProperties['target'] = pelvisDefaultTarget.uuid()
+
+        # Create pelvis look-at control
+        #
+        pelvisLookAtOrigin = om.MVector(transformutils.breakMatrix(pelvisMatrix)[3]) + om.MVector(0.0, -rigDiameter * 2.0, 0.0)
+        pelvisLookAtMatrix = self.__default_spine_matrix__ * transformutils.createTranslateMatrix(pelvisLookAtOrigin)
+
+        pelvisLookAtSpaceName = self.formatName(name='Pelvis', subname='LookAt', type='space')
+        pelvisLookAtSpace = self.scene.createNode('transform', name=pelvisLookAtSpaceName, parent=controlsGroup)
+        pelvisLookAtSpace.setWorldMatrix(pelvisLookAtMatrix)
+        pelvisLookAtSpace.freezeTransform()
+
+        pelvisLookAtCtrlName = self.formatName(name='Pelvis', subname='LookAt', type='control')
+        pelvisLookAtCtrl = self.scene.createNode('transform', name=pelvisLookAtCtrlName, parent=pelvisLookAtSpace)
+        pelvisLookAtCtrl.addPointHelper('sphere', 'centerMarker', size=(20.0 * rigScale), colorRGB=colorRGB)
+        pelvisLookAtCtrl.addDivider('Settings')
+        pelvisLookAtCtrl.addProxyAttr('lookAt', pelvisCtrl['lookAt'])
+        pelvisLookAtCtrl.addProxyAttr('lookAtOffset', pelvisCtrl['lookAtOffset'])
+        pelvisLookAtCtrl.addDivider('Spaces')
+        pelvisLookAtCtrl.addAttr(longName='transformSpaceW0', niceName='Transform Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
+        pelvisLookAtCtrl.addAttr(longName='transformSpaceW1', niceName='Transform Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
+        pelvisLookAtCtrl.addAttr(longName='transformSpaceW2', niceName='Transform Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True, default=1.0)
+        pelvisLookAtCtrl.prepareChannelBoxForAnimation()
+        self.publishNode(pelvisLookAtCtrl, alias='LookAt')
+
+        pelvisLookAtTargetName = self.formatName(name='Pelvis', subname='LookAt', type='target')
+        pelvisLookAtTarget = self.scene.createNode('transform', name=pelvisLookAtTargetName, parent=privateGroup)
+        pelvisLookAtTarget.displayLocalAxis = True
+        pelvisLookAtTarget.visibility = False
+        pelvisLookAtTarget.setWorldMatrix(pelvisMatrix)
+        pelvisLookAtTarget.freezeTransform()
+
+        pelvisLookAtTarget.addConstraint('transformConstraint', [waistCtrl], maintainOffset=True, skipRotate=True)
+        pelvisLookAtTarget.addConstraint(
+            'aimConstraint',
+            [pelvisLookAtCtrl],
+            aimVector=(0.0, 1.0, 0.0),
+            upVector=(1.0, 0.0, 0.0),
+            worldUpType=2,
+            worldUpVector=(1.0, 0.0, 0.0),
+            worldUpObject=pelvisLookAtCtrl,
+            maintainOffset=True
+        )
+
+        pelvisLookAtCtrl.userProperties['space'] = pelvisLookAtSpace.uuid()
+        pelvisLookAtCtrl.userProperties['target'] = pelvisLookAtTarget.uuid()
+
+        # Create pelvis look-at curve
+        #
+        pelvisLookAtMatrix = pelvisLookAtCtrl.worldMatrix()
+        controlPoints = [transformutils.breakMatrix(matrix)[3] for matrix in (pelvisLookAtMatrix, pelvisMatrix)]
+        curveData = shapeutils.createCurveFromPoints(controlPoints, degree=1)
+
+        pelvisLookAtShapeName = self.formatName(subname='LookAtHandle', type='control')
+        pelvisLookAtShape = self.scene.createNode('nurbsCurve', name=f'{pelvisLookAtShapeName}Shape', parent=pelvisLookAtCtrl)
+        pelvisLookAtShape.setAttr('cached', curveData)
+        pelvisLookAtShape.useObjectColor = 2
+        pelvisLookAtShape.wireColorRGB = lightColorRGB
+
+        nodes = [pelvisLookAtCtrl, pelvisCtrl]
+
+        for (i, node) in enumerate(nodes):
+
+            index = i + 1
+
+            multMatrixName = self.formatName(subname='ControlPoint', index=index, type='multMatrix')
+            multMatrix = self.scene.createNode('multMatrix', name=multMatrixName)
+            multMatrix.connectPlugs(node[f'worldMatrix[{node.instanceNumber()}]'], 'matrixIn[0]')
+            multMatrix.connectPlugs(pelvisLookAtShape[f'parentInverseMatrix[{pelvisLookAtShape.instanceNumber()}]'], 'matrixIn[1]')
+
+            breakMatrixName = self.formatName(subname='ControlPoint', index=index, type='breakMatrix')
+            breakMatrix = self.scene.createNode('breakMatrix', name=breakMatrixName)
+            breakMatrix.connectPlugs(multMatrix['matrixSum'], 'inMatrix')
+            breakMatrix.connectPlugs('row4X', pelvisLookAtShape[f'controlPoints[{i}].xValue'])
+            breakMatrix.connectPlugs('row4Y', pelvisLookAtShape[f'controlPoints[{i}].yValue'])
+            breakMatrix.connectPlugs('row4Z', pelvisLookAtShape[f'controlPoints[{i}].zValue'])
+
+        # Setup pelvis look-at space switching
+        #
+        pelvisLookAtTargets = {'World': motionCtrl, 'COG': cogCtrl, 'Waist': waistCtrl}
+        pelvisLookAtSpaceSwitch = pelvisLookAtSpace.addSpaceSwitch(list(pelvisLookAtTargets.values()), weighted=True, maintainOffset=False)
+
+        headLookAtOffsetReverseName = self.formatName(subname='LookAtOffset', type='revDoubleLinear')
+        headLookAtOffsetReverse = self.scene.createNode('revDoubleLinear', name=headLookAtOffsetReverseName)
+        headLookAtOffsetReverse.connectPlugs(pelvisCtrl['lookAtOffset'], 'input')
+
+        headLookAtOffsetComposeMatrixName = self.formatName(subname='LookAtOffset', type='composeMatrix')
+        headLookAtOffsetComposeMatrix = self.scene.createNode('composeMatrix', name=headLookAtOffsetComposeMatrixName)
+        headLookAtOffsetComposeMatrix.connectPlugs(headLookAtOffsetReverse['output'], 'inputTranslateY')
+
+        headLookAtRestMatrix = transformutils.createTranslateMatrix(pelvisMatrix)
+
+        for (i, (name, target)) in enumerate(pelvisLookAtTargets.items()):
+
+            targetMatrix = target.worldMatrix()
+            targetOffsetMatrix = headLookAtRestMatrix * targetMatrix.inverse()
+            targetOffsetTranslate, targetRotateOffset, targetOffsetScale = transformutils.decomposeTransformMatrix(targetOffsetMatrix)
+
+            targetOffsetComposeMatrixName = self.formatName(name=f'{self.componentName}LookAt', subname=f'{name}TargetOffset', type='composeMatrix')
+            targetOffsetComposeMatrix = self.scene.createNode('composeMatrix', name=targetOffsetComposeMatrixName)
+            targetOffsetComposeMatrix.setAttr('inputTranslate', targetOffsetTranslate)
+            targetOffsetComposeMatrix.setAttr('inputRotate', targetRotateOffset, convertUnits=False)
+
+            targetMultMatrixName = self.formatName(name=f'{self.componentName}LookAt', subname=f'{name}Target', type='multMatrix')
+            targetMultMatrix = self.scene.createNode('multMatrix', name=targetMultMatrixName)
+            targetMultMatrix.connectPlugs(headLookAtOffsetComposeMatrix['outputMatrix'], 'matrixIn[0]')
+            targetMultMatrix.connectPlugs(targetOffsetComposeMatrix['outputMatrix'], 'matrixIn[1]')
+            targetMultMatrix.connectPlugs(target[f'worldMatrix[{target.instanceNumber()}]'], 'matrixIn[2]')
+
+            pelvisLookAtSpaceSwitch.connectPlugs(pelvisLookAtCtrl[f'transformSpaceW{i}'], f'target[{i}].targetWeight')
+            pelvisLookAtSpaceSwitch.connectPlugs(targetMultMatrix['matrixSum'], f'target[{i}].targetMatrix', force=True)
+
+        pelvisLookAtCtrl.userProperties['spaceSwitch'] = pelvisLookAtSpaceSwitch.uuid()
+
+        # Setup pelvis space switching
+        #
+        pelvisSpaceSwitch = pelvisSpace.addSpaceSwitch([pelvisDefaultTarget, pelvisLookAtTarget], weighted=True, maintainOffset=True)
+        pelvisSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (True, True, True)}, {'targetWeight': (0.0, 0.0, 0.0)}])
+        pelvisSpaceSwitch.connectPlugs(pelvisCtrl['lookAt'], 'target[0].targetRotateWeight')
+        pelvisSpaceSwitch.connectPlugs(pelvisCtrl['lookAt'], 'target[1].targetRotateWeight')
+
+        pelvisCtrl.userProperties['spaceSwitch'] = pelvisSpaceSwitch.uuid()
+
+        # Tag controllers
+        #
+        cogCtrl.tagAsController(children=[waistCtrl])
+        waistCtrl.tagAsController(parent=cogCtrl, children=[pelvisCtrl, pelvisLookAtCtrl])
+        pelvisCtrl.tagAsController(parent=waistCtrl)
+        pelvisLookAtCtrl.tagAsController(parent=waistCtrl)
     # endregion
