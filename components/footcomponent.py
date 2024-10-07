@@ -628,7 +628,6 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         mirrorSign = -1.0 if requiresMirroring else 1.0
         mirrorMatrix = self.__default_mirror_matrices__[componentSide]
 
-        componentSide = self.Side(self.componentSide)
         colorRGB = Colour(*shapeutils.COLOUR_SIDE_RGB[componentSide])
         lightColorRGB = colorRGB.lighter()
         darkColorRGB = colorRGB.darker()
@@ -715,6 +714,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             # Setup foot pivot controls
             #
             localHalfDepth = localDepth * 0.5
+            localHalfHeight = localHeight * 0.25
 
             footPivotCtrlName = self.formatName(subname='Pivot', type='control')
             footPivotCtrl = self.scene.createNode('transform', name=footPivotCtrlName, parent=footCtrl)
@@ -722,18 +722,18 @@ class FootComponent(extremitycomponent.ExtremityComponent):
                 [
                     (0.0, 0.0, 0.0),
                     (0.0, 0.0, localHalfDepth),
-                    (0.0, -localHalfDepth, localHalfDepth),
-                    (0.0, 0.0, localDepth),
-                    (0.0, localHalfDepth, localHalfDepth),
+                    (0.0, -localHalfHeight, localHalfDepth),
+                    (0.0, 0.0, localHalfDepth + localHalfHeight),
+                    (0.0, localHalfHeight, localHalfDepth),
                     (0.0, 0.0, localHalfDepth),
                     (0.0, 0.0, 0.0),
                     (localHalfDepth, 0.0, 0.0),
                     (-localHalfDepth, 0.0, 0.0),
                     (0.0, 0.0, 0.0),
                     (0.0, 0.0, -localHalfDepth),
-                    (0.0, -localHalfDepth, -localHalfDepth),
-                    (0.0, 0.0, -localDepth),
-                    (0.0, localHalfDepth, -localHalfDepth),
+                    (0.0, -localHalfHeight, -localHalfDepth),
+                    (0.0, 0.0, -localHalfDepth - localHalfHeight),
+                    (0.0, localHalfHeight, -localHalfDepth),
                     (0.0, 0.0, -localHalfDepth),
                     (0.0, 0.0, 0.0)
                 ],
@@ -840,7 +840,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             #
             heelRollCtrlName = self.formatName(subname='Heel', type='control')
             heelRollCtrl = self.scene.createNode('transform', name=heelRollCtrlName, parent=footPivotTarget)
-            heelRollCtrl.addPointHelper('triangle', size=localDepth, localPosition=(0.0, 0.0, localCenter.z), localRotate=(0.0, 0.0, 90.0 * mirrorSign), colorRGB=lightColorRGB)
+            heelRollCtrl.addPointHelper('triangle', size=localHalfDepth, localPosition=(0.0, 0.0, localCenter.z), localRotate=(0.0, 0.0, 90.0 * mirrorSign), colorRGB=lightColorRGB)
             heelRollCtrl.setWorldMatrix(heelMatrix, skipRotate=True, skipScale=True)
             heelRollCtrl.freezeTransform()
             heelRollCtrl.prepareChannelBoxForAnimation()
@@ -850,7 +850,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             #
             toeRollCtrlName = self.formatName(subname='ToeTip', type='control')
             toeRollCtrl = self.scene.createNode('transform', name=toeRollCtrlName, parent=heelRollCtrl)
-            toeRollCtrl.addPointHelper('triangle', size=localDepth, localPosition=(0.0, 0.0, localCenter.z), localRotate=(0.0, 0.0, -90.0 * mirrorSign), colorRGB=lightColorRGB)
+            toeRollCtrl.addPointHelper('triangle', size=localHalfDepth, localPosition=(0.0, 0.0, localCenter.z), localRotate=(0.0, 0.0, -90.0 * mirrorSign), colorRGB=lightColorRGB)
             toeRollCtrl.setWorldMatrix(toeTipMatrix, skipRotate=True, skipScale=True)
             toeRollCtrl.freezeTransform()
             toeRollCtrl.prepareChannelBoxForAnimation()
