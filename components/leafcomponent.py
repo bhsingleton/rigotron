@@ -16,6 +16,11 @@ class LeafComponent(basecomponent.BaseComponent):
     # region Dunderscores
     __version__ = 1.0
     __default_component_name__ = 'Leaf'
+    __default_component_matrix = om.MMatrix.kIdentity
+    # endregion
+
+    # region Attributes
+    spaceSwitchEnabled = mpyattribute.MPyAttribute('spaceSwitchEnabled', attributeType='bool', default=False)
     # endregion
 
     # region Methods
@@ -59,7 +64,7 @@ class LeafComponent(basecomponent.BaseComponent):
 
         # Update joint transform
         #
-        leafMatrix = leafSpec.getMatrix(default=om.MMatrix.kIdentity)
+        leafMatrix = leafSpec.getMatrix(default=self.__default_component_matrix)
         leafJoint.setWorldMatrix(leafMatrix)
 
         return (leafJoint,)
@@ -92,14 +97,34 @@ class LeafComponent(basecomponent.BaseComponent):
         leafSpace.copyTransform(leafExportJoint)
         leafSpace.freezeTransform()
 
-        leafSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
-
-        leafCtrlName = self.formatName(type='control')
-        leafCtrl = self.scene.createNode('transform', name=leafCtrlName, parent=leafSpace)
+        leafCtrl = self.scene.createNode('transform', name=leafSpec.driver, parent=leafSpace)
         leafCtrl.addPointHelper('disc', size=(10.0 * rigScale), side=componentSide)
         leafCtrl.prepareChannelBoxForAnimation()
         leafCtrl.tagAsController()
         self.publishNode(leafCtrl, alias=self.componentName)
 
         leafCtrl.userProperties['space'] = leafSpace.uuid()
+
+        # Setup space switching
+        #
+        requiresSpaceSwitch = bool(self.spaceSwitchEnabled)
+
+        if requiresSpaceSwitch:
+
+            leafCtrl.addDivider('Spaces')
+            leafCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
+
+            rootComponent = self.findComponentAncestors('RootComponent')[0]
+            motionCtrl = rootComponent.getPublishedNode('Motion')
+
+            spaceSwitch = leafSpace.addSpaceSwitch([parentExportCtrl, motionCtrl], weighted=True, maintainOffset=True)
+            spaceSwitch.setAttr('target[0].targetReverse', (True, True, True))
+            spaceSwitch.connectPlugs(leafCtrl['localOrGlobal'], 'target[0].targetWeight')
+            spaceSwitch.connectPlugs(leafCtrl['localOrGlobal'], 'target[1].targetWeight')
+
+            leafCtrl.userProperties['spaceSwitch'] = spaceSwitch.uuid()
+
+        else:
+
+            leafSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
     # endregion
