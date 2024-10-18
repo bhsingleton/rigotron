@@ -107,7 +107,7 @@ def changeState(component, state):
     # We must ensure the parent components are already at the requested state!
     #
     currentState = Status(component.componentStatus)
-    isValid = all([ancestor.componentStatus >= state for ancestor in component.iterComponentAncestors()])
+    isValid = all([Status(ancestor.componentStatus) >= state for ancestor in component.iterComponentAncestors()])
 
     if not isValid:
 
