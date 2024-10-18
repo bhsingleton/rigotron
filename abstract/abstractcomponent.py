@@ -2,7 +2,6 @@ import os
 import re
 import getpass
 
-from abc import abstractmethod
 from collections import deque
 from time import strftime, gmtime
 from maya.api import OpenMaya as om
@@ -353,17 +352,21 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
             stop = index.stop if index.stop is not None else plug.numElements()
             step = index.step if index.step is not None else 1
 
-            logicalIndices = list(range(start, stop, step))
+            physicalIndices = list(range(start, stop, step))
 
             # Iterate through logical indices
             #
             components = []
+            logicalIndices = []
 
-            for logicalIndex in logicalIndices:
+            for physicalIndex in reversed(physicalIndices):
 
                 # Check if element is connected
                 #
-                destination = plug.elementByLogicalIndex(logicalIndex)
+                destination = plug.elementByPhysicalIndex(physicalIndex)
+
+                logicalIndex = destination.logicalIndex()
+                logicalIndices.append(logicalIndex)
 
                 if not destination.isDestination:
 
@@ -396,18 +399,32 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
         :rtype: None
         """
 
+        # Check if component is already a child
+        #
+        children = list(self.iterComponentChildren())
+
+        if child in children:
+
+            index = children.index(child)
+            self.popComponentChild(index)
+
         # Check if elements require moving
         #
         plug = self.findPlug('componentChildren')
-        destination = plug.elementByLogicalIndex(insertAt)
+        plugutils.consolidateConnectedElements(plug)
 
-        if destination.isDestination:
+        element = plug.elementByLogicalIndex(insertAt)
+
+        if element.isDestination:
 
             plugutils.moveConnectedElements(plug, insertAt)
 
         # Connect child to component
         #
         source = child.findPlug('message')
+        destination = plug.elementByLogicalIndex(insertAt)
+
+        log.info(f'Inserting child component @ {destination.info}')
         self.connectPlugs(source, destination)
 
     def appendComponentChild(self, child):

@@ -208,11 +208,12 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         :rtype: int
         """
 
-        isRoot = not parent.isValid()
+        isTopLevel = not parent.isValid()
 
-        if isRoot:
+        if isTopLevel:
 
-            return int(self.rootComponent is not None)
+            hasValidRoot = self.rootComponent is not None
+            return 1 if hasValidRoot else 0
 
         else:
 
@@ -444,11 +445,7 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
 
         finally:
 
-            # Iterate through internal IDs
-            #
-            success = False
-
-            for hashCode in reversed(hashCodes):
+            for hashCode in reversed(sorted(hashCodes)):
 
                 sourceComponent = self.decodeInternalId(hashCode)
                 sourceIndex = self.indexFromComponent(sourceComponent)
@@ -461,7 +458,7 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
 
                     break
 
-            return success
+            return False  # Returning true causes Qt to call `removeRows` which is not desirable!
 
     def appendRow(self, item, parent=QtCore.QModelIndex()):
         """
@@ -606,7 +603,7 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         :type parent: QtCore.QModelIndex
         :rtype: bool
         """
-
+        
         # Signal start of removal
         #
         lastRow = (row + count) - 1
