@@ -1128,7 +1128,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         #
         selectedIndices = [index for index in self.outlinerTreeView.selectedIndexes() if index.column() == 0]
 
-        for index in selectedIndices:
+        for index in reversed(selectedIndices):
 
             # Check if component is meta
             #
@@ -1173,6 +1173,10 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         else:
 
             self._currentComponent = self.nullWeakReference
+
+        # Update property model
+        #
+        self.invalidateProperties()
 
     @QtCore.Slot(int)
     def on_attachmentComboBox_currentIndexChanged(self, index):
