@@ -64,7 +64,7 @@ class PropComponent(basecomponent.BaseComponent):
         #
         propSpec, = self.resizeSkeletonSpecs(1, skeletonSpecs)
         propSpec.name = self.formatName()
-        propSpec.driver = self.formatName(type='control')
+        propSpec.driver = self.formatName(subname='Offset', type='control')
 
         # Call parent method
         #
@@ -141,8 +141,7 @@ class PropComponent(basecomponent.BaseComponent):
         propCtrl.prepareChannelBoxForAnimation()
         self.publishNode(propCtrl, alias='Prop')
 
-        propOffsetCtrlName = self.formatName(subname='Offset', type='control')
-        propOffsetCtrl = self.scene.createNode('transform', name=propOffsetCtrlName, parent=propCtrl)
+        propOffsetCtrl = self.scene.createNode('transform', name=propSpec.driver, parent=propCtrl)
         propOffsetCtrl.addPointHelper('cylinder', size=15.0, colorRGB=lightColorRGB, lineWidth=2.0)
         propOffsetCtrl.prepareChannelBoxForAnimation()
         self.publishNode(propOffsetCtrl, alias='Offset')
