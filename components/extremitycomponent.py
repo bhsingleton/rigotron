@@ -1,11 +1,23 @@
 from maya.api import OpenMaya as om
 from mpy import mpyattribute
+from abc import abstractmethod
+from enum import IntEnum
 from . import basecomponent
 
 import logging
 logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
+
+
+class LocomotionType(IntEnum):
+    """
+    Enum class of locomotion types.
+    """
+
+    NONE = -1
+    PLANTIGRADE = 0
+    DIGITGRADE = 1
 
 
 class ExtremityComponent(basecomponent.BaseComponent):
@@ -18,7 +30,21 @@ class ExtremityComponent(basecomponent.BaseComponent):
     __default_component_name__ = 'Extremity'
     # endregion
 
+    # region Enums
+    LocomotionType = LocomotionType
+    # endregion
+
     # region Methods
+    @abstractmethod
+    def locomotionType(self):
+        """
+        Returns the locomotion type for this component.
+
+        :rtype: LocomotionType
+        """
+
+        return self.LocomotionType.NONE
+
     def overrideLimbPoleVector(self, extremityCtrl, limbPVCtrl):
         """
         Overrides the space switch options on the supplied limb PV control.

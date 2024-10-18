@@ -351,6 +351,15 @@ class FootComponent(extremitycomponent.ExtremityComponent):
     # endregion
 
     # region Methods
+    def locomotionType(self):
+        """
+        Returns the locomotion type for this component.
+
+        :rtype: LocomotionType
+        """
+
+        return self.LocomotionType.PLANTIGRADE
+
     def toeFlags(self):
         """
         Returns the enabled flags for each toe.

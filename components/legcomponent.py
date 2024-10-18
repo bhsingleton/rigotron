@@ -29,7 +29,7 @@ class LegComponent(TwoBoneLimbComponent):
                     (20.0, 0.0, 90.0, 1.0)
                 ]
             ),
-            LimbType.LOWER: om.MMatrix(
+            LimbType.HINGE: om.MMatrix(
                 [
                     (0.0, 0.0, -1.0, 0.0),
                     (0.0, 1.0, 0.0, 0.0),
@@ -37,10 +37,10 @@ class LegComponent(TwoBoneLimbComponent):
                     (20.0, 0.0, 50.0, 1.0)
                 ]
             ),
-            LimbType.HINGE: om.MMatrix(
+            LimbType.LOWER: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
                     (0.0, 0.0, -1.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
                     (20.0, 0.0, 50.0, 1.0)
                 ]
@@ -63,20 +63,20 @@ class LegComponent(TwoBoneLimbComponent):
                     (-20.0, 0.0, 90.0, 1.0)
                 ]
             ),
+            LimbType.HINGE: om.MMatrix(
+                [
+                    (0.0, 0.0, -1.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (1.0, 0.0, 0.0, 0.0),
+                    (20.0, 0.0, 50.0, 1.0)
+                ]
+            ),
             LimbType.LOWER: om.MMatrix(
                 [
                     (0.0, 0.0, -1.0, 0.0),
                     (0.0, 1.0, 0.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
                     (-20.0, 0.0, 50.0, 1.0)
-                ]
-            ),
-            LimbType.HINGE: om.MMatrix(
-                [
-                    (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
-                    (1.0, 0.0, 0.0, 0.0),
-                    (20.0, 0.0, 50.0, 1.0)
                 ]
             ),
             LimbType.EXTREMITY: om.MMatrix(

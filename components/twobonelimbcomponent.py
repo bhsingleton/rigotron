@@ -296,13 +296,14 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         # Create kinematic limb joints
         #
         jointTypes = (upperLimbName, lowerLimbName, extremityName)
-        kinematicTypes = ('FK', 'IK', 'Blend')
+        kinematicTypes = ('FK', 'IK', 'RIK', 'Blend')
 
         limbFKJoints = [None] * 3
         limbIKJoints = [None] * 3
+        limbRIKJoints = [None] * 3
         limbBlendJoints = [None] * 3
         limbMatrices = (upperMatrix, lowerMatrix, extremityMatrix)
-        kinematicJoints = (limbFKJoints, limbIKJoints, limbBlendJoints)
+        kinematicJoints = (limbFKJoints, limbIKJoints, limbRIKJoints, limbBlendJoints)
 
         for (i, kinematicType) in enumerate(kinematicTypes):
 
@@ -319,6 +320,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         upperFKJoint, lowerFKJoint, extremityFKJoint = limbFKJoints
         upperIKJoint, lowerIKJoint, extremityIKJoint = limbIKJoints
+        upperRIKJoint, lowerRIKJoint, extremityRIKJoint = limbRIKJoints
         upperBlendJoint, lowerBlendJoint, extremityBlendJoint = limbBlendJoints
 
         # Create switch control
@@ -336,7 +338,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         switchCtrl.addAttr(longName='mode', niceName='Mode (FK/IK)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
         switchCtrl.addAttr(longName=upperOffsetAttr, attributeType='doubleLinear', keyable=True)
         switchCtrl.addAttr(longName=lowerOffsetAttr, attributeType='doubleLinear', keyable=True)
-        switchCtrl.addAttr(longName='stretch', attributeType='float', min=0.0, max=1.0, keyable=True)
+        switchCtrl.addAttr(longName='stretch', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
         switchCtrl.addAttr(longName='pin', attributeType='float', min=0.0, max=1.0, keyable=True)
         switchCtrl.addAttr(longName='soften', attributeType='float', min=0.0, keyable=True)
         switchCtrl.addAttr(longName='twist', attributeType='doubleAngle', keyable=True)
@@ -422,9 +424,9 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         # Setup limb blends
         #
         blender = switchCtrl['mode']
-        upperBlender = setuputils.createTransformBlends(upperFKJoint, upperIKJoint, upperBlendJoint, blender=blender)
-        lowerBlender = setuputils.createTransformBlends(lowerFKJoint, lowerIKJoint, lowerBlendJoint, blender=blender)
-        extremityBlender = setuputils.createTransformBlends(extremityFKJoint, extremityIKJoint, extremityBlendJoint, blender=blender)
+        upperBlender = setuputils.createTransformBlends(upperFKJoint, upperRIKJoint, upperBlendJoint, blender=blender)
+        lowerBlender = setuputils.createTransformBlends(lowerFKJoint, lowerRIKJoint, lowerBlendJoint, blender=blender)
+        extremityBlender = setuputils.createTransformBlends(extremityFKJoint, extremityRIKJoint, extremityBlendJoint, blender=blender)
 
         upperBlender.setName(self.formatName(subname=upperLimbName, type='blendTransform'))
         lowerBlender.setName(self.formatName(subname=lowerLimbName, type='blendTransform'))
@@ -632,8 +634,11 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         # Apply IK solvers
         #
         lowerAngle = math.degrees(lowerIKJoint.eulerRotation().z)
-        preferredAngle = lowerAngle if (lowerAngle >= 1.0) else 1.0
+        lowerAngleSign = math.copysign(1.0, lowerAngle)
+        preferredAngle = lowerAngle if (abs(lowerAngle) >= 1.0) else lowerAngleSign
+
         lowerIKJoint.preferredAngleZ = preferredAngle
+        lowerRIKJoint.preferredAngleZ = preferredAngle
 
         limbIKHandle, limbIKEffector = kinematicutils.applyRotationPlaneSolver(upperIKJoint, extremityIKJoint)
         limbIKEffector.setName(self.formatName(type='ikEffector'))
@@ -641,19 +646,40 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         limbIKHandle.setParent(privateGroup)
         limbIKHandle.connectPlugs(switchCtrl['twist'], 'twist')
 
-        ikHandleTargetName = self.formatName(kinemat='IK', type='target')
-        ikHandleTarget = self.scene.createNode('transform', name=ikHandleTargetName, parent=extremityIKOffsetCtrl)
+        limbRIKHandle, limbRIKEffector = kinematicutils.applyRotationPlaneSolver(upperRIKJoint, extremityRIKJoint)
+        limbRIKEffector.setName(self.formatName(subname='Reverse', type='ikEffector'))
+        limbRIKHandle.setName(self.formatName(subname='Reverse', type='ikHandle'))
+        limbRIKHandle.setParent(privateGroup)
+        limbRIKHandle.connectPlugs(switchCtrl['twist'], 'twist')
 
         # Constrain IK joints
         #
-        upperIKJoint.addConstraint('pointConstraint', [limbCtrl])
-        upperIKJoint.addConstraint('scaleConstraint', [limbCtrl])
-
+        upperIKJoint.addConstraint('transformConstraint', [limbCtrl], skipRotate=True)
         upperIKJoint.connectPlugs('scale', lowerIKJoint['scale'])
         lowerIKJoint.connectPlugs('scale', extremityIKJoint['scale'])
 
+        upperRIKJoint.addConstraint('transformConstraint', [limbCtrl], skipRotate=True)
+        upperRIKJoint.connectPlugs('scale', lowerRIKJoint['scale'])
+        lowerRIKJoint.connectPlugs('scale', extremityRIKJoint['scale'])
+
         # Apply IK softening
         #
+        ikHandleTargetName = self.formatName(kinemat='IK', type='target')
+        ikHandleTarget = self.scene.createNode('transform', name=ikHandleTargetName, parent=privateGroup)
+        ikHandleTarget.displayLocalAxis = True
+        ikHandleTarget.visibility = False
+        ikHandleTarget.copyTransform(limbIKHandle, skipRotate=True, skipScale=True)
+
+        limbIKHandle.addConstraint('pointConstraint', [ikHandleTarget])
+
+        rikHandleTargetName = self.formatName(kinemat='RIK', type='target')
+        rikHandleTarget = self.scene.createNode('transform', name=rikHandleTargetName, parent=privateGroup)
+        rikHandleTarget.displayLocalAxis = True
+        rikHandleTarget.visibility = False
+        rikHandleTarget.copyTransform(limbRIKHandle, skipRotate=True, skipScale=True)
+
+        limbRIKHandle.addConstraint('pointConstraint', [rikHandleTarget])
+
         limbReverseStretchName = self.formatName(subname='Stretch', type='revDoubleLinear')
         limbReverseStretch = self.scene.createNode('revDoubleLinear', name=limbReverseStretchName)
         limbReverseStretch.connectPlugs(switchCtrl['stretch'], 'input')
@@ -665,9 +691,20 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         limbIKSoftener.connectPlugs(limbReverseStretch['output'], 'envelope')
         limbIKSoftener.connectPlugs(limbLength['output1D'], 'chainLength')
         limbIKSoftener.connectPlugs(limbCtrl[f'worldMatrix[{limbCtrl.instanceNumber()}]'], 'startMatrix')
-        limbIKSoftener.connectPlugs(ikHandleTarget[f'worldMatrix[{ikHandleTarget.instanceNumber()}]'], 'endMatrix')
-        limbIKSoftener.connectPlugs(limbIKHandle[f'parentInverseMatrix[{limbIKHandle.instanceNumber()}]'], 'parentInverseMatrix')
-        limbIKSoftener.connectPlugs('outPosition', limbIKHandle['translate'])
+        limbIKSoftener.connectPlugs(extremityIKOffsetCtrl[f'worldMatrix[{extremityIKOffsetCtrl.instanceNumber()}]'], 'endMatrix')
+        limbIKSoftener.connectPlugs(ikHandleTarget[f'parentInverseMatrix[{ikHandleTarget.instanceNumber()}]'], 'parentInverseMatrix')
+        limbIKSoftener.connectPlugs('outPosition', ikHandleTarget['translate'])
+
+        limbRIKSoftenerName = self.formatName(kinemat='RIK', type='ikSoftener')
+        limbRIKSoftener = self.scene.createNode('ikSoftener', name=limbRIKSoftenerName)
+        limbRIKSoftener.chainScaleCompensate = True
+        limbRIKSoftener.connectPlugs(switchCtrl['soften'], 'radius')
+        limbRIKSoftener.connectPlugs(limbReverseStretch['output'], 'envelope')
+        limbRIKSoftener.connectPlugs(limbLength['output1D'], 'chainLength')
+        limbRIKSoftener.connectPlugs(limbCtrl[f'worldMatrix[{limbCtrl.instanceNumber()}]'], 'startMatrix')
+        limbRIKSoftener.connectPlugs(extremityIKOffsetCtrl[f'worldMatrix[{extremityIKOffsetCtrl.instanceNumber()}]'], 'endMatrix')
+        limbRIKSoftener.connectPlugs(rikHandleTarget[f'parentInverseMatrix[{rikHandleTarget.instanceNumber()}]'], 'parentInverseMatrix')
+        limbRIKSoftener.connectPlugs('outPosition', rikHandleTarget['translate'])
 
         # Calculate default PV matrix
         #
@@ -753,8 +790,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         limbPVCtrl.prepareChannelBoxForAnimation()
         self.publishNode(limbPVCtrl, alias=f'{limbName}_PV')
 
-        limbPVSpaceSwitch = limbPVSpace.addSpaceSwitch([motionCtrl, cogCtrl, spineCtrl, limbCtrl, followTarget], maintainOffset=True)
-        limbPVSpaceSwitch.weighted = True
+        limbPVSpaceSwitch = limbPVSpace.addSpaceSwitch([motionCtrl, cogCtrl, spineCtrl, limbCtrl, followTarget], weighted=True, maintainOffset=True)
         limbPVSpaceSwitch.connectPlugs(limbPVCtrl['transformSpaceW0'], 'target[0].targetWeight')
         limbPVSpaceSwitch.connectPlugs(limbPVCtrl['transformSpaceW1'], 'target[1].targetWeight')
         limbPVSpaceSwitch.connectPlugs(limbPVCtrl['transformSpaceW2'], 'target[2].targetWeight')
@@ -762,59 +798,86 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         limbPVSpaceSwitch.connectPlugs(limbPVCtrl['transformSpaceW4'], 'target[4].targetWeight')
 
         limbIKHandle.addConstraint('poleVectorConstraint', [limbPVCtrl])
+        limbRIKHandle.addConstraint('poleVectorConstraint', [limbPVCtrl])
 
         limbPVCtrl.userProperties['space'] = limbPVSpace.uuid()
         limbPVCtrl.userProperties['spaceSwitch'] = limbPVSpaceSwitch.uuid()
 
         limbPVCtrl.tagAsController(parent=extremityIKCtrl)
 
-        # Setup IK stretch
+        # Setup stretch on IK joints
         #
-        upperStretchName = self.formatName(name=upperLimbName, subname='Stretch', type='multDoubleLinear')
-        upperStretch = self.scene.createNode('multDoubleLinear', name=upperStretchName)
-        upperStretch.connectPlugs(upperLength['output1D'], 'input1')
-        upperStretch.connectPlugs(limbIKSoftener['softScale'], 'input2')
+        upperIKStretchName = self.formatName(name=upperLimbName, kinemat='IK', subname='Stretch', type='multDoubleLinear')
+        upperIKStretch = self.scene.createNode('multDoubleLinear', name=upperIKStretchName)
+        upperIKStretch.connectPlugs(upperLength['output1D'], 'input1')
+        upperIKStretch.connectPlugs(limbIKSoftener['softScale'], 'input2')
 
-        upperEnvelopeName = self.formatName(name=upperLimbName, subname='Envelope', type='blendTwoAttr')
-        upperEnvelope = self.scene.createNode('blendTwoAttr', name=upperEnvelopeName)
-        upperEnvelope.connectPlugs(switchCtrl['stretch'], 'attributesBlender')
-        upperEnvelope.connectPlugs(upperLength['output1D'], 'input[0]')
-        upperEnvelope.connectPlugs(upperStretch['output'], 'input[1]')
+        upperIKEnvelopeName = self.formatName(name=upperLimbName, kinemat='IK', subname='Envelope', type='blendTwoAttr')
+        upperIKEnvelope = self.scene.createNode('blendTwoAttr', name=upperIKEnvelopeName)
+        upperIKEnvelope.connectPlugs(switchCtrl['stretch'], 'attributesBlender')
+        upperIKEnvelope.connectPlugs(upperLength['output1D'], 'input[0]')
+        upperIKEnvelope.connectPlugs(upperIKStretch['output'], 'input[1]')
+        upperIKEnvelope.connectPlugs('output', lowerIKJoint['translateX'])
 
-        upperDistanceName = self.formatName(name=upperLimbName, subname='Pin', type='distanceBetween')
-        upperDistance = self.scene.createNode('distanceBetween', name=upperDistanceName)
-        upperDistance.connectPlugs(limbCtrl[f'worldMatrix[{limbCtrl.instanceNumber()}]'], 'inMatrix1')
-        upperDistance.connectPlugs(limbPVCtrl[f'worldMatrix[{limbPVCtrl.instanceNumber()}]'], 'inMatrix2')
+        lowerIKStretchName = self.formatName(name=lowerLimbName, kinemat='IK', subname='Stretch', type='multDoubleLinear')
+        lowerIKStretch = self.scene.createNode('multDoubleLinear', name=lowerIKStretchName)
+        lowerIKStretch.connectPlugs(lowerLength['output1D'], 'input1')
+        lowerIKStretch.connectPlugs(limbIKSoftener['softScale'], 'input2')
 
-        upperPinName = self.formatName(name=upperLimbName, subname='Pin', type='blendTwoAttr')
-        upperPin = self.scene.createNode('blendTwoAttr', name=upperPinName)
-        upperPin.connectPlugs(switchCtrl['pin'], 'attributesBlender')
-        upperPin.connectPlugs(upperEnvelope['output'], 'input[0]')
-        upperPin.connectPlugs(upperDistance['distance'], 'input[1]')
-        upperPin.connectPlugs('output', lowerIKJoint['translateX'])
+        lowerIKEnvelopeName = self.formatName(name=lowerLimbName, kinemat='IK', subname='Envelope', type='blendTwoAttr')
+        lowerIKEnvelope = self.scene.createNode('blendTwoAttr', name=lowerIKEnvelopeName)
+        lowerIKEnvelope.connectPlugs(switchCtrl['stretch'], 'attributesBlender')
+        lowerIKEnvelope.connectPlugs(lowerLength['output1D'], 'input[0]')
+        lowerIKEnvelope.connectPlugs(lowerIKStretch['output'], 'input[1]')
+        lowerIKEnvelope.connectPlugs('output', extremityIKJoint['translateX'])
 
-        lowerStretchName = self.formatName(name=lowerLimbName, subname='Stretch', type='multDoubleLinear')
-        lowerStretch = self.scene.createNode('multDoubleLinear', name=lowerStretchName)
-        lowerStretch.connectPlugs(lowerLength['output1D'], 'input1')
-        lowerStretch.connectPlugs(limbIKSoftener['softScale'], 'input2')
+        # Setup stretch on RIK joints
+        #
+        upperRIKStretchName = self.formatName(name=upperLimbName, kinemat='RIK', subname='Stretch', type='multDoubleLinear')
+        upperRIKStretch = self.scene.createNode('multDoubleLinear', name=upperRIKStretchName)
+        upperRIKStretch.connectPlugs(upperLength['output1D'], 'input1')
+        upperRIKStretch.connectPlugs(limbRIKSoftener['softScale'], 'input2')
 
-        lowerEnvelopeName = self.formatName(name=lowerLimbName, subname='Envelope', type='blendTwoAttr')
-        lowerEnvelope = self.scene.createNode('blendTwoAttr', name=lowerEnvelopeName)
-        lowerEnvelope.connectPlugs(switchCtrl['stretch'], 'attributesBlender')
-        lowerEnvelope.connectPlugs(lowerLength['output1D'], 'input[0]')
-        lowerEnvelope.connectPlugs(lowerStretch['output'], 'input[1]')
+        upperRIKEnvelopeName = self.formatName(name=upperLimbName, kinemat='RIK', subname='Envelope', type='blendTwoAttr')
+        upperRIKEnvelope = self.scene.createNode('blendTwoAttr', name=upperRIKEnvelopeName)
+        upperRIKEnvelope.connectPlugs(switchCtrl['stretch'], 'attributesBlender')
+        upperRIKEnvelope.connectPlugs(upperLength['output1D'], 'input[0]')
+        upperRIKEnvelope.connectPlugs(upperRIKStretch['output'], 'input[1]')
 
-        lowerDistanceName = self.formatName(name=lowerLimbName, subname='Pin', type='distanceBetween')
-        lowerDistance = self.scene.createNode('distanceBetween', name=lowerDistanceName)
-        lowerDistance.connectPlugs(limbPVCtrl[f'worldMatrix[{limbPVCtrl.instanceNumber()}]'], 'inMatrix1')
-        lowerDistance.connectPlugs(limbIKSoftener[f'outWorldMatrix'], 'inMatrix2')
+        upperRIKDistanceName = self.formatName(name=upperLimbName, kinemat='RIK', subname='Pin', type='distanceBetween')
+        upperRIKDistance = self.scene.createNode('distanceBetween', name=upperRIKDistanceName)
+        upperRIKDistance.connectPlugs(limbCtrl[f'worldMatrix[{limbCtrl.instanceNumber()}]'], 'inMatrix1')
+        upperRIKDistance.connectPlugs(limbPVCtrl[f'worldMatrix[{limbPVCtrl.instanceNumber()}]'], 'inMatrix2')
 
-        lowerPinName = self.formatName(name=lowerLimbName, subname='Pin', type='blendTwoAttr')
-        lowerPin = self.scene.createNode('blendTwoAttr', name=lowerPinName)
-        lowerPin.connectPlugs(switchCtrl['pin'], 'attributesBlender')
-        lowerPin.connectPlugs(lowerEnvelope['output'], 'input[0]')
-        lowerPin.connectPlugs(lowerDistance['distance'], 'input[1]')
-        lowerPin.connectPlugs('output', extremityIKJoint['translateX'])
+        upperRIKPinName = self.formatName(name=upperLimbName, kinemat='RIK', subname='Pin', type='blendTwoAttr')
+        upperRIKPin = self.scene.createNode('blendTwoAttr', name=upperRIKPinName)
+        upperRIKPin.connectPlugs(switchCtrl['pin'], 'attributesBlender')
+        upperRIKPin.connectPlugs(upperRIKEnvelope['output'], 'input[0]')
+        upperRIKPin.connectPlugs(upperRIKDistance['distance'], 'input[1]')
+        upperRIKPin.connectPlugs('output', lowerRIKJoint['translateX'])
+
+        lowerRIKStretchName = self.formatName(name=lowerLimbName, kinemat='RIK', subname='Stretch', type='multDoubleLinear')
+        lowerRIKStretch = self.scene.createNode('multDoubleLinear', name=lowerRIKStretchName)
+        lowerRIKStretch.connectPlugs(lowerLength['output1D'], 'input1')
+        lowerRIKStretch.connectPlugs(limbRIKSoftener['softScale'], 'input2')
+
+        lowerRIKEnvelopeName = self.formatName(name=lowerLimbName, kinemat='RIK', subname='Envelope', type='blendTwoAttr')
+        lowerRIKEnvelope = self.scene.createNode('blendTwoAttr', name=lowerRIKEnvelopeName)
+        lowerRIKEnvelope.connectPlugs(switchCtrl['stretch'], 'attributesBlender')
+        lowerRIKEnvelope.connectPlugs(lowerLength['output1D'], 'input[0]')
+        lowerRIKEnvelope.connectPlugs(lowerRIKStretch['output'], 'input[1]')
+
+        lowerRIKDistanceName = self.formatName(name=lowerLimbName, kinemat='RIK', subname='Pin', type='distanceBetween')
+        lowerRIKDistance = self.scene.createNode('distanceBetween', name=lowerRIKDistanceName)
+        lowerRIKDistance.connectPlugs(limbPVCtrl[f'worldMatrix[{limbPVCtrl.instanceNumber()}]'], 'inMatrix1')
+        lowerRIKDistance.connectPlugs(limbRIKSoftener[f'outWorldMatrix'], 'inMatrix2')
+
+        lowerRIKPinName = self.formatName(name=lowerLimbName, kinemat='RIK', subname='Pin', type='blendTwoAttr')
+        lowerRIKPin = self.scene.createNode('blendTwoAttr', name=lowerRIKPinName)
+        lowerRIKPin.connectPlugs(switchCtrl['pin'], 'attributesBlender')
+        lowerRIKPin.connectPlugs(lowerRIKEnvelope['output'], 'input[0]')
+        lowerRIKPin.connectPlugs(lowerRIKDistance['distance'], 'input[1]')
+        lowerRIKPin.connectPlugs('output', extremityRIKJoint['translateX'])
 
         # Create hinge controls
         #
@@ -850,7 +913,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         hingeCtrl.addDivider('Spaces')
         hingeCtrl.addAttr(longName='straighten', niceName='Straighten (Off/On)', attributeType='distance', min=0.0, max=1.0, default=0.0, keyable=True)
         hingeCtrl.prepareChannelBoxForAnimation()
-        self.publishNode(hingeCtrl, alias=f'{hingeName}')
+        self.publishNode(hingeCtrl, alias=hingeName)
 
         hingeSpaceSwitch = hingeSpace.addSpaceSwitch([hingeBendTarget, hingeStraightTarget])
         hingeSpaceSwitch.weighted = True
@@ -860,6 +923,16 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         hingeCtrl.userProperties['space'] = hingeSpace.uuid()
         hingeCtrl.userProperties['spaceSwitch'] = hingeSpaceSwitch.uuid()
+
+        # Check if hinge was enabled
+        # If so, update bind pose on export joint!
+        #
+        hingeEnabled = bool(hingeSpec.enabled)
+
+        if hingeEnabled:
+
+            hingeExportJoint = self.scene(hingeSpec.uuid)
+            hingeExportJoint.copyTransform(hingeCtrl)
 
         # Create target joints
         #
@@ -916,6 +989,11 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         self.userProperties['fkJoints'] = (upperFKJoint.uuid(), lowerFKJoint.uuid(), extremityFKJoint.uuid())
         self.userProperties['fkControls'] = (upperFKCtrl.uuid(), lowerFKCtrl.uuid(), extremityFKTarget.uuid())
 
+        self.userProperties['rikJoints'] = (upperRIKJoint.uuid(), lowerRIKJoint.uuid(), extremityRIKJoint.uuid())
+        self.userProperties['rikHandle'] = limbRIKHandle.uuid()
+        self.userProperties['rikEffector'] = limbRIKEffector.uuid()
+        self.userProperties['rikSoftener'] = limbRIKSoftener.uuid()
+
         self.userProperties['ikJoints'] = (upperIKJoint.uuid(), lowerIKJoint.uuid(), extremityIKJoint.uuid())
         self.userProperties['ikControls'] = (limbCtrl.uuid(), extremityIKCtrl.uuid())
         self.userProperties['ikHandle'] = limbIKHandle.uuid()
@@ -939,40 +1017,92 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
             # Create upper twist controller
             #
-            limbRollSpaceName = self.formatName(name=upperLimbName, subname='Roll', type='space')
-            limbRollSpace = self.scene.createNode('transform', name=limbRollSpaceName, parent=controlsGroup)
-            limbRollSpace.copyTransform(upperJoint)
-            limbRollSpace.freezeTransform()
+            upperLimbSpaceName = self.formatName(name=upperLimbName, type='space')
+            upperLimbSpace = self.scene.createNode('transform', name=upperLimbSpaceName, parent=controlsGroup)
+            upperLimbSpace.copyTransform(upperJoint)
+            upperLimbSpace.freezeTransform()
 
-            limbRollCtrlName = self.formatName(name=upperLimbName, subname='Roll', type='control')
-            limbRollCtrl = self.scene.createNode('transform', name=limbRollCtrlName, parent=limbRollSpace)
-            limbRollCtrl.addPointHelper('tearDrop', size=(20.0 * rigScale), localRotate=(90.0, 0.0, 0.0), lineWidth=3.0, colorRGB=darkColorRGB)
-            limbRollCtrl.addAttr(longName='inheritsTwist', attributeType='angle', min=0.0, max=1.0, default=1.0, keyable=True)
-            limbRollCtrl.addDivider('Handles')
-            limbRollCtrl.addProxyAttr('straighten', hingeCtrl['straighten'])
-            limbRollCtrl.addProxyAttr('handleOffset', hingeCtrl['handleOffset'])
-            limbRollCtrl.addProxyAttr('handleInset', hingeCtrl['handleInset'])
-            limbRollCtrl.prepareChannelBoxForAnimation()
-            self.publishNode(limbRollCtrl, alias=f'{limbName}_Twist')
+            upperLimbCtrlName = self.formatName(name=upperLimbName, type='control')
+            upperLimbCtrl = self.scene.createNode('transform', name=upperLimbCtrlName, parent=upperLimbSpace)
+            upperLimbCtrl.addPointHelper('tearDrop', 'centerMarker', size=(20.0 * rigScale), localRotate=(90.0, 0.0, 0.0), lineWidth=3.0, colorRGB=darkColorRGB)
+            upperLimbCtrl.addDivider('Settings')
+            upperLimbCtrl.addAttr(longName='inheritsTwist', attributeType='angle', min=0.0, max=1.0, default=1.0, keyable=True)
+            upperLimbCtrl.addDivider('Handles')
+            upperLimbCtrl.addProxyAttr('straighten', hingeCtrl['straighten'])
+            upperLimbCtrl.addProxyAttr('handleOffset', hingeCtrl['handleOffset'])
+            upperLimbCtrl.addProxyAttr('handleInset', hingeCtrl['handleInset'])
+            upperLimbCtrl.prepareChannelBoxForAnimation()
+            self.publishNode(upperLimbCtrl, alias=upperLimbName)
 
             limbRollSolverName = self.formatName(name=upperLimbName, subname='Roll', type='twistSolver')
             limbRollSolver = self.scene.createNode('twistSolver', name=limbRollSolverName)
             limbRollSolver.forwardAxis = 0  # X
             limbRollSolver.upAxis = 2  # Z
             limbRollSolver.inverse = True
-            limbRollSolver.startOffsetMatrix = upperMatrix * limbMatrix.inverse()
+            limbRollSolver.startOffsetMatrix = mirrorMatrix
             limbRollSolver.connectPlugs(limbTarget[f'worldMatrix[{limbTarget.instanceNumber()}]'], 'startMatrix')
             limbRollSolver.connectPlugs(upperJoint[f'worldMatrix[{upperJoint.instanceNumber()}]'], 'endMatrix')
 
             limbRollEnvelope = self.scene.createNode('floatMath')
             limbRollEnvelope.setAttr('operation', 2)  # Multiply
             limbRollEnvelope.connectPlugs(limbRollSolver['roll'], 'inAngleA')
-            limbRollEnvelope.connectPlugs(limbRollCtrl['inheritsTwist'], 'inAngleB')
+            limbRollEnvelope.connectPlugs(upperLimbCtrl['inheritsTwist'], 'inAngleB')
 
-            limbRollConstraint = limbRollSpace.addConstraint('transformConstraint', [upperJoint])
+            limbRollConstraint = upperLimbSpace.addConstraint('transformConstraint', [upperJoint])
             limbRollConstraint.connectPlugs(limbRollEnvelope['outAngle'], 'target[0].targetOffsetRotateX')
 
             self.userProperties['rollSolver'] = limbRollSolver.uuid()
+
+            # Create upper-limb out-handle control
+            #
+            upperLimbOutSpaceName = self.formatName(name=upperLimbName, subname='Out', type='space')
+            upperLimbOutSpace = self.scene.createNode('transform', name=upperLimbOutSpaceName, parent=controlsGroup)
+            upperLimbOutSpace.setWorldMatrix(upperMatrix)
+            upperLimbOutSpace.freezeTransform()
+
+            upperLimbOutCtrlName = self.formatName(name=upperLimbName, subname='Out', type='control')
+            upperLimbOutCtrl = self.scene.createNode('transform', name=upperLimbOutCtrlName, parent=upperLimbOutSpace)
+            upperLimbOutCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=((5.0 * rigScale), 0.0, 0.0), localRotate=(0.0, 0.0, 180.0), side=componentSide)
+            upperLimbOutCtrl.addDivider('Handles')
+            upperLimbOutCtrl.addProxyAttr('straighten', hingeCtrl['straighten'])
+            upperLimbOutCtrl.addProxyAttr('handleOffset', hingeCtrl['handleOffset'])
+            upperLimbOutCtrl.addProxyAttr('handleInset', hingeCtrl['handleInset'])
+            upperLimbOutCtrl.addDivider('Spaces')
+            upperLimbOutCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
+            upperLimbOutCtrl.prepareChannelBoxForAnimation()
+            self.publishNode(upperLimbOutCtrl, alias=f'{upperLimbName}_Out')
+
+            upperLimbOutSpaceSwitch = upperLimbOutSpace.addSpaceSwitch([upperLimbCtrl, limbCtrl], maintainOffset=False)
+            upperLimbOutSpaceSwitch.weighted = True
+            upperLimbOutSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (True, True, True)}, {'targetWeight': (0.0, 0.0, 0.0)}])
+            upperLimbOutSpaceSwitch.connectPlugs(upperLimbOutCtrl['localOrGlobal'], 'target[0].targetWeight')
+            upperLimbOutSpaceSwitch.connectPlugs(upperLimbOutCtrl['localOrGlobal'], 'target[1].targetWeight')
+            upperLimbOutSpaceSwitch.connectPlugs(hingeCtrl['handleInset'], 'target[0].targetOffsetTranslateX')
+            upperLimbOutSpaceSwitch.connectPlugs(hingeCtrl['handleInset'], 'target[1].targetOffsetTranslateX')
+
+            upperLimbOutCtrl.userProperties['space'] = upperLimbOutSpace.uuid()
+            upperLimbOutCtrl.userProperties['spaceSwitch'] = upperLimbOutSpaceSwitch.uuid()
+
+            # Create upper-limb out-handle proxy curve
+            #
+            curveData = shapeutils.createCurveFromPoints([om.MPoint.kOrigin, om.MPoint.kOrigin], degree=1)
+
+            curveShape = self.scene.createNode('nurbsCurve', parent=upperLimbOutCtrl)
+            curveShape.setAttr('cached', curveData)
+            curveShape.useObjectColor = 2
+            curveShape.wireColorRGB = lightColorRGB
+
+            multMatrixName = self.formatName(name=upperLimbName, subname='OutHandle', type='multMatrix')
+            multMatrix = self.scene.createNode('multMatrix', name=multMatrixName)
+            multMatrix.connectPlugs(upperLimbCtrl[f'worldMatrix[{upperLimbCtrl.instanceNumber()}]'], 'matrixIn[0]')
+            multMatrix.connectPlugs(curveShape[f'parentInverseMatrix[{curveShape.instanceNumber()}]'], 'matrixIn[1]')
+
+            breakMatrixName = self.formatName(name=upperLimbName, subname='OutHandle', type='breakMatrix')
+            breakMatrix = self.scene.createNode('breakMatrix', name=breakMatrixName)
+            breakMatrix.connectPlugs(multMatrix['matrixSum'], 'inMatrix')
+            breakMatrix.connectPlugs('row4X', curveShape[f'controlPoints[1].xValue'])
+            breakMatrix.connectPlugs('row4Y', curveShape[f'controlPoints[1].yValue'])
+            breakMatrix.connectPlugs('row4Z', curveShape[f'controlPoints[1].zValue'])
 
             # Create hinge-in control
             #
@@ -1018,7 +1148,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             hingeOutMatrix.connectPlugs(hingeCtrl['handleOffset'], 'inputTranslateX')
             hingeOutMatrix.connectPlugs('outputMatrix', hingeOutCtrl['offsetParentMatrix'])
 
-            # Create hinge proxy curve handles
+            # Create hinge proxy curve
             #
             controlPoints = [om.MPoint.kOrigin, om.MPoint.kOrigin, om.MPoint.kOrigin]
             curveData = shapeutils.createCurveFromPoints(controlPoints, degree=1)
@@ -1047,79 +1177,70 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
                 breakMatrix.connectPlugs('row4Y', curveShape[f'controlPoints[{curveIndex}].yValue'])
                 breakMatrix.connectPlugs('row4Z', curveShape[f'controlPoints[{curveIndex}].zValue'])
 
-            # Create upper-out control
+            # Create lower-limb in-handle control
             #
-            upperOutSpaceName = self.formatName(name=upperLimbName, subname='Out', type='space')
-            upperOutSpace = self.scene.createNode('transform', name=upperOutSpaceName, parent=controlsGroup)
-            upperOutSpace.setWorldMatrix(upperMatrix)
-            upperOutSpace.freezeTransform()
+            lowerLimbInSpaceName = self.formatName(name=extremityName, subname='In', type='space')
+            lowerLimbInSpace = self.scene.createNode('transform', name=lowerLimbInSpaceName, parent=controlsGroup)
+            lowerLimbInSpace.copyTransform(extremityJoint)
+            lowerLimbInSpace.freezeTransform()
 
-            upperOutCtrlName = self.formatName(name=upperLimbName, subname='Out', type='control')
-            upperOutCtrl = self.scene.createNode('transform', name=upperOutCtrlName, parent=upperOutSpace)
-            upperOutCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=((5.0 * rigScale), 0.0, 0.0), localRotate=(0.0, 0.0, 180.0), side=componentSide)
-            upperOutCtrl.addDivider('Handles')
-            upperOutCtrl.addProxyAttr('straighten', hingeCtrl['straighten'])
-            upperOutCtrl.addProxyAttr('handleOffset', hingeCtrl['handleOffset'])
-            upperOutCtrl.addProxyAttr('handleInset', hingeCtrl['handleInset'])
-            upperOutCtrl.addDivider('Spaces')
-            upperOutCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
-            upperOutCtrl.prepareChannelBoxForAnimation()
-            self.publishNode(upperOutCtrl, alias=f'{upperLimbName}_Out')
+            lowerLimbInCtrlName = self.formatName(name=extremityName, subname='In', type='control')
+            lowerLimbInCtrl = self.scene.createNode('transform', name=lowerLimbInCtrlName, parent=lowerLimbInSpace)
+            lowerLimbInCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=((-5.0 * rigScale), 0.0, 0.0), side=componentSide)
+            lowerLimbInCtrl.addDivider('Handles')
+            lowerLimbInCtrl.addProxyAttr('straighten', hingeCtrl['straighten'])
+            lowerLimbInCtrl.addProxyAttr('handleOffset', hingeCtrl['handleOffset'])
+            lowerLimbInCtrl.addProxyAttr('handleInset', hingeCtrl['handleInset'])
+            lowerLimbInCtrl.addDivider('Spaces')
+            lowerLimbInCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
+            lowerLimbInCtrl.prepareChannelBoxForAnimation()
+            self.publishNode(lowerLimbInCtrl, alias=f'{extremityName}_In')
 
-            upperOutSpaceSwitch = upperOutSpace.addSpaceSwitch([limbRollCtrl, limbCtrl], maintainOffset=False)
-            upperOutSpaceSwitch.weighted = True
-            upperOutSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (True, True, True)}, {'targetWeight': (0.0, 0.0, 0.0)}])
-            upperOutSpaceSwitch.connectPlugs(upperOutCtrl['localOrGlobal'], 'target[0].targetWeight')
-            upperOutSpaceSwitch.connectPlugs(upperOutCtrl['localOrGlobal'], 'target[1].targetWeight')
-            upperOutSpaceSwitch.connectPlugs(hingeCtrl['handleInset'], 'target[0].targetOffsetTranslateX')
-            upperOutSpaceSwitch.connectPlugs(hingeCtrl['handleInset'], 'target[1].targetOffsetTranslateX')
+            lowerLimbInNegateName = self.formatName(name=extremityName, subname='In', type='floatMath')
+            lowerLimbInNegate = self.scene.createNode('floatMath', name=lowerLimbInNegateName)
+            lowerLimbInNegate.setAttr('operation', 5)  # Negate
+            lowerLimbInNegate.connectPlugs(hingeCtrl['handleInset'], 'inDistanceA')
 
-            upperOutCtrl.userProperties['space'] = upperOutSpace.uuid()
-            upperOutCtrl.userProperties['spaceSwitch'] = upperOutSpaceSwitch.uuid()
+            lowerLimbInSpaceSwitch = lowerLimbInSpace.addSpaceSwitch([extremityJoint], maintainOffset=False)
+            lowerLimbInSpaceSwitch.weighted = True
+            lowerLimbInSpaceSwitch.setAttr('target[0]', {'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (True, True, True)})
+            lowerLimbInSpaceSwitch.connectPlugs(lowerLimbInCtrl['localOrGlobal'], 'target[0].targetWeight')
+            lowerLimbInSpaceSwitch.connectPlugs(lowerLimbInNegate['outDistance'], 'target[0].targetOffsetTranslateX')
 
-            # Create extremity-in control
+            lowerLimbInCtrl.userProperties['negate'] = lowerLimbInNegate.uuid()
+            lowerLimbInCtrl.userProperties['space'] = lowerLimbInSpace.uuid()
+            lowerLimbInCtrl.userProperties['spaceSwitch'] = lowerLimbInSpaceSwitch.uuid()
+
+            hingeCtrl.userProperties['otherHandles'] = (upperLimbOutCtrl.uuid(), lowerLimbInCtrl.uuid())
+
+            # Create upper-out proxy curve handles
             #
-            extremityInSpaceName = self.formatName(name=extremityName, subname='In', type='space')
-            extremityInSpace = self.scene.createNode('transform', name=extremityInSpaceName, parent=extremityIKCtrl)
-            extremityInSpace.copyTransform(extremityJoint)
-            extremityInSpace.freezeTransform()
+            curveData = shapeutils.createCurveFromPoints([om.MPoint.kOrigin, om.MPoint.kOrigin], degree=1)
 
-            extremityInCtrlName = self.formatName(name=extremityName, subname='In', type='control')
-            extremityInCtrl = self.scene.createNode('transform', name=extremityInCtrlName, parent=extremityInSpace)
-            extremityInCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=((-5.0 * rigScale), 0.0, 0.0), side=componentSide)
-            extremityInCtrl.addDivider('Handles')
-            extremityInCtrl.addProxyAttr('straighten', hingeCtrl['straighten'])
-            extremityInCtrl.addProxyAttr('handleOffset', hingeCtrl['handleOffset'])
-            extremityInCtrl.addProxyAttr('handleInset', hingeCtrl['handleInset'])
-            extremityInCtrl.addDivider('Spaces')
-            extremityInCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
-            extremityInCtrl.prepareChannelBoxForAnimation()
-            self.publishNode(extremityInCtrl, alias=f'{extremityName}_In')
+            curveShape = self.scene.createNode('nurbsCurve', parent=lowerLimbInCtrl)
+            curveShape.setAttr('cached', curveData)
+            curveShape.useObjectColor = 2
+            curveShape.wireColorRGB = lightColorRGB
 
-            extremityInNegateName = self.formatName(name=extremityName, subname='In', type='floatMath')
-            extremityInNegate = self.scene.createNode('floatMath', name=extremityInNegateName)
-            extremityInNegate.setAttr('operation', 5)  # Negate
-            extremityInNegate.connectPlugs(hingeCtrl['handleInset'], 'inDistanceA')
+            multMatrixName = self.formatName(name=lowerLimbName, subname='OutHandle', type='multMatrix')
+            multMatrix = self.scene.createNode('multMatrix', name=multMatrixName)
+            multMatrix.connectPlugs(extremityJoint[f'worldMatrix[{extremityJoint.instanceNumber()}]'], 'matrixIn[0]')
+            multMatrix.connectPlugs(curveShape[f'parentInverseMatrix[{curveShape.instanceNumber()}]'], 'matrixIn[1]')
 
-            extremityInSpaceSwitch = extremityInSpace.addSpaceSwitch([extremityJoint], maintainOffset=False)
-            extremityInSpaceSwitch.weighted = True
-            extremityInSpaceSwitch.setAttr('target[0]', {'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (True, True, True)})
-            extremityInSpaceSwitch.connectPlugs(extremityInCtrl['localOrGlobal'], 'target[0].targetWeight')
-            extremityInSpaceSwitch.connectPlugs(extremityInNegate['outDistance'], 'target[0].targetOffsetTranslateX')
-
-            extremityInCtrl.userProperties['negate'] = extremityInNegate.uuid()
-            extremityInCtrl.userProperties['space'] = extremityInSpace.uuid()
-            extremityInCtrl.userProperties['spaceSwitch'] = extremityInSpaceSwitch.uuid()
-
-            hingeCtrl.userProperties['otherHandles'] = (upperOutCtrl.uuid(), extremityInCtrl.uuid())
+            breakMatrixName = self.formatName(name=lowerLimbName, subname='InHandle', type='breakMatrix')
+            breakMatrix = self.scene.createNode('breakMatrix', name=breakMatrixName)
+            breakMatrix.connectPlugs(multMatrix['matrixSum'], 'inMatrix')
+            breakMatrix.connectPlugs('row4X', curveShape[f'controlPoints[1].xValue'])
+            breakMatrix.connectPlugs('row4Y', curveShape[f'controlPoints[1].yValue'])
+            breakMatrix.connectPlugs('row4Z', curveShape[f'controlPoints[1].zValue'])
 
             # Create twist curve
             #
             segmentNames = (upperLimbName, lowerLimbName)
             segmentSpecs = (upperLimbSpec, lowerLimbSpec)
             segmentJoints = (upperJoint, lowerJoint)
-            segmentScalars = ((limbRollCtrl, hingeCtrl), (hingeCtrl, extremityIKCtrl))
-            segmentCtrls = ((limbRollCtrl, upperOutCtrl, hingeInCtrl, hingeCtrl), (hingeCtrl, hingeOutCtrl, extremityInCtrl, extremityJoint))
+            segmentScalars = ((upperLimbCtrl, hingeCtrl), (hingeCtrl, extremityIKCtrl))
+            segmentCtrls = ((upperLimbCtrl, upperLimbOutCtrl, hingeInCtrl, hingeCtrl), (hingeCtrl, hingeOutCtrl, lowerLimbInCtrl, extremityJoint))
 
             twistSolvers = [None] * 2
             scaleRemappers = [None] * 2

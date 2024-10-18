@@ -222,6 +222,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
     # region Attributes
     preferredHand = mpyattribute.MPyAttribute('preferredHand', attributeType='bool', default=False)
+    rollEnabled = mpyattribute.MPyAttribute('rollEnabled', attributeType='bool', default=True)
     thumbEnabled = mpyattribute.MPyAttribute('thumbEnabled', attributeType='bool', default=True)
     numThumbLinks = mpyattribute.MPyAttribute('numThumbLinks', attributeType='int', min=1, max=10, default=2)
     metacarpalsEnabled = mpyattribute.MPyAttribute('metacarpalsEnabled', attributeType='bool', default=False)
@@ -287,6 +288,15 @@ class HandComponent(extremitycomponent.ExtremityComponent):
     # endregion
 
     # region Methods
+    def locomotionType(self):
+        """
+        Returns the locomotion type for this component.
+
+        :rtype: LocomotionType
+        """
+
+        return self.LocomotionType.DIGITGRADE
+
     def fingerFlags(self):
         """
         Returns the enabled flags for each finger.
@@ -331,10 +341,12 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         numPivotTypes = len(pivotTypes)
 
         pivotSpecs = self.resizePivotSpecs(numPivotTypes, pivotSpecs)
+        pivotEnabled = bool(self.rollEnabled)
 
-        for (name, i) in pivotTypes.items():
+        for (name, pivotSpec) in zip(pivotTypes.keys(), pivotSpecs):
 
-            pivotSpecs[i].name = self.formatName(subname=name.title(), type='locator')
+            pivotSpec.name = self.formatName(subname=name.title(), type='locator')
+            pivotSpec.enabled = pivotEnabled
 
         # Call parent method
         #
@@ -347,18 +359,27 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         :rtype: Union[Tuple[mpynode.MPyNode], None]
         """
 
-        # Iterate through default pivots
+        # Iterate through pivot specs
         #
         pivotSpecs = self.pivotSpecs()
         side = self.Side(self.componentSide)
 
-        for (i, spec) in enumerate(pivotSpecs):
+        for (i, pivotSpec) in enumerate(pivotSpecs):
 
-            pivot = self.scene.createNode('transform', name=spec.name)
+            # Check if pivot is enabled
+            #
+            if not pivotSpec.enabled:
+
+                continue
+
+            # Create pivot and update transform
+            #
+            pivot = self.scene.createNode('transform', name=pivotSpec.name)
             pivot.addPointHelper('cross', size=20.0)
-            spec.uuid = pivot.uuid()
+            pivotSpec.uuid = pivot.uuid()
 
-            matrix = spec.getMatrix(default=self.__default_pivot_matrices__[side][i])
+            defaultMatrix = self.__default_pivot_matrices__[side][i]
+            matrix = pivotSpec.getMatrix(default=defaultMatrix)
             pivot.setWorldMatrix(matrix)
 
     def invalidateSkeletonSpecs(self, skeletonSpecs):
@@ -513,9 +534,9 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
         return (handJoint, *allFingerJoints)
 
-    def buildRig(self):
+    def buildFullRig(self):
         """
-        Builds the control rig for this component.
+        Builds the full control rig for this component.
 
         :rtype: None
         """
@@ -565,10 +586,10 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         switchCtrl = self.scene(limbComponent.userProperties['switchControl'])
         limbFKCtrl = self.scene(limbComponent.userProperties['fkControls'][-1])
         limbIKCtrl = self.scene(limbComponent.userProperties['ikControls'][-1])
-        limbIKOffset = self.scene(limbIKCtrl.userProperties['offset'])
-        limbIKJoint = self.scene(limbComponent.userProperties['ikJoints'][-1])
-        limbIKTarget = self.scene(limbComponent.userProperties['ikTarget'])
-        limbTipJoint = self.scene(limbComponent.userProperties['targetJoints'][-1])
+        limbIKOffsetCtrl = self.scene(limbIKCtrl.userProperties['offset'])
+        limbTipIKJoint = self.scene(limbComponent.userProperties['ikJoints'][-1])
+        limbTipRIKJoint = self.scene(limbComponent.userProperties['rikJoints'][-1])
+        limbRIKSoftener = self.scene(limbComponent.userProperties['rikSoftener'])
 
         # Create hand control
         #
@@ -582,21 +603,33 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         handCtrlName = self.formatName(type='control')
         handCtrl = self.scene.createNode('transform', name=handCtrlName, parent=handSpace)
         handCtrl.addShape('HandCurve', size=(20.0 * rigScale), localScale=(mirrorSign, mirrorSign, 1.0), lineWidth=2.0, side=componentSide)
+        handCtrl.addDivider('Settings')
+        handCtrl.addAttr(longName='pin', attributeType='float', min=0.0, max=1.0, keyable=True)
         handCtrl.addDivider('Pose')
         handCtrl.addAttr(longName='curl', attributeType='angle', keyable=True)
         handCtrl.addAttr(longName='spread', attributeType='angle', keyable=True)
         handCtrl.addAttr(longName='splay', attributeType='angle', keyable=True)
         handCtrl.addDivider('Spaces')
         handCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
+        handCtrl.addAttr(longName='localForearmLock', attributeType='float', min=0.0, max=1.0, keyable=True)
         handCtrl.prepareChannelBoxForAnimation()
         self.publishNode(handCtrl, alias='Hand')
 
-        handSpaceSwitch = handSpace.addSpaceSwitch([limbFKCtrl, limbIKOffset, motionCtrl], maintainOffset=True)  # TODO: Add `localForearmLock` attribute!
-        handSpaceSwitch.weighted = True
+        handSpaceSwitch = handSpace.addSpaceSwitch([limbFKCtrl, limbIKOffsetCtrl, motionCtrl], weighted=True, maintainOffset=True)
         handSpaceSwitch.setAttr('target', [{'targetReverse': (True, True, True)}, {}, {'targetWeight': (0.0, 0.0, 0.0)}])
         handSpaceSwitch.connectPlugs(switchCtrl['mode'], 'target[0].targetWeight')
         handSpaceSwitch.connectPlugs(switchCtrl['mode'], 'target[1].targetWeight')
-        handSpaceSwitch.connectPlugs(handCtrl['localOrGlobal'], 'target[2].targetRotateWeight')
+        handSpaceSwitch.connectPlugs(handCtrl['localOrGlobal'], 'target[2].targetRotateWeight', force=True)
+
+        handIKSpaceSwitchName = self.formatName(subname='IK', type='spaceSwitch')
+        handIKSpaceSwitch = self.scene.createNode('spaceSwitch', name=handIKSpaceSwitchName)
+        handIKSpaceSwitch.weighted = True
+        handIKSpaceSwitch.setAttr('restMatrix', handCtrlMatrix)
+        handIKSpaceSwitch.addTargets([limbIKOffsetCtrl, limbTipIKJoint], maintainOffset=True)
+        handIKSpaceSwitch.setAttr('target[0]', {'targetReverse': (True, True, True)})
+        handIKSpaceSwitch.connectPlugs(handCtrl['localForearmLock'], 'target[0].targetWeight')
+        handIKSpaceSwitch.connectPlugs(handCtrl['localForearmLock'], 'target[1].targetWeight')
+        handIKSpaceSwitch.connectPlugs('outputMatrix', handSpaceSwitch['target[1].targetMatrix'], force=True)
 
         # Create pose driver negate nodes
         #
@@ -644,7 +677,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         knuckleRollCtrl.setWorldMatrix(knuckleMatrix, skipRotate=True, skipScale=True)
         knuckleRollCtrl.freezeTransform()
         knuckleRollCtrl.addDivider('Settings')
-        knuckleRollCtrl.addAttr(longName='pin', attributeType='float', min=0.0, max=1.0, keyable=True)
+        knuckleRollCtrl.addProxyAttr('pin', handCtrl['pin'])
         knuckleRollCtrl.addDivider('Poses')
         knuckleRollCtrl.addProxyAttr('curl', handCtrl['curl'])
         knuckleRollCtrl.addProxyAttr('spread', handCtrl['spread'])
@@ -653,8 +686,15 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         knuckleRollCtrl.prepareChannelBoxForAnimation()
         self.publishNode(knuckleRollCtrl, alias='Knuckle')
 
-        limbIKTarget.setParent(knuckleRollCtrl, absolute=True)
-        limbIKTarget.freezeTransform()
+        handIKTargetName = self.formatName(subname='IK', type='target')
+        handIKTarget = self.scene.createNode('transform', name=handIKTargetName, parent=knuckleRollCtrl)
+        handIKTarget.displayLocalAxis = True
+        handIKTarget.visibility = False
+        handIKTarget.copyTransform(handExportJoint, skipScale=True)
+        handIKTarget.freezeTransform()
+        handIKTarget.lock()
+
+        limbRIKSoftener.connectPlugs(handIKTarget[f'worldMatrix[{handIKTarget.instanceNumber()}]'], 'endMatrix', force=True)
 
         # Create kinematic metacarpal joints
         #
@@ -700,16 +740,18 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
         # Constrain hand IK joints
         #
-        handIKJoint.addConstraint('pointConstraint', [limbIKJoint])
+        handIKJoint.addConstraint('pointConstraint', [limbTipRIKJoint])
         handIKJoint.addConstraint('aimConstraint', [knuckleRollCtrl], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpVector=(0.0, 0.0, 1.0), worldUpObject=knuckleRollCtrl, maintainOffset=True)
         handIKJoint.addConstraint('scaleConstraint', [handCtrl])
 
-        # Create metacarpal controls
+        # Create metacarpal/finger controls
         #
-        fingerGroups = handSpec.groups
+        handOffsetFKComposeMatrix, handOffsetFKMultMatrix, handOffsetFKInverseMatrix = None, None, None
+        handTipOffsetFKComposeMatrix, handTipOffsetFKMultMatrix, handTipOffsetFKInverseMatrix = None, None, None
+
         metacarpalCtrls = []
 
-        for (fingerId, fingerGroup) in fingerGroups.items():
+        for (fingerId, fingerGroup) in handSpec.groups.items():
 
             # Check if finger is enabled
             #
@@ -806,23 +848,54 @@ class HandComponent(extremitycomponent.ExtremityComponent):
                 #
                 metacarpalFKJoint.addConstraint('transformConstraint', [metacarpalCtrl], maintainOffset=requiresMirroring)
 
-                # Apply IK solver to metacarpal IK joints
+                # Repurpose FK transform components for IK joints
                 #
                 metacarpalIKJoint.connectPlugs(metacarpalFKJoint['translate'], 'translate')
                 metacarpalIKJoint.connectPlugs(metacarpalFKJoint['scale'], 'scale')
 
-                fingerIKTargetName = self.formatName(subname=fullFingerName, kinemat='IK', type='target')
-                fingerIKTarget = self.scene.createNode('transform', name=fingerIKTargetName, parent=knuckleRollCtrl)
-                fingerIKTarget.displayLocalAxis = True
-                fingerIKTarget.visibility = False
-                fingerIKTarget.lock()
+                # Create metacarpal-tip IK target
+                #
+                metacarpalTipIKTargetName = self.formatName(subname=f'{fullMetacarpalName}Tip', kinemat='IK', type='target')
+                metacarpalTipIKTarget = self.scene.createNode('transform', name=metacarpalTipIKTargetName, parent=knuckleRollCtrl)
+                metacarpalTipIKTarget.displayLocalAxis = True
+                metacarpalTipIKTarget.visibility = False
+                metacarpalTipIKTarget.lock()
 
-                fingerIKMultMatrixName = self.formatName(subname=fullFingerName, kinemat='IK', type='multMatrix')
-                fingerIKMultMatrix = self.scene.createNode('multMatrix', name=fingerIKMultMatrixName)
-                fingerIKMultMatrix.connectPlugs(fingerFKJoint[f'worldMatrix[{fingerTipFKJoint.instanceNumber()}]'], 'matrixIn[0]')
-                fingerIKMultMatrix.connectPlugs(handTipFKJoint[f'worldInverseMatrix[{handTipFKJoint.instanceNumber()}]'], 'matrixIn[1]')
-                fingerIKMultMatrix.connectPlugs('matrixSum', fingerIKTarget['offsetParentMatrix'])
+                metacarpalTipIKMultMatrixName = self.formatName(subname=f'{fullMetacarpalName}Tip', kinemat='IK', type='multMatrix')
+                metacarpalTipIKMultMatrix = self.scene.createNode('multMatrix', name=metacarpalTipIKMultMatrixName)
+                metacarpalTipIKMultMatrix.connectPlugs(fingerFKJoint[f'worldMatrix[{fingerFKJoint.instanceNumber()}]'], 'matrixIn[0]')
 
+                if componentSide == self.Side.RIGHT:
+
+                    if handTipOffsetFKComposeMatrix is None:
+
+                        handTipOffsetFKComposeMatrixName = self.formatName(subname='KnuckleOffset', kinemat='FK', type='composeMatrix')
+                        handTipOffsetFKComposeMatrix = self.scene.createNode('composeMatrix', name=handTipOffsetFKComposeMatrixName)
+                        handTipOffsetFKComposeMatrix.setAttr('inputRotateZ', 180.0)
+
+                    if handTipOffsetFKMultMatrix is None:
+
+                        handTipOffsetFKMultMatrixName = self.formatName(subname='KnuckleOffset', kinemat='FK', type='multMatrix')
+                        handTipOffsetFKMultMatrix = self.scene.createNode('multMatrix', name=handTipOffsetFKMultMatrixName)
+                        handTipOffsetFKMultMatrix.connectPlugs(handTipOffsetFKComposeMatrix['outputMatrix'], 'matrixIn[0]')
+                        handTipOffsetFKMultMatrix.connectPlugs(handTipFKJoint[f'worldMatrix[{handTipFKJoint.instanceNumber()}]'], 'matrixIn[1]')
+
+                    if handTipOffsetFKInverseMatrix is None:
+
+                        handTipOffsetFKInverseMatrixName = self.formatName(subname='KnuckleOffset', kinemat='FK', type='inverseMatrix')
+                        handTipOffsetFKInverseMatrix = self.scene.createNode('inverseMatrix', name=handTipOffsetFKInverseMatrixName)
+                        handTipOffsetFKInverseMatrix.connectPlugs(handTipOffsetFKMultMatrix['matrixSum'], 'inputMatrix')
+
+                    metacarpalTipIKMultMatrix.connectPlugs(handTipOffsetFKInverseMatrix['outputMatrix'], 'matrixIn[1]')
+                    metacarpalTipIKMultMatrix.connectPlugs('matrixSum', metacarpalTipIKTarget['offsetParentMatrix'])
+
+                else:
+
+                    metacarpalTipIKMultMatrix.connectPlugs(handTipFKJoint[f'worldInverseMatrix[{handTipFKJoint.instanceNumber()}]'], 'matrixIn[1]')
+                    metacarpalTipIKMultMatrix.connectPlugs('matrixSum', metacarpalTipIKTarget['offsetParentMatrix'])
+
+                # Create finger-tip IK target
+                #
                 fingerTipIKTargetName = self.formatName(subname=f'{fullFingerName}Tip', kinemat='IK', type='target')
                 fingerTipIKTarget = self.scene.createNode('transform', name=fingerTipIKTargetName, parent=handCtrl)
                 fingerTipIKTarget.displayLocalAxis = True
@@ -832,10 +905,37 @@ class HandComponent(extremitycomponent.ExtremityComponent):
                 fingerTipIKMultMatrixName = self.formatName(subname=f'{fullFingerName}Tip', kinemat='IK', type='multMatrix')
                 fingerTipIKMultMatrix = self.scene.createNode('multMatrix', name=fingerTipIKMultMatrixName)
                 fingerTipIKMultMatrix.connectPlugs(fingerTipFKJoint[f'worldMatrix[{fingerTipFKJoint.instanceNumber()}]'], 'matrixIn[0]')
-                fingerTipIKMultMatrix.connectPlugs(handFKJoint[f'worldInverseMatrix[{handFKJoint.instanceNumber()}]'], 'matrixIn[1]')
-                fingerTipIKMultMatrix.connectPlugs('matrixSum', fingerTipIKTarget['offsetParentMatrix'])
 
-                metacarpalIKJoint.addConstraint('aimConstraint', [fingerIKTarget], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpVector=(0.0, 0.0, 1.0), worldUpObject=fingerIKTarget, maintainOffset=True)
+                if componentSide == self.Side.RIGHT:
+
+                    if handOffsetFKComposeMatrix is None:
+
+                        handOffsetFKComposeMatrixName = self.formatName(subname='WristOffset', kinemat='FK', type='composeMatrix')
+                        handOffsetFKComposeMatrix = self.scene.createNode('composeMatrix', name=handOffsetFKComposeMatrixName)
+                        handOffsetFKComposeMatrix.setAttr('inputRotateZ', 180.0)
+
+                    if handOffsetFKMultMatrix is None:
+
+                        handOffsetFKMultMatrixName = self.formatName(subname='WristOffset', kinemat='FK', type='multMatrix')
+                        handOffsetFKMultMatrix = self.scene.createNode('multMatrix', name=handOffsetFKMultMatrixName)
+                        handOffsetFKMultMatrix.connectPlugs(handOffsetFKComposeMatrix['outputMatrix'], 'matrixIn[0]')
+                        handOffsetFKMultMatrix.connectPlugs(handFKJoint[f'worldMatrix[{handFKJoint.instanceNumber()}]'], 'matrixIn[1]')
+
+                    if handOffsetFKInverseMatrix is None:
+
+                        handOffsetFKInverseMatrixName = self.formatName(subname='WristOffset', kinemat='FK', type='inverseMatrix')
+                        handOffsetFKInverseMatrix = self.scene.createNode('inverseMatrix', name=handOffsetFKInverseMatrixName)
+                        handOffsetFKInverseMatrix.connectPlugs(handOffsetFKMultMatrix['matrixSum'], 'inputMatrix')
+
+                    fingerTipIKMultMatrix.connectPlugs(handOffsetFKInverseMatrix['outputMatrix'], 'matrixIn[1]')
+                    fingerTipIKMultMatrix.connectPlugs('matrixSum', fingerTipIKTarget['offsetParentMatrix'])
+
+                else:
+
+                    fingerTipIKMultMatrix.connectPlugs(handFKJoint[f'worldInverseMatrix[{handFKJoint.instanceNumber()}]'], 'matrixIn[1]')
+                    fingerTipIKMultMatrix.connectPlugs('matrixSum', fingerTipIKTarget['offsetParentMatrix'])
+
+                metacarpalIKJoint.addConstraint('aimConstraint', [metacarpalTipIKTarget], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpVector=(0.0, 0.0, 1.0), worldUpObject=metacarpalTipIKTarget, maintainOffset=True)
                 fingerIKJoint.addConstraint('aimConstraint', [fingerTipIKTarget], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpVector=(0.0, 0.0, 1.0), worldUpObject=fingerTipIKTarget, maintainOffset=True)
 
             else:
@@ -1110,12 +1210,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
                 metacarpalScaleRemap.setAttr(f'parameter[{i}]', weight)
                 metacarpalScaleRemap.connectPlugs(f'outValue[{i}]', metacarpalSpace['scale'])
 
-        # Add foot space to limb's pole-vector control
-        #
-        limbPVCtrl = self.scene(limbComponent.userProperties['pvControl'])
-        self.overrideLimbPoleVector(handCtrl, limbPVCtrl)
-
-        # Override end-matrix on limb's twist solver
+        # Override end-matrix on parent limb's twist solver
         #
         twistSolver = self.scene(limbComponent.userProperties['twistSolvers'][-1])
         rotateMatrix = transformutils.createRotationMatrix([-90.0 * mirrorSign, 0.0, 0.0])
@@ -1123,12 +1218,12 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
         self.overrideLimbTwist(handCtrl, twistSolver, offsetMatrix=offsetMatrix)
 
-        # Override end-value on limb's scale remapper
+        # Override end-value on parent limb's scale remapper
         #
         scaleRemapper = self.scene(limbComponent.userProperties['scaleRemappers'][-1])
         self.overrideLimbRemapper(handCtrl, scaleRemapper)
 
-        # Override extremity-in control space
+        # Override local space on parent limb's extremity-in control
         #
         hingeCtrl = self.scene(limbComponent.userProperties['hingeControl'])
         otherHandles = hingeCtrl.userProperties.get('otherHandles', [])
@@ -1143,4 +1238,30 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         #
         handCtrl.tagAsController(children=metacarpalCtrls)
         knuckleRollCtrl.tagAsController(parent=handCtrl)
+
+    def buildPartialRig(self):
+        """
+        Builds a partial control rig for this component.
+
+        :rtype: None
+        """
+
+        raise NotImplementedError()
+
+    def buildRig(self):
+        """
+        Builds the control rig for this component.
+
+        :rtype: None
+        """
+
+        rollEnabled = bool(self.rollEnabled)
+
+        if rollEnabled:
+
+            self.buildFullRig()
+
+        else:
+
+            self.buildPartialRig()
     # endregion
