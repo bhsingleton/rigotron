@@ -150,6 +150,34 @@ class PropComponent(basecomponent.BaseComponent):
         propCtrl.userProperties['offset'] = propOffsetCtrl.uuid()
         propCtrl.userProperties['spaceSwitch'] = propSpaceSwitch.uuid()
 
+    def repairOppositeRig(self):
+        """
+        Repairs any broken connections on the opposite prop component.
+
+        :rtype: None
+        """
+
+        # Check if opposite control exists
+        #
+        propCtrl = self.getPublishedNode('Prop')
+        oppositePropCtrl = propCtrl.getOppositeNode()
+
+        hasOpposite = oppositePropCtrl is not self
+
+        if not hasOpposite:
+
+            return
+
+        # Get opposite space switch
+        #
+        oppositePropOffsetCtrl = self.scene(oppositePropCtrl.userProperties['offset'])
+        oppositePropSpaceSwitch = self.scene(oppositePropCtrl.userProperties['spaceSwitch'])
+
+        for target in oppositePropSpaceSwitch.targets():
+
+            targetNode = self.scene(target.name())
+            targetNode.connectPlugs(f'worldMatrix[{targetNode.instanceNumber()}]', oppositePropSpaceSwitch[f'target[{target.index}].targetMatrix'], force=True)
+
     def finalizeRig(self):
         """
         Notifies the component that the rig requires finalizing.
@@ -162,21 +190,23 @@ class PropComponent(basecomponent.BaseComponent):
         rootComponent = self.findRootComponent()
         spineComponent = rootComponent.findComponentDescendants('SpineComponent')[0]
         handComponents = spineComponent.findComponentDescendants('HandComponent')
-        hasHands = len(handComponents) > 0
+
+        leftHandComponents = [component for component in handComponents if component.componentSide == self.Side.LEFT and component.componentId == self.componentId]
+        leftHandComponent = leftHandComponents[0] if (len(leftHandComponents) > 0) else None
+        rightHandComponents = [component for component in handComponents if component.componentSide == self.Side.RIGHT and component.componentId == self.componentId]
+        rightHandComponent = rightHandComponents[0] if (len(rightHandComponents) > 0) else None
 
         worldCtrl = rootComponent.getPublishedNode('Motion')
         pelvisCtrl = spineComponent.getPublishedNode('Pelvis')
         chestCtrl = spineComponent.getPublishedNode('Chest')
 
-        leftHandCtrl, rightHandCtrl = None, None
+        hasLeftHand = leftHandComponent is not None
+        leftHandExists = leftHandComponent.componentStatus == self.Status.RIG if hasLeftHand else False
+        leftHandCtrl = leftHandComponent.getPublishedNode('Hand') if leftHandExists else None
 
-        if hasHands:
-
-            leftHandComponents = [component for component in handComponents if component.componentSide == self.Side.LEFT and component.componentId == self.componentId]
-            leftHandCtrl = leftHandComponents[0].getPublishedNode('Hand') if (len(leftHandComponents) > 0) else None
-
-            rightHandComponents = [component for component in handComponents if component.componentSide == self.Side.RIGHT and component.componentId == self.componentId]
-            rightHandCtrl = rightHandComponents[0].getPublishedNode('Hand') if (len(rightHandComponents) > 0) else None
+        hasRightHand = rightHandComponent is not None
+        rightHandExists = rightHandComponent.componentStatus == self.Status.RIG if hasRightHand else False
+        rightHandCtrl = rightHandComponent.getPublishedNode('Hand') if rightHandExists else None
 
         # Evaluate component side
         #
@@ -190,8 +220,6 @@ class PropComponent(basecomponent.BaseComponent):
 
             # Add space attributes
             #
-            hasRightHand = rightHandCtrl is not None
-
             propCtrl.addDivider('Spaces')
             propCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (Pelvis)', attributeType='float', min=0.0, max=1.0, keyable=True)
@@ -262,8 +290,6 @@ class PropComponent(basecomponent.BaseComponent):
 
             # Add space attributes
             #
-            hasLeftHand = leftHandCtrl is not None
-
             propCtrl.addDivider('Spaces')
             propCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (Pelvis)', attributeType='float', min=0.0, max=1.0, keyable=True)
@@ -362,4 +388,8 @@ class PropComponent(basecomponent.BaseComponent):
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
+
+        # Check if opposite rig requires repairs
+        #
+        self.repairOppositeRig()
     # endregion
