@@ -1,8 +1,10 @@
 from maya.api import OpenMaya as om
 from mpy import mpynode, mpyattribute
 from typing import List, Union
+from enum import IntEnum
 from collections import namedtuple
 from dcc.dataclasses.colour import Colour
+from dcc.math import floatmath
 from dcc.maya.libs import transformutils, shapeutils
 from rigomatic.libs import kinematicutils
 from . import basecomponent
@@ -16,6 +18,16 @@ log.setLevel(logging.INFO)
 SpineFKPair = namedtuple('SpineFKPair', ('rot', 'trans'))
 
 
+class SpinePivotType(IntEnum):
+    """
+    Collection of all available spine pivots.
+    """
+
+    COG = 0
+    WAIST = 1
+    TIP = 2
+
+
 class SpineComponent(basecomponent.BaseComponent):
     """
     Overload of `AbstractComponent` that implements spine components.
@@ -26,9 +38,31 @@ class SpineComponent(basecomponent.BaseComponent):
     numSpineLinks = mpyattribute.MPyAttribute('numSpineLinks', attributeType='int', min=2, default=3)
     # endregion
 
+    # region Enums
+    SpinePivotType = SpinePivotType
+    # endregion
+
     # region Dunderscores
     __version__ = 1.0
     __default_component_name__ = 'Spine'
+    __default_pivot_matrices__ = {
+        SpinePivotType.TIP: om.MMatrix(
+            [
+                (1.0, 0.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0, 0.0),
+                (0.0, 0.0, 1.0, 0.0),
+                (0.0, 0.0, 200.0, 1.0)
+            ]
+        )
+    }
+    __default_pelvis_matrix__ = om.MMatrix(
+        [
+            (0.0, 0.0, 1.0, 0.0),
+            (0.0, -1.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0, 0.0),
+            (0.0, 0.0, 100.0, 1.0)
+        ]
+    )
     __default_spine_spacing__ = 20.0
     __default_spine_matrix__ = om.MMatrix(
         [
@@ -36,14 +70,6 @@ class SpineComponent(basecomponent.BaseComponent):
             (0.0, -1.0, 0.0, 0.0),
             (1.0, 0.0, 0.0, 0.0),
             (0.0, 0.0, 0.0, 1.0)
-        ]
-    )
-    __default_pelvis_matrix__ = om.MMatrix(
-        [
-            (0.0, 0.0, 1.0, 0.0),
-            (0.0, -1.0, 0.0, 0.0),
-            (1.0, 0.0, 0.0, 0.0),
-            (0.0, 0.0, 100.0, 1.0)
         ]
     )
     # endregion
@@ -73,6 +99,73 @@ class SpineComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Methods
+    def invalidatePivotSpecs(self, pivotSpecs):
+        """
+        Rebuilds the internal pivot specs for this component.
+
+        :type pivotSpecs: List[pivotspec.PivotSpec]
+        :rtype: None
+        """
+
+        # Concatenate pivot names
+        #
+        pivotTypes = self.SpinePivotType.__members__
+        numPivotTypes = len(pivotTypes)
+
+        pivotSpecs = self.resizePivotSpecs(numPivotTypes, pivotSpecs)
+
+        for (pivotType, pivotSpec) in zip(self.SpinePivotType, pivotSpecs):
+
+            isSpineTip = pivotType == self.SpinePivotType.TIP
+
+            pivotSpec.name = self.formatName(subname=pivotType.name.title(), type='locator')
+            pivotSpec.enabled = isSpineTip  # For now this is the only pivot I have implemented!
+
+        # Call parent method
+        #
+        super(SpineComponent, self).invalidatePivotSpecs(pivotSpecs)
+
+    def buildPivots(self):
+        """
+        Builds the pivots for this component.
+
+        :rtype: Union[Tuple[mpynode.MPyNode], None]
+        """
+
+        # Inspect pivot specs
+        #
+        pivotSpecs = self.pivotSpecs()
+
+        numPivotSpecs = len(pivotSpecs)
+        expectedPivotSpecs = len(self.SpinePivotType)
+
+        if numPivotSpecs != expectedPivotSpecs:
+
+            self.markPivotsDirty()
+            pivotSpecs = self.pivotSpecs()
+
+        # Iterate through pivot specs
+        #
+        for (pivotType, pivotSpec) in enumerate(pivotSpecs):
+
+            # Check if pivot is enabled
+            #
+            if not pivotSpec.enabled:
+
+                continue
+
+            # Create pivot and update transform
+            #
+            pivotType = self.SpinePivotType(pivotType)
+
+            pivot = self.scene.createNode('transform', name=pivotSpec.name)
+            pivot.addPointHelper('cross', 'axisTripod', size=10.0)
+            pivotSpec.uuid = pivot.uuid()
+
+            defaultMatrix = self.__default_pivot_matrices__[pivotType]
+            matrix = pivotSpec.getMatrix(default=defaultMatrix)
+            pivot.setWorldMatrix(matrix)
+
     def invalidateSkeletonSpecs(self, skeletonSpecs):
         """
         Rebuilds the internal skeleton specs for this component.
@@ -186,23 +279,6 @@ class SpineComponent(basecomponent.BaseComponent):
 
             return (pelvisJoint,)
 
-    def buildRig(self):
-        """
-        Builds the control rig for this component.
-
-        :rtype: None
-        """
-
-        spineEnabled = bool(self.spineEnabled)
-
-        if spineEnabled:
-
-            return self.buildFullRig()
-
-        else:
-
-            return self.buildPartialRig()
-
     def buildFullRig(self):
         """
         Builds the full spine rig for this component.
@@ -215,6 +291,10 @@ class SpineComponent(basecomponent.BaseComponent):
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
         jointsGroup = self.scene(self.jointsGroup)
+
+        cogPivotSpec, waistPivotSpec, spineTipPivotSpec = self.pivotSpecs()
+        spineTipMatrix = spineTipPivotSpec.getMatrix()
+        spineTipPoint = transformutils.decomposeTransformMatrix(spineTipMatrix)[0]
 
         pelvisSpec, nullSpec, *spineSpecs = self.skeletonSpecs()
         pelvisExportJoint = self.scene(pelvisSpec.uuid)
@@ -338,7 +418,7 @@ class SpineComponent(basecomponent.BaseComponent):
         pelvisCtrl = self.scene.createNode('transform', name=pelvisCtrlName, parent=pelvisSpace)
         pelvisCtrl.addPointHelper('diamond', size=(12.0 * rigScale), colorRGB=darkColorRGB)
         pelvisCtrl.prepareChannelBoxForAnimation()
-        self.publishNode(pelvisCtrl, alias=f'Pelvis')
+        self.publishNode(pelvisCtrl, alias='Pelvis')
 
         pelvisCtrl.userProperties['space'] = pelvisSpace.uuid()
 
@@ -350,8 +430,8 @@ class SpineComponent(basecomponent.BaseComponent):
 
         spineCount = len(spineSpecs)
         lastSpineIndex = spineCount - 1
-        
-        spineFKCtrls = [None] * spineCount  # type: List[Union[SpineFKPair, None]]
+
+        spineFKCtrls = [None] * spineCount  # type: List[SpineFKPair]
 
         for (i, spineJoint) in enumerate(spineExportJoints):
 
@@ -389,6 +469,8 @@ class SpineComponent(basecomponent.BaseComponent):
 
                 # Check if spine FK translate control is required
                 #
+                spineFKTransCtrl = None
+
                 if i > 0:
 
                     index = str(i).zfill(2)
@@ -402,39 +484,56 @@ class SpineComponent(basecomponent.BaseComponent):
                     spineFKRotCtrl.userProperties['translate'] = spineFKTransCtrl.uuid()
                     spineFKTransCtrl.userProperties['rotate'] = spineFKRotCtrl.uuid()
 
-                    spineFKCtrls[i] = SpineFKPair(spineFKRotCtrl, spineFKTransCtrl)
-
-                else:
-
-                    spineFKCtrls[i] = SpineFKPair(spineFKRotCtrl, None)
+                spineFKCtrls[i] = SpineFKPair(spineFKRotCtrl, spineFKTransCtrl)
 
             else:
 
-                # Create FK chest nodes
+                # Create chest FK rotate control
                 #
-                chestFKSpaceName = self.formatName(name='Chest', kinemat='FK', type='space')
-                chestFKSpace = self.scene.createNode('transform', name=chestFKSpaceName, parent=controlsGroup)
-                chestFKSpace.copyTransform(spineJoint)
-                chestFKSpace.freezeTransform()
+                chestFKRotSpaceName = self.formatName(name='Chest', subname='FK', kinemat='Rot', type='space')
+                chestFKRotSpace = self.scene.createNode('transform', name=chestFKRotSpaceName, parent=controlsGroup)
+                chestFKRotSpace.copyTransform(spineJoint)
+                chestFKRotSpace.freezeTransform()
 
-                chestFKCtrlName = self.formatName(name='Chest', kinemat='FK', type='control')
-                chestFKCtrl = self.scene.createNode('transform', name=chestFKCtrlName, parent=chestFKSpace)
-                chestFKCtrl.addPointHelper('disc', size=(24.0 * rigScale), localScale=(1.0, 1.0, 1.5), colorRGB=lightColorRGB, lineWidth=2.0)
-                chestFKCtrl.addDivider('Spaces')
-                chestFKCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
-                chestFKCtrl.prepareChannelBoxForAnimation()
-                chestFKCtrl.userProperties['space'] = chestFKSpace.uuid()
-                self.publishNode(chestFKCtrl, alias='Chest_FK')
+                chestFKRotCtrlName = self.formatName(name='Chest', subname='FK', kinemat='Rot', type='control')
+                chestFKRotCtrl = self.scene.createNode('transform', name=chestFKRotCtrlName, parent=chestFKRotSpace)
+                chestFKRotCtrl.addPointHelper('disc', size=(24.0 * rigScale), localScale=(1.0, 1.0, 1.5), colorRGB=lightColorRGB, lineWidth=2.0)
+                chestFKRotCtrl.addDivider('Spaces')
+                chestFKRotCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
+                chestFKRotCtrl.prepareChannelBoxForAnimation()
+                self.publishNode(chestFKRotCtrl, alias='Chest_FK_Rot')
 
-                localSpaceCtrl = spineFKCtrls[i - 1].rot
-                targets = (localSpaceCtrl, worldSpaceCtrl)
+                targets = (spineFKCtrls[i - 1].rot, worldSpaceCtrl)
 
-                chestFKSpaceSwitch = chestFKSpace.addSpaceSwitch(targets, weighted=True)
-                chestFKSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 1.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
-                chestFKSpaceSwitch.connectPlugs(chestFKCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
-                chestFKSpaceSwitch.connectPlugs(chestFKCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
+                chestFKRotSpaceSwitch = chestFKRotSpace.addSpaceSwitch(targets, weighted=True)
+                chestFKRotSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 1.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
+                chestFKRotSpaceSwitch.connectPlugs(chestFKRotCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
+                chestFKRotSpaceSwitch.connectPlugs(chestFKRotCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
 
-                spineFKCtrls[i] = SpineFKPair(chestFKCtrl, None)
+                chestFKRotCtrl.userProperties['space'] = chestFKRotSpace.uuid()
+                chestFKRotCtrl.userProperties['spaceSwitch'] = chestFKRotSpaceSwitch.uuid()
+
+                # Create chest FK translate control
+                #
+                chestFKTransCtrlName = self.formatName(name='Chest', subname='FK', kinemat='Trans', type='control')
+                chestFKTransCtrl = self.scene.createNode('transform', name=chestFKTransCtrlName, parent=chestFKRotCtrl)
+                chestFKTransCtrl.addPointHelper('axisView', size=(12.0 * rigScale), localScale=(0.0, 3.0, 0.0), colorRGB=lightColorRGB)
+                chestFKTransCtrl.prepareChannelBoxForAnimation()
+                self.publishNode(chestFKTransCtrl, alias=f'Chest_FK_Trans')
+
+                chestFKRotCtrl.userProperties['translate'] = chestFKTransCtrl.uuid()
+                chestFKTransCtrl.userProperties['rotate'] = chestFKRotCtrl.uuid()
+
+                spineFKCtrls[i] = SpineFKPair(chestFKRotCtrl, chestFKTransCtrl)
+
+        spineFKTipTargetName = self.formatName(name=f'{self.componentName}Tip', subname='FK', type='target')
+        spineFKTipTarget = self.scene.createNode('transform', name=spineFKTipTargetName, parent=spineFKCtrls[-1].rot)
+        spineFKTipTarget.displayLocalAxis = True
+        spineFKTipTarget.visibility = False
+        spineFKTipTarget.setWorldMatrix(spineTipMatrix, skipRotate=True, skipScale=True)
+        spineFKTipTarget.freezeTransform()
+
+        self.userProperties['SpineFKTipTarget'] = spineFKTipTarget.uuid()
 
         # Create chest IK control
         #
@@ -467,57 +566,54 @@ class SpineComponent(basecomponent.BaseComponent):
 
         chestIKCtrl.userProperties['space'] = chestIKSpace.uuid()
 
-        # Create spine base and tip joints
+        # Create spine IK base and tip joints
         #
         firstSpineFKCtrl = spineFKCtrls[0].rot
-        lastSpineFKCtrl = spineFKCtrls[-1].rot
+        firstSpineFKSpace = self.scene(firstSpineFKCtrl.userProperties['space'])
 
-        spineIKBaseTargetName = self.formatName(subname='IK', kinemat='Base', type='target')
-        spineIKBaseTarget = self.scene.createNode('transform', name=spineIKBaseTargetName, parent=firstSpineFKCtrl)
-        spineIKBaseTarget.displayLocalAxis = True
-        spineIKBaseTarget.visibility = False
-        spineIKBaseTarget.copyTransform(hipsCtrl)
-        spineIKBaseTarget.freezeTransform()
-        spineIKBaseTarget.connectPlugs(hipsCtrl['translate'], 'translate')
+        spineFKGlobalVectorName = self.formatName(subname='FK', index=1, kinemat='Global', type='multiplyVectorByMatrix')
+        spineFKGlobalVector = self.scene.createNode('multiplyVectorByMatrix', name=spineFKGlobalVectorName)
+        spineFKGlobalVector.connectPlugs(firstSpineFKCtrl['translate'], 'input')
+        spineFKGlobalVector.connectPlugs(firstSpineFKCtrl[f'parentMatrix[{firstSpineFKCtrl.instanceNumber()}]'], 'matrix')
+
+        spineFKLocalVectorName = self.formatName(subname='FK', index=1, kinemat='Local', type='multiplyVectorByMatrix')
+        spineFKLocalVector = self.scene.createNode('multiplyVectorByMatrix', name=spineFKLocalVectorName)
+        spineFKLocalVector.connectPlugs(spineFKGlobalVector['output'], 'input')
+        spineFKLocalVector.connectPlugs(hipsCtrl[f'parentInverseMatrix[{hipsCtrl.instanceNumber()}]'], 'matrix')
 
         spineIKBaseJointName = self.formatName(subname='IK', kinemat='Base', type='joint')
         spineIKBaseJoint = self.scene.createNode('joint', name=spineIKBaseJointName, parent=jointsGroup)
-        spineIKBaseJoint.copyTransform(hipsCtrl)
-        spineIKBaseJoint.addConstraint('pointConstraint', [spineIKBaseTarget])
-        spineIKBaseJoint.addConstraint('scaleConstraint', [cogCtrl])
+        spineIKBaseJoint.copyTransform(firstSpineFKCtrl)
 
-        constraint = spineIKBaseJoint.addConstraint('parentConstraint', [hipsCtrl, firstSpineFKCtrl], skipTranslate=True)
-        constraint.interpType = 2  # Shortest
+        spineIKBaseSpaceSwitch = spineIKBaseJoint.addSpaceSwitch([hipsCtrl, firstSpineFKCtrl, firstSpineFKSpace], weighted=True, maintainOffset=True)
+        spineIKBaseSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 1.0, 0.0)}, {'targetWeight': (0.0, 1.0, 0.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 1.0)}])
+        spineIKBaseSpaceSwitch.connectPlugs(spineFKLocalVector['output'], 'target[0].targetOffsetTranslate')
+        spineIKBaseSpaceSwitch.connectPlugs(hipsCtrl['spineInfluence'], 'target[0].targetRotateWeight')
+        spineIKBaseSpaceSwitch.connectPlugs(hipsCtrl['spineInfluence'], 'target[1].targetRotateWeight')
 
-        targets = constraint.targets()
-        constraint.connectPlugs(hipsCtrl['spineInfluence'], targets[0].driver())
-
-        reverseWeightName = self.formatName(subname='IK', kinemat='Base', type='revDoubleLinear')
-        reverseWeight = self.scene.createNode('revDoubleLinear', name=reverseWeightName)
-        reverseWeight.connectPlugs(hipsCtrl['spineInfluence'], 'input')
-        reverseWeight.connectPlugs('output', targets[1].driver())
+        lastSpineFKCtrl = spineFKCtrls[-1].rot
 
         spineIKTipJointName = self.formatName(subname='IK', kinemat='Tip', type='joint')
         spineIKTipJoint = self.scene.createNode('joint', name=spineIKTipJointName, parent=jointsGroup)
-        spineIKTipJoint.copyTransform(chestIKCtrl)
-        spineIKTipJoint.addConstraint('parentConstraint', [chestIKCtrl])
-        spineIKTipJoint.addConstraint('scaleConstraint', [cogCtrl])
+        spineIKTipJoint.copyTransform(lastSpineFKCtrl)
 
-        # Create spine curve
+        spineIKTipSpaceSwitch = spineIKTipJoint.addSpaceSwitch([chestIKCtrl, chestIKSpace], weighted=True, maintainOffset=True)
+        spineIKTipSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 1.0, 0.0)}, {'targetWeight': (0.0, 0.0, 1.0)}])
+
+        # Create spine IK curve
         #
-        controlPoints = [spineExportJoint.translation(space=om.MSpace.kWorld) for spineExportJoint in spineExportJoints]
-        numControlPoints = len(controlPoints)
-
-        curveData = shapeutils.createCurveFromPoints(controlPoints, degree=1)
-
         curveName = self.formatName(type='nurbsCurve')
-        curve = self.scene.createNode('transform', name=curveName, parent=privateGroup)
+        curve = self.scene.createNode('transform', name=curveName, subname='IK', parent=privateGroup)
         curve.inheritsTransform = False
-        curve.template = True
         curve.lockAttr('translate', 'rotate', 'scale')
 
-        curveShape = self.scene.createNode('nurbsCurve', name=f'{curveName}Shape', parent=curve)
-        curveShape.setAttr('cached', curveData)
+        controlPoints = [spineExportJoint.translation(space=om.MSpace.kWorld) for spineExportJoint in spineExportJoints]
+        controlPoints.append(spineTipPoint)
+        numControlPoints = len(controlPoints)
+
+        curveShape = curve.addCurve(controlPoints, degree=1)
+        curveShape.dispCV = True
+        curveShape.template = True
 
         # Add skin deformer to curve
         #
@@ -529,7 +625,7 @@ class SpineComponent(basecomponent.BaseComponent):
         skinCluster.maintainMaxInfluences = True
         skinCluster.addInfluences(*influences)
 
-        firstSpineFKCtrl.connectPlugs(f'worldInverseMatrix[{firstSpineFKCtrl.instanceNumber()}]', skinCluster['bindPreMatrix[0]'])
+        firstSpineFKCtrl.connectPlugs(f'parentInverseMatrix[{firstSpineFKCtrl.instanceNumber()}]', skinCluster['bindPreMatrix[0]'])
         chestIKCtrl.connectPlugs(f'parentInverseMatrix[{chestIKCtrl.instanceNumber()}]', skinCluster['bindPreMatrix[1]'])
 
         # Create remap for skin weights
@@ -540,8 +636,12 @@ class SpineComponent(basecomponent.BaseComponent):
         weightRemap.setAttr('value', [{'value_FloatValue': 0.0, 'value_Interp': 2}, {'value_FloatValue': 1.0, 'value_Interp': 2}])
 
         intermediateCurve = skinCluster.intermediateObject()
-        curveLength = intermediateCurve.length()
+        chestPoint = intermediateCurve.cvPosition(numControlPoints - 2)
+        maxParam = intermediateCurve.getParamAtPoint(chestPoint)
+        curveLength = intermediateCurve.findLengthFromParam(maxParam)
+
         controlNodes = [spineFKTransCtrl if (spineFKTransCtrl is not None) else spineFKRotCtrl for (spineFKRotCtrl, spineFKTransCtrl) in spineFKCtrls]
+        controlNodes.append(spineFKTipTarget)
 
         parameters = [None] * numControlPoints
 
@@ -553,7 +653,7 @@ class SpineComponent(basecomponent.BaseComponent):
             param = intermediateCurve.getParamAtPoint(point)
             paramLength = intermediateCurve.findLengthFromParam(param)
 
-            parameter = paramLength / curveLength
+            parameter = floatmath.clamp(paramLength / curveLength, 0.0, 1.0)
             parameters[i] = parameter
 
             # Add parameter to control node
@@ -575,7 +675,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Override control-points on intermediate-object
         #
-        controlMatrices = [None] * numControlPoints  # type: List[Union[mpynode.MPyNode, None]]
+        controlMatrices = [None] * numControlPoints  # type: List[mpynode.MPyNode]
 
         for (i, controlNode) in enumerate(controlNodes):
 
@@ -597,7 +697,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Create spine IK joints
         #
-        spineIKJoints = [None] * numControlPoints  # type: List[Union[mpynode.MPyNode, None]]
+        spineIKJoints = [None] * numControlPoints  # type: List[mpynode.MPyNode]
 
         for (i, (startNode, endNode)) in enumerate(zip(controlNodes[:-1], controlNodes[1:])):
 
@@ -635,6 +735,19 @@ class SpineComponent(basecomponent.BaseComponent):
 
                 spineIKJoints[-1] = lastSpineIKJoint
 
+        spineIKTipJoint = spineIKJoints[-1]
+
+        spineIKTipTargetName = self.formatName(name=f'{self.componentName}Tip', subname='IK', type='target')
+        spineIKTipTarget = self.scene.createNode('transform', name=spineIKTipTargetName, parent=privateGroup)
+        spineIKTipTarget.displayLocalAxis = True
+        spineIKTipTarget.visibility = False
+        spineIKTipTarget.copyTransform(spineIKTipJoint)
+
+        spineIKTipTarget.addConstraint('transformConstraint', [spineIKTipJoint], skipRotate=True)
+        spineIKTipTarget.addConstraint('orientConstraint', [chestIKCtrl])
+
+        self.userProperties['SpineIKTipTarget'] = spineIKTipTarget.uuid()
+
         # Setup spline IK solver
         #
         splineIKHandle, splineIKEffector = kinematicutils.applySplineSolver(spineIKJoints[0], spineIKJoints[-1], curveShape)
@@ -651,13 +764,6 @@ class SpineComponent(basecomponent.BaseComponent):
         splineIKHandle.dWorldUpVectorEnd = (0.0, 1.0, 0.0)
         splineIKHandle.connectPlugs(spineIKBaseJoint[f'worldMatrix[{spineIKBaseJoint.instanceNumber()}]'], 'dWorldUpMatrix')
         splineIKHandle.connectPlugs(spineIKTipJoint[f'worldMatrix[{spineIKTipJoint.instanceNumber()}]'], 'dWorldUpMatrixEnd')
-
-        splineIKEffector.hideDisplay = False
-        splineIKEffector.breakConnections('translate', source=True, destination=False, recursive=True)
-        splineIKEffector.breakConnections('offsetParentMatrix', source=True, destination=False)
-        splineIKEffector.setParent(spineIKJoints[-1])
-        splineIKEffector.resetAttr('translate')
-        splineIKEffector.setName(self.formatName(type='ikEffector'))
 
         # Setup spline IK stretch
         #
@@ -705,19 +811,19 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Create spine controls
         #
-        lastSpineIndex = numControlPoints - 1
-        spineCtrls = [None] * numControlPoints
+        spineCtrls = [None] * spineCount
 
-        for (i, (spineIKJoint, spineExportJoint)) in enumerate(zip(spineIKJoints, spineExportJoints)):
+        for (i, (spineIKJoint, spineExportJoint)) in enumerate(zip(spineIKJoints[:-1], spineExportJoints)):
 
+            # Evaluate position in loop
+            #
             if i == lastSpineIndex:
 
                 chestSpaceName = self.formatName(name='Chest', type='space')
                 chestSpace = self.scene.createNode('transform', name=chestSpaceName, parent=controlsGroup)
                 chestSpace.copyTransform(spineExportJoint)
                 chestSpace.freezeTransform()
-                chestSpace.addConstraint('pointConstraint', [spineIKJoint])
-                chestSpace.addConstraint('orientConstraint', [chestIKCtrl])
+                chestSpace.addConstraint('parentConstraint', [spineIKJoint], maintainOffset=True)
 
                 chestCtrlName = self.formatName(name='Chest', type='control')
                 chestCtrl = self.scene.createNode('transform', name=chestCtrlName, parent=chestSpace)
@@ -777,39 +883,34 @@ class SpineComponent(basecomponent.BaseComponent):
         # Tag controllers
         #
         cogCtrl.tagAsController(children=[waistCtrl])
-        waistCtrl.tagAsController(parent=cogCtrl, children=[hipsCtrl, firstSpineFKCtrl])
-        hipsCtrl.tagAsController(parent=waistCtrl, children=[pelvisCtrl])
+        waistCtrl.tagAsController(parent=cogCtrl, children=[hipsCtrl, firstSpineFKCtrl, upperBodyCtrl])
+        hipsCtrl.tagAsController(parent=waistCtrl, children=[pelvisCtrl, upperBodyCtrl])
+        upperBodyCtrl.tagAsController(parent=hipsCtrl, children=[spineCtrls[0]])
+        pelvisCtrl.tagAsController(parent=hipsCtrl)
+
+        firstSpineFKCtrl.tagAsController(parent=waistCtrl)
+        lastSpineFKCtrl.tagAsController(children=[chestIKCtrl])
         chestIKCtrl.tagAsController(parent=lastSpineFKCtrl)
 
-        for (i, (spineFKRotCtrl, spineFKTransCtrl)) in enumerate(spineFKCtrls):
+        for (i, (spineFKPair, nextSpineFKPair)) in enumerate(zip(spineFKCtrls[:-1], spineFKCtrls[1:])):
 
-            parent = spineFKCtrls[i - 1].rot if (i > 0) else waistCtrl
-            child = spineFKCtrls[i + 1].rot if (i < lastSpineIndex) else chestIKCtrl
+            if i == 0:
 
-            if spineFKTransCtrl is not None:
-
-                spineFKRotCtrl.tagAsController(parent=parent, children=[child, spineFKTransCtrl])
-                spineFKTransCtrl.tagAsController(parent=spineFKRotCtrl)
+                spineFKPair.rot.tagAsController(parent=parent, children=[nextSpineFKPair.rot])
+                nextSpineFKPair.rot.tagAsController(parent=spineFKPair.rot)
 
             else:
 
-                spineFKRotCtrl.tagAsController(parent=parent, children=[child])
+                spineFKPair.rot.tagAsController(parent=parent, children=[nextSpineFKPair.rot, spineFKPair.trans])
+                spineFKPair.trans.tagAsController(parent=spineFKPair.rot)
+                nextSpineFKPair.rot.tagAsController(parent=spineFKPair.rot)
 
-        pelvisCtrl.tagAsController(parent=hipsCtrl, children=[upperBodyCtrl])
-        upperBodyCtrl.tagAsController(parent=pelvisCtrl, children=[spineCtrls[0]])
-
-        for (i, spineCtrl) in enumerate(spineCtrls):
+        for (i, (spineCtrl, nextSpineCtrl)) in enumerate(zip(spineCtrls[:-1], spineCtrls[1:])):
 
             parent = spineCtrls[i - 1] if (i > 0) else upperBodyCtrl
 
-            if i < lastSpineIndex:
-
-                child = spineCtrls[i + 1]
-                spineCtrl.tagAsController(parent=parent, children=[child])
-
-            else:
-
-                spineCtrl.tagAsController(parent=parent)
+            spineCtrl.tagAsController(parent=parent, children=[nextSpineCtrl])
+            nextSpineCtrl.tagAsController(parent=spineCtrl)
 
     def buildPartialRig(self):
         """
@@ -954,54 +1055,60 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Create pelvis look-at control
         #
-        pelvisLookAtOrigin = om.MVector(transformutils.breakMatrix(pelvisMatrix)[3]) + om.MVector(0.0, -rigDiameter * 2.0, 0.0)
-        pelvisLookAtMatrix = self.__default_spine_matrix__ * transformutils.createTranslateMatrix(pelvisLookAtOrigin)
-
         pelvisLookAtSpaceName = self.formatName(name='Pelvis', subname='LookAt', type='space')
         pelvisLookAtSpace = self.scene.createNode('transform', name=pelvisLookAtSpaceName, parent=controlsGroup)
-        pelvisLookAtSpace.setWorldMatrix(pelvisLookAtMatrix)
+        pelvisLookAtSpace.copyTransform(waistCtrl, skipRotate=True, skipScale=True)
         pelvisLookAtSpace.freezeTransform()
 
+        pelvisLookAtGroupName = self.formatName(name='Pelvis', subname='LookAt', type='transform')
+        pelvisLookAtGroup = self.scene.createNode('transform', name=pelvisLookAtGroupName, parent=pelvisLookAtSpace)
+        pelvisLookAtGroup.setWorldMatrix(pelvisMatrix, skipRotate=True, skipScale=True)
+        pelvisLookAtGroup.freezeTransform()
+
         pelvisLookAtCtrlName = self.formatName(name='Pelvis', subname='LookAt', type='control')
-        pelvisLookAtCtrl = self.scene.createNode('transform', name=pelvisLookAtCtrlName, parent=pelvisLookAtSpace)
+        pelvisLookAtCtrl = self.scene.createNode('transform', name=pelvisLookAtCtrlName, parent=pelvisLookAtGroup)
         pelvisLookAtCtrl.addPointHelper('sphere', 'centerMarker', size=(20.0 * rigScale), colorRGB=colorRGB)
         pelvisLookAtCtrl.addDivider('Settings')
         pelvisLookAtCtrl.addProxyAttr('lookAt', pelvisCtrl['lookAt'])
         pelvisLookAtCtrl.addProxyAttr('lookAtOffset', pelvisCtrl['lookAtOffset'])
         pelvisLookAtCtrl.addDivider('Spaces')
-        pelvisLookAtCtrl.addAttr(longName='transformSpaceW0', niceName='Transform Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
-        pelvisLookAtCtrl.addAttr(longName='transformSpaceW1', niceName='Transform Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
-        pelvisLookAtCtrl.addAttr(longName='transformSpaceW2', niceName='Transform Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True, default=1.0)
+        pelvisLookAtCtrl.addAttr(longName='localOrGlobal',attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
         pelvisLookAtCtrl.prepareChannelBoxForAnimation()
         self.publishNode(pelvisLookAtCtrl, alias='LookAt')
+        
+        pelvisLookAtSpaceSwitch = pelvisLookAtSpace.addSpaceSwitch([waistCtrl, motionCtrl], weighted=True, maintainOffset=True)
+        pelvisLookAtSpaceSwitch.setAttr('target', [{'targetReverse': (True, False, False), 'targetWeight': (0.0, 0.0, 1.0)}, {'targetWeight': (0.0, 1.0, 0.0)}])
+        pelvisLookAtSpaceSwitch.connectPlugs(pelvisLookAtCtrl['localOrGlobal'], 'target[0].targetTranslateWeight')
+        pelvisLookAtSpaceSwitch.connectPlugs(pelvisLookAtCtrl['localOrGlobal'], 'target[1].targetTranslateWeight')
+        
+        # Setup head look-at offset
+        #
+        pelvisLookAtMatrix = pelvisLookAtGroup.getAttr('offsetParentMatrix')
+        translation, eulerRotation, scale = transformutils.decomposeTransformMatrix(pelvisLookAtMatrix)
 
-        pelvisLookAtTargetName = self.formatName(name='Pelvis', subname='LookAt', type='target')
-        pelvisLookAtTarget = self.scene.createNode('transform', name=pelvisLookAtTargetName, parent=privateGroup)
-        pelvisLookAtTarget.displayLocalAxis = True
-        pelvisLookAtTarget.visibility = False
-        pelvisLookAtTarget.setWorldMatrix(pelvisMatrix)
-        pelvisLookAtTarget.freezeTransform()
+        pelvisLookAtComposeMatrixName = self.formatName(name='Pelvis', subname='LookAt', type='composeMatrix')
+        pelvisLookAtComposeMatrix = self.scene.createNode('composeMatrix', name=pelvisLookAtComposeMatrixName)
+        pelvisLookAtComposeMatrix.setAttr('inputTranslate', translation)
+        pelvisLookAtComposeMatrix.setAttr('inputRotate', eulerRotation, convertUnits=False)
 
-        pelvisLookAtTarget.addConstraint('transformConstraint', [waistCtrl], maintainOffset=True, skipRotate=True)
-        pelvisLookAtTarget.addConstraint(
-            'aimConstraint',
-            [pelvisLookAtCtrl],
-            aimVector=(0.0, 1.0, 0.0),
-            upVector=(1.0, 0.0, 0.0),
-            worldUpType=2,
-            worldUpVector=(1.0, 0.0, 0.0),
-            worldUpObject=pelvisLookAtCtrl,
-            maintainOffset=True
-        )
+        pelvisLookAtOffsetInverseName = self.formatName(subname='LookAt', type='floatMath')
+        pelvisLookAtOffsetInverse = self.scene.createNode('floatMath', name=pelvisLookAtOffsetInverseName)
+        pelvisLookAtOffsetInverse.setAttr('operation', 5)  # Negate
+        pelvisLookAtOffsetInverse.connectPlugs(pelvisCtrl['lookAtOffset'], 'inDistanceA')
 
-        pelvisLookAtCtrl.userProperties['space'] = pelvisLookAtSpace.uuid()
-        pelvisLookAtCtrl.userProperties['target'] = pelvisLookAtTarget.uuid()
+        pelvisLookAtOffsetComposeMatrixName = self.formatName(subname='LookAtOffset', type='composeMatrix')
+        pelvisLookAtOffsetComposeMatrix = self.scene.createNode('composeMatrix', name=pelvisLookAtOffsetComposeMatrixName)
+        pelvisLookAtOffsetComposeMatrix.connectPlugs(pelvisLookAtOffsetInverse['outDistance'], 'inputTranslateY')
+
+        pelvisLookAtMultMatrixName = self.formatName(subname='LookAt', type='multMatrix')
+        pelvisLookAtMultMatrix = self.scene.createNode('multMatrix', name=pelvisLookAtMultMatrixName)
+        pelvisLookAtMultMatrix.connectPlugs(pelvisLookAtOffsetComposeMatrix['outputMatrix'], 'matrixIn[0]')
+        pelvisLookAtMultMatrix.connectPlugs(pelvisLookAtComposeMatrix['outputMatrix'], 'matrixIn[1]')
+        pelvisLookAtMultMatrix.connectPlugs('matrixSum', pelvisLookAtGroup['offsetParentMatrix'])
 
         # Create pelvis look-at curve
         #
-        pelvisLookAtMatrix = pelvisLookAtCtrl.worldMatrix()
-        controlPoints = [transformutils.breakMatrix(matrix)[3] for matrix in (pelvisLookAtMatrix, pelvisMatrix)]
-        curveData = shapeutils.createCurveFromPoints(controlPoints, degree=1)
+        curveData = shapeutils.createCurveFromPoints([om.MPoint.kOrigin, om.MPoint.kOrigin], degree=1)
 
         pelvisLookAtShapeName = self.formatName(subname='LookAtHandle', type='control')
         pelvisLookAtShape = self.scene.createNode('nurbsCurve', name=f'{pelvisLookAtShapeName}Shape', parent=pelvisLookAtCtrl)
@@ -1009,60 +1116,42 @@ class SpineComponent(basecomponent.BaseComponent):
         pelvisLookAtShape.useObjectColor = 2
         pelvisLookAtShape.wireColorRGB = lightColorRGB
 
-        nodes = [pelvisLookAtCtrl, pelvisCtrl]
-
-        for (i, node) in enumerate(nodes):
+        for (i, node) in enumerate([pelvisLookAtCtrl, pelvisCtrl]):
 
             index = i + 1
 
-            multMatrixName = self.formatName(subname='ControlPoint', index=index, type='multMatrix')
+            multMatrixName = self.formatName(name='Pelvis', subname='ControlPoint', index=index, type='multMatrix')
             multMatrix = self.scene.createNode('multMatrix', name=multMatrixName)
             multMatrix.connectPlugs(node[f'worldMatrix[{node.instanceNumber()}]'], 'matrixIn[0]')
             multMatrix.connectPlugs(pelvisLookAtShape[f'parentInverseMatrix[{pelvisLookAtShape.instanceNumber()}]'], 'matrixIn[1]')
 
-            breakMatrixName = self.formatName(subname='ControlPoint', index=index, type='breakMatrix')
+            breakMatrixName = self.formatName(name='Pelvis', subname='ControlPoint', index=index, type='breakMatrix')
             breakMatrix = self.scene.createNode('breakMatrix', name=breakMatrixName)
             breakMatrix.connectPlugs(multMatrix['matrixSum'], 'inMatrix')
             breakMatrix.connectPlugs('row4X', pelvisLookAtShape[f'controlPoints[{i}].xValue'])
             breakMatrix.connectPlugs('row4Y', pelvisLookAtShape[f'controlPoints[{i}].yValue'])
             breakMatrix.connectPlugs('row4Z', pelvisLookAtShape[f'controlPoints[{i}].zValue'])
 
-        # Setup pelvis look-at space switching
+        # Create pelvis look-at target
         #
-        pelvisLookAtTargets = {'World': motionCtrl, 'COG': cogCtrl, 'Waist': waistCtrl}
-        pelvisLookAtSpaceSwitch = pelvisLookAtSpace.addSpaceSwitch(list(pelvisLookAtTargets.values()), weighted=True, maintainOffset=False)
+        pelvisLookAtTargetName = self.formatName(name='Pelvis', subname='LookAt', type='target')
+        pelvisLookAtTarget = self.scene.createNode('transform', name=pelvisLookAtTargetName, parent=privateGroup)
+        pelvisLookAtTarget.displayLocalAxis = True
+        pelvisLookAtTarget.addConstraint('transformConstraint', [waistCtrl], skipRotate=True)
+        pelvisLookAtTarget.addConstraint(
+            'aimConstraint',
+            [pelvisLookAtCtrl],
+            aimVector=(0.0, 1.0, 0.0),
+            upVector=(1.0, 0.0, 0.0),
+            worldUpType=2,
+            worldUpVector=(0.0, 0.0, 1.0),
+            worldUpObject=pelvisLookAtCtrl
+        )
 
-        headLookAtOffsetReverseName = self.formatName(subname='LookAtOffset', type='revDoubleLinear')
-        headLookAtOffsetReverse = self.scene.createNode('revDoubleLinear', name=headLookAtOffsetReverseName)
-        headLookAtOffsetReverse.connectPlugs(pelvisCtrl['lookAtOffset'], 'input')
-
-        headLookAtOffsetComposeMatrixName = self.formatName(subname='LookAtOffset', type='composeMatrix')
-        headLookAtOffsetComposeMatrix = self.scene.createNode('composeMatrix', name=headLookAtOffsetComposeMatrixName)
-        headLookAtOffsetComposeMatrix.connectPlugs(headLookAtOffsetReverse['output'], 'inputTranslateY')
-
-        headLookAtRestMatrix = transformutils.createTranslateMatrix(pelvisMatrix)
-
-        for (i, (name, target)) in enumerate(pelvisLookAtTargets.items()):
-
-            targetMatrix = target.worldMatrix()
-            targetOffsetMatrix = headLookAtRestMatrix * targetMatrix.inverse()
-            targetOffsetTranslate, targetRotateOffset, targetOffsetScale = transformutils.decomposeTransformMatrix(targetOffsetMatrix)
-
-            targetOffsetComposeMatrixName = self.formatName(name=f'{self.componentName}LookAt', subname=f'{name}TargetOffset', type='composeMatrix')
-            targetOffsetComposeMatrix = self.scene.createNode('composeMatrix', name=targetOffsetComposeMatrixName)
-            targetOffsetComposeMatrix.setAttr('inputTranslate', targetOffsetTranslate)
-            targetOffsetComposeMatrix.setAttr('inputRotate', targetRotateOffset, convertUnits=False)
-
-            targetMultMatrixName = self.formatName(name=f'{self.componentName}LookAt', subname=f'{name}Target', type='multMatrix')
-            targetMultMatrix = self.scene.createNode('multMatrix', name=targetMultMatrixName)
-            targetMultMatrix.connectPlugs(headLookAtOffsetComposeMatrix['outputMatrix'], 'matrixIn[0]')
-            targetMultMatrix.connectPlugs(targetOffsetComposeMatrix['outputMatrix'], 'matrixIn[1]')
-            targetMultMatrix.connectPlugs(target[f'worldMatrix[{target.instanceNumber()}]'], 'matrixIn[2]')
-
-            pelvisLookAtSpaceSwitch.connectPlugs(pelvisLookAtCtrl[f'transformSpaceW{i}'], f'target[{i}].targetWeight')
-            pelvisLookAtSpaceSwitch.connectPlugs(targetMultMatrix['matrixSum'], f'target[{i}].targetMatrix', force=True)
-
+        pelvisLookAtCtrl.userProperties['space'] = pelvisLookAtSpace.uuid()
         pelvisLookAtCtrl.userProperties['spaceSwitch'] = pelvisLookAtSpaceSwitch.uuid()
+        pelvisLookAtCtrl.userProperties['group'] = pelvisLookAtGroup.uuid()
+        pelvisLookAtCtrl.userProperties['target'] = pelvisLookAtTarget.uuid()
 
         # Setup pelvis space switching
         #
@@ -1079,4 +1168,21 @@ class SpineComponent(basecomponent.BaseComponent):
         waistCtrl.tagAsController(parent=cogCtrl, children=[pelvisCtrl, pelvisLookAtCtrl])
         pelvisCtrl.tagAsController(parent=waistCtrl)
         pelvisLookAtCtrl.tagAsController(parent=waistCtrl)
+
+    def buildRig(self):
+        """
+        Builds the control rig for this component.
+
+        :rtype: None
+        """
+
+        spineEnabled = bool(self.spineEnabled)
+
+        if spineEnabled:
+
+            return self.buildFullRig()
+
+        else:
+
+            return self.buildPartialRig()
     # endregion
