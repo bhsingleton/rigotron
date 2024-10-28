@@ -272,7 +272,8 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         isLeg = self.className.endswith('LegComponent')
         spineAlias = 'Chest' if isArm else 'Pelvis'
         spineComponent = rootComponent.findComponentDescendants('SpineComponent')[0]
-        cogCtrl = spineComponent.getPublishedNode('Waist')
+        cogCtrl = spineComponent.getPublishedNode('COG')
+        waistCtrl = spineComponent.getPublishedNode('Waist')
         spineCtrl = spineComponent.getPublishedNode(spineAlias)
 
         clavicleComponents = self.findComponentAncestors('ClavicleComponent')
@@ -379,14 +380,42 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             limbCtrl.addDivider('Spaces')
             limbCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
             limbCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
-            limbCtrl.addAttr(longName='positionSpaceW2', niceName=f'Position Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
-            limbCtrl.addAttr(longName='positionSpaceW3', niceName=f'Position Space (Clavicle)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+            limbCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            limbCtrl.addAttr(longName='positionSpaceW3', niceName=f'Position Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
+            limbCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (Clavicle)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
             limbCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, default=defaultWorldSpace, keyable=True)
             limbCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
-            limbCtrl.addAttr(longName='rotationSpaceW2', niceName=f'Rotation Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
-            limbCtrl.addAttr(longName='rotationSpaceW3', niceName=f'Rotation Space (Clavicle)', attributeType='float', min=0.0, max=1.0, default=defaultClavicleSpace, keyable=True)
+            limbCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            limbCtrl.addAttr(longName='rotationSpaceW3', niceName=f'Rotation Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
+            limbCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (Clavicle)', attributeType='float', min=0.0, max=1.0, default=defaultClavicleSpace, keyable=True)
 
-            limbSpaceSwitch = limbSpace.addSpaceSwitch([motionCtrl, cogCtrl, spineCtrl, limbTarget], maintainOffset=True)
+            limbSpaceSwitch = limbSpace.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl, spineCtrl, limbTarget], maintainOffset=True)
+            limbSpaceSwitch.weighted = True
+            limbSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (1.0, 1.0, 1.0)}])
+            limbSpaceSwitch.connectPlugs(limbCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
+            limbSpaceSwitch.connectPlugs(limbCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
+            limbSpaceSwitch.connectPlugs(limbCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
+            limbSpaceSwitch.connectPlugs(limbCtrl['positionSpaceW3'], 'target[3].targetTranslateWeight')
+            limbSpaceSwitch.connectPlugs(limbCtrl['positionSpaceW4'], 'target[4].targetTranslateWeight')
+            limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
+            limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
+            limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
+            limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
+            limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW4'], 'target[4].targetRotateWeight')
+
+        else:
+
+            limbCtrl.addDivider('Spaces')
+            limbCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            limbCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            limbCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            limbCtrl.addAttr(longName='positionSpaceW3', niceName=f'Position Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+            limbCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            limbCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            limbCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            limbCtrl.addAttr(longName='rotationSpaceW3', niceName=f'Rotation Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+
+            limbSpaceSwitch = limbSpace.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl, limbTarget], maintainOffset=True)
             limbSpaceSwitch.weighted = True
             limbSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (1.0, 1.0, 1.0)}])
             limbSpaceSwitch.connectPlugs(limbCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
@@ -397,26 +426,6 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
             limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
             limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
-
-        else:
-
-            limbCtrl.addDivider('Spaces')
-            limbCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
-            limbCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
-            limbCtrl.addAttr(longName='positionSpaceW2', niceName=f'Position Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-            limbCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
-            limbCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
-            limbCtrl.addAttr(longName='rotationSpaceW2', niceName=f'Rotation Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-
-            limbSpaceSwitch = limbSpace.addSpaceSwitch([motionCtrl, cogCtrl, limbTarget], maintainOffset=True)
-            limbSpaceSwitch.weighted = True
-            limbSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (1.0, 1.0, 1.0)}])
-            limbSpaceSwitch.connectPlugs(limbCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
-            limbSpaceSwitch.connectPlugs(limbCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
-            limbSpaceSwitch.connectPlugs(limbCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
-            limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
-            limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
-            limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
 
         limbCtrl.userProperties['space'] = limbSpace.uuid()
         limbCtrl.userProperties['spaceSwitch'] = limbSpaceSwitch.uuid()
@@ -597,12 +606,14 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         extremityIKCtrl.addDivider('Spaces')
         extremityIKCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, default=defaultWorldSpace, keyable=True)
         extremityIKCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
-        extremityIKCtrl.addAttr(longName='positionSpaceW2', niceName=f'Position Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
-        extremityIKCtrl.addAttr(longName='positionSpaceW3', niceName=f'Position Space ({limbName})', attributeType='float', min=0.0, max=1.0, default=defaultLimbSpace, keyable=True)
+        extremityIKCtrl.addAttr(longName='positionSpaceW2', niceName=f'Position Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+        extremityIKCtrl.addAttr(longName='positionSpaceW3', niceName=f'Position Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
+        extremityIKCtrl.addAttr(longName='positionSpaceW4', niceName=f'Position Space ({limbName})', attributeType='float', min=0.0, max=1.0, default=defaultLimbSpace, keyable=True)
         extremityIKCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
         extremityIKCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
-        extremityIKCtrl.addAttr(longName='rotationSpaceW2', niceName=f'Rotation Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
-        extremityIKCtrl.addAttr(longName='rotationSpaceW3', niceName=f'Rotation Space ({limbName})', attributeType='float', min=0.0, max=1.0, keyable=True)
+        extremityIKCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+        extremityIKCtrl.addAttr(longName='rotationSpaceW3', niceName=f'Rotation Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
+        extremityIKCtrl.addAttr(longName='rotationSpaceW4', niceName=f'Rotation Space ({limbName})', attributeType='float', min=0.0, max=1.0, keyable=True)
         extremityIKCtrl.prepareChannelBoxForAnimation()
         self.publishNode(extremityIKCtrl, alias=f'{extremityName}_IK')
 
@@ -612,17 +623,19 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         extremityIKOffsetCtrl.prepareChannelBoxForAnimation()
         self.publishNode(extremityIKOffsetCtrl, alias=f'{extremityName}_IK_Offset')
 
-        extremityIKSpaceSwitch = extremityIKSpace.addSpaceSwitch([motionCtrl, cogCtrl, spineCtrl, limbCtrl], maintainOffset=True)
+        extremityIKSpaceSwitch = extremityIKSpace.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl, spineCtrl, limbCtrl], maintainOffset=True)
         extremityIKSpaceSwitch.weighted = True
-        extremityIKSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 1.0)}])
+        extremityIKSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 1.0)}])
         extremityIKSpaceSwitch.connectPlugs(extremityIKCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
         extremityIKSpaceSwitch.connectPlugs(extremityIKCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
         extremityIKSpaceSwitch.connectPlugs(extremityIKCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
         extremityIKSpaceSwitch.connectPlugs(extremityIKCtrl['positionSpaceW3'], 'target[3].targetTranslateWeight')
+        extremityIKSpaceSwitch.connectPlugs(extremityIKCtrl['positionSpaceW4'], 'target[4].targetTranslateWeight')
         extremityIKSpaceSwitch.connectPlugs(extremityIKCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
         extremityIKSpaceSwitch.connectPlugs(extremityIKCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
         extremityIKSpaceSwitch.connectPlugs(extremityIKCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
         extremityIKSpaceSwitch.connectPlugs(extremityIKCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
+        extremityIKSpaceSwitch.connectPlugs(extremityIKCtrl['rotationSpaceW4'], 'target[4].targetRotateWeight')
 
         extremityIKCtrl.userProperties['space'] = extremityIKSpace.uuid()
         extremityIKCtrl.userProperties['spaceSwitch'] = extremityIKSpaceSwitch.uuid()
@@ -745,10 +758,10 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         forwardVectorMultMatrixName = self.formatName(subname='Forward', type='multiplyVectorByMatrix')
         forwardVectorMultMatrix = self.scene.createNode('multiplyVectorByMatrix', name=forwardVectorMultMatrixName)
         forwardVectorMultMatrix.connectPlugs(limbIKSoftener['outWorldVector'], 'input')
-        forwardVectorMultMatrix.connectPlugs(cogCtrl[f'worldInverseMatrix[{cogCtrl.instanceNumber()}]'], 'matrix')
+        forwardVectorMultMatrix.connectPlugs(waistCtrl[f'worldInverseMatrix[{waistCtrl.instanceNumber()}]'], 'matrix')
 
-        defaultSampleInput = forwardVector * cogCtrl.worldInverseMatrix()
-        defaultSampleOutput = -poleVector * cogCtrl.worldInverseMatrix()
+        defaultSampleInput = forwardVector * waistCtrl.worldInverseMatrix()
+        defaultSampleOutput = -poleVector * waistCtrl.worldInverseMatrix()
         followSamples = self.__default_rbf_samples__[componentSide]
 
         followRBFSolverName = self.formatName(subname='Follow', type='rbfSolver')
@@ -767,7 +780,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         followUpVectorMultMatrixName = self.formatName(subname='Follow', type='multiplyVectorByMatrix')
         followUpVectorMultMatrix = self.scene.createNode('multiplyVectorByMatrix', name=followUpVectorMultMatrixName)
         followUpVectorMultMatrix.connectPlugs(followRBFSolver['outputTranslate'], 'input')
-        followUpVectorMultMatrix.connectPlugs(cogCtrl[f'worldMatrix[{cogCtrl.instanceNumber()}]'], 'matrix')
+        followUpVectorMultMatrix.connectPlugs(waistCtrl[f'worldMatrix[{waistCtrl.instanceNumber()}]'], 'matrix')
 
         followConstraint = followJoint.addConstraint('aimConstraint', [ikHandleTarget], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, -1.0, 0.0), worldUpType=3, worldUpVector=(0.0, 1.0, 0.0))
         followConstraint.connectPlugs(followUpVectorMultMatrix['output'], 'worldUpVector')
@@ -784,18 +797,20 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         limbPVCtrl.addDivider('Spaces')
         limbPVCtrl.addAttr(longName='transformSpaceW0', niceName='Transform Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
         limbPVCtrl.addAttr(longName='transformSpaceW1', niceName='Transform Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
-        limbPVCtrl.addAttr(longName='transformSpaceW2', niceName=f'Transform Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
-        limbPVCtrl.addAttr(longName='transformSpaceW3', niceName=f'Transform Space ({limbName})', attributeType='float', min=0.0, max=1.0, keyable=True)
-        limbPVCtrl.addAttr(longName='transformSpaceW4', niceName='Transform Space (Auto)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+        limbPVCtrl.addAttr(longName='transformSpaceW2', niceName='Transform Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+        limbPVCtrl.addAttr(longName='transformSpaceW3', niceName=f'Transform Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
+        limbPVCtrl.addAttr(longName='transformSpaceW4', niceName=f'Transform Space ({limbName})', attributeType='float', min=0.0, max=1.0, keyable=True)
+        limbPVCtrl.addAttr(longName='transformSpaceW5', niceName='Transform Space (Auto)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
         limbPVCtrl.prepareChannelBoxForAnimation()
         self.publishNode(limbPVCtrl, alias=f'{limbName}_PV')
 
-        limbPVSpaceSwitch = limbPVSpace.addSpaceSwitch([motionCtrl, cogCtrl, spineCtrl, limbCtrl, followTarget], weighted=True, maintainOffset=True)
+        limbPVSpaceSwitch = limbPVSpace.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl, spineCtrl, limbCtrl, followTarget], weighted=True, maintainOffset=True)
         limbPVSpaceSwitch.connectPlugs(limbPVCtrl['transformSpaceW0'], 'target[0].targetWeight')
         limbPVSpaceSwitch.connectPlugs(limbPVCtrl['transformSpaceW1'], 'target[1].targetWeight')
         limbPVSpaceSwitch.connectPlugs(limbPVCtrl['transformSpaceW2'], 'target[2].targetWeight')
         limbPVSpaceSwitch.connectPlugs(limbPVCtrl['transformSpaceW3'], 'target[3].targetWeight')
         limbPVSpaceSwitch.connectPlugs(limbPVCtrl['transformSpaceW4'], 'target[4].targetWeight')
+        limbPVSpaceSwitch.connectPlugs(limbPVCtrl['transformSpaceW5'], 'target[5].targetWeight')
 
         limbIKHandle.addConstraint('poleVectorConstraint', [limbPVCtrl])
         limbRIKHandle.addConstraint('poleVectorConstraint', [limbPVCtrl])
