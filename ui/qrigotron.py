@@ -138,7 +138,13 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.addSpineComponentAction.setWhatsThis('SpineComponent')
         self.addSpineComponentAction.setToolTip('Adds a spine to the selected component.')
         self.addSpineComponentAction.triggered.connect(self.on_addComponentAction_triggered)
-
+        
+        self.addBeltComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/BeltComponent.svg'), 'Belt', parent=self.mainToolBar)
+        self.addBeltComponentAction.setObjectName('addBeltComponentAction')
+        self.addBeltComponentAction.setWhatsThis('BeltComponent')
+        self.addBeltComponentAction.setToolTip('Adds a belt to the selected component.')
+        self.addBeltComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+        
         self.addTailComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/TailComponent.svg'), 'Tail', parent=self.mainToolBar)
         self.addTailComponentAction.setObjectName('addTailComponentAction')
         self.addTailComponentAction.setWhatsThis('TailComponent')
@@ -186,7 +192,13 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.addJawComponentAction.setWhatsThis('JawComponent')
         self.addJawComponentAction.setToolTip('Adds a jaw to the selected component.')
         self.addJawComponentAction.triggered.connect(self.on_addComponentAction_triggered)
-
+        
+        self.addCollarComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/CollarComponent.svg'), 'Collar', parent=self.mainToolBar)
+        self.addCollarComponentAction.setObjectName('addCollarComponentAction')
+        self.addCollarComponentAction.setWhatsThis('CollarComponent')
+        self.addCollarComponentAction.setToolTip('Adds a collar to the selected component.')
+        self.addCollarComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+        
         self.addPropComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/PropComponent.svg'), 'Prop', parent=self.mainToolBar)
         self.addPropComponentAction.setObjectName('addPropComponentAction')
         self.addPropComponentAction.setWhatsThis('PropComponent')
@@ -226,6 +238,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.mainToolBar.addAction(self.addRootComponentAction)
         self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.addSpineComponentAction)
+        self.mainToolBar.addAction(self.addBeltComponentAction)
         self.mainToolBar.addAction(self.addTailComponentAction)
         self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.addLegComponentAction)
@@ -237,6 +250,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.addHeadComponentAction)
         self.mainToolBar.addAction(self.addJawComponentAction)
+        self.mainToolBar.addAction(self.addCollarComponentAction)
         self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.addPropComponentAction)
         self.mainToolBar.addAction(self.addStowComponentAction)

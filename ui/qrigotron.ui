@@ -27,7 +27,7 @@
     <item>
      <widget class="QSplitter" name="mainSplitter">
       <property name="orientation">
-       <enum>Qt::Horizontal</enum>
+       <enum>Qt::Orientation::Horizontal</enum>
       </property>
       <widget class="QWidget" name="outlinerWidget" native="true">
        <layout class="QVBoxLayout" name="outlinerLayout">
@@ -55,7 +55,7 @@
            <string>Outliner</string>
           </property>
           <property name="alignment">
-           <set>Qt::AlignCenter</set>
+           <set>Qt::AlignmentFlag::AlignCenter</set>
           </property>
           <property name="flat">
            <bool>true</bool>
@@ -96,16 +96,16 @@
            <string notr="true">QTreeView::item { height: 24px; }</string>
           </property>
           <property name="editTriggers">
-           <set>QAbstractItemView::NoEditTriggers</set>
+           <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
           </property>
           <property name="dragEnabled">
            <bool>true</bool>
           </property>
           <property name="dragDropMode">
-           <enum>QAbstractItemView::InternalMove</enum>
+           <enum>QAbstractItemView::DragDropMode::InternalMove</enum>
           </property>
           <property name="defaultDropAction">
-           <enum>Qt::MoveAction</enum>
+           <enum>Qt::DropAction::MoveAction</enum>
           </property>
           <property name="alternatingRowColors">
            <bool>true</bool>
@@ -171,7 +171,7 @@
            <string>Properties</string>
           </property>
           <property name="alignment">
-           <set>Qt::AlignCenter</set>
+           <set>Qt::AlignmentFlag::AlignCenter</set>
           </property>
           <property name="flat">
            <bool>true</bool>
@@ -431,7 +431,7 @@
     <bool>false</bool>
    </property>
    <property name="orientation">
-    <enum>Qt::Horizontal</enum>
+    <enum>Qt::Orientation::Horizontal</enum>
    </property>
    <property name="iconSize">
     <size>
@@ -440,7 +440,7 @@
     </size>
    </property>
    <property name="toolButtonStyle">
-    <enum>Qt::ToolButtonTextUnderIcon</enum>
+    <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
    </property>
    <property name="floatable">
     <bool>true</bool>
@@ -454,6 +454,7 @@
    <addaction name="addRootComponentAction"/>
    <addaction name="separator"/>
    <addaction name="addSpineComponentAction"/>
+   <addaction name="addBeltComponentAction"/>
    <addaction name="addTailComponentAction"/>
    <addaction name="separator"/>
    <addaction name="addLegComponentAction"/>
@@ -465,6 +466,7 @@
    <addaction name="separator"/>
    <addaction name="addHeadComponentAction"/>
    <addaction name="addJawComponentAction"/>
+   <addaction name="addCollarComponentAction"/>
    <addaction name="separator"/>
    <addaction name="addPropComponentAction"/>
    <addaction name="addStowedComponentAction"/>
@@ -747,6 +749,36 @@
    </property>
    <property name="toolTip">
     <string>Adds a player-alignment to the selection component.</string>
+   </property>
+  </action>
+  <action name="addBeltComponentAction">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/rigotron/icons/BeltComponent.svg</normaloff>:/rigotron/icons/BeltComponent.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Belt</string>
+   </property>
+   <property name="toolTip">
+    <string>Adds a belt to the selected component.</string>
+   </property>
+   <property name="whatsThis">
+    <string>SpineComponent</string>
+   </property>
+  </action>
+  <action name="addCollarComponentAction">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/rigotron/icons/CollarComponent.svg</normaloff>:/rigotron/icons/CollarComponent.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Collar</string>
+   </property>
+   <property name="toolTip">
+    <string>Adds a collar to the selected component.</string>
+   </property>
+   <property name="whatsThis">
+    <string>SpineComponent</string>
    </property>
   </action>
  </widget>
