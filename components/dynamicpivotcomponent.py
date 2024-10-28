@@ -22,7 +22,7 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
     # region Dunderscores
     __version__ = 1.0
     __default_component_name__ = 'DynamicPivot'
-    __default_component_matrix = om.MMatrix(
+    __default_component_matrix__ = om.MMatrix(
         [
             (0.0, 0.0, 1.0, 0.0),
             (0.0, -1.0, 0.0, 0.0),
@@ -146,33 +146,38 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
 
         # Add intermediate shape to leaf pivot space
         #
-        leafPivotSpaceName = self.formatName(subname='Pivot', type='space')
-        leafPivotSpace = self.scene.createNode('transform', name=leafPivotSpaceName, parent=controlsGroup)
-        leafPivotSpace.setWorldMatrix(pivotSpec.matrix, skipScale=True)
-        leafPivotSpace.freezeTransform()
+        leafPivoterSpaceName = self.formatName(subname='Pivoter', type='space')
+        leafPivoterSpace = self.scene.createNode('transform', name=leafPivoterSpaceName, parent=controlsGroup)
+        leafPivoterSpace.setWorldMatrix(pivotSpec.matrix, skipScale=True)
+        leafPivoterSpace.freezeTransform()
+        leafPivoterSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
 
-        leafPivotSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
+        leafPivoterCtrlName = self.formatName(subname='Pivoter', type='control')
+        leafPivoterCtrl = self.scene.createNode('transform', name=leafPivoterCtrlName, parent=leafPivoterSpace)
+        leafPivoterCtrl.prepareChannelBoxForAnimation()
+        self.publishNode(leafPivoterCtrl, alias='Pivoter')
 
-        leafPivotInverseMatrix = leafPivotSpace.worldInverseMatrix()
-        leafIntermediatePoints = [point * leafPivotInverseMatrix for point in pivotCurvePoints]
+        leafPivoterInverseMatrix = leafPivoterSpace.worldInverseMatrix()
+        leafPivoterCurvePoints = [point * leafPivoterInverseMatrix for point in pivotCurvePoints]
 
-        leafIntermediateObject = leafPivotSpace.addCurve(leafIntermediatePoints, degree=fnPivotCurve.degree, form=fnPivotCurve.form)
-        leafIntermediateObject.template = True
-        leafIntermediateObject.setName(f'{leafPivotSpace.name()}Shape')
+        leafPivoterCurve = leafPivoterCtrl.addCurve(leafPivoterCurvePoints, degree=fnPivotCurve.degree, form=fnPivotCurve.form)
+        leafPivoterCurve.setName(f'{leafPivoterCtrl.name()}Shape')
+        leafPivoterCurve.objectColor = 2
+        leafPivoterCurve.objectColorRGB = colorRGB
 
         # Add foot control shape
         #
-        localMin, localMax = om.MVector(leafIntermediateObject.getAttr('boundingBoxMin')), om.MVector(leafIntermediateObject.getAttr('boundingBoxMax'))
+        localMin, localMax = om.MVector(leafPivoterCurve.getAttr('boundingBoxMin')), om.MVector(leafPivoterCurve.getAttr('boundingBoxMax'))
         localCenter = (localMin * 0.5) + (localMax * 0.5)
-        localWidth, localHeight, localDepth = leafIntermediateObject.getAttr('boundingBoxSize')
+        localWidth, localHeight, localDepth = leafPivoterCurve.getAttr('boundingBoxSize')
 
         # Setup leaf pivot controls
         #
         localHalfHeight = localHeight * 0.5
         localHalfDepth = localDepth * 0.5
 
-        leafPivotCtrlName = self.formatName(subname='Pivot', type='control')
-        leafPivotCtrl = self.scene.createNode('transform', name=leafPivotCtrlName, parent=leafPivotSpace)
+        leafPivotCtrlName = self.formatName(subname='Pivoter', type='control')
+        leafPivotCtrl = self.scene.createNode('transform', name=leafPivoterCtrlName, parent=leafPivoterCtrl)
         leafPivotCtrl.addCurve(
             [
                 (0.0, 0.0, 0.0),
@@ -202,8 +207,8 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
         leafCenterName = self.formatName(subname='Center', type='vectorMath')
         leafCenter = self.scene.createNode('vectorMath', name=leafCenterName)
         leafCenter.operation = 9  # Average
-        leafCenter.connectPlugs(leafIntermediateObject['boundingBoxMin'], 'inFloatA')
-        leafCenter.connectPlugs(leafIntermediateObject['boundingBoxMax'], 'inFloatB')
+        leafCenter.connectPlugs(leafPivoterCurve['boundingBoxMin'], 'inFloatA')
+        leafCenter.connectPlugs(leafPivoterCurve['boundingBoxMax'], 'inFloatB')
 
         leafPivotMatrixName = self.formatName(subname='Pivot', type='composeMatrix')
         leafPivotMatrix = self.scene.createNode('composeMatrix', name=leafPivotMatrixName)
@@ -213,7 +218,7 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
         leafPivotMultMatrixName = self.formatName(subname='Pivot', type='multMatrix')
         leafPivotMultMatrix = self.scene.createNode('multMatrix', name=leafPivotMultMatrixName)
         leafPivotMultMatrix.connectPlugs(leafPivotCtrl[f'worldMatrix[{leafPivotCtrl.instanceNumber()}]'], 'matrixIn[0]')
-        leafPivotMultMatrix.connectPlugs(leafIntermediateObject[f'worldInverseMatrix[{leafIntermediateObject.instanceNumber()}]'], 'matrixIn[1]')
+        leafPivotMultMatrix.connectPlugs(leafPivoterCurve[f'worldInverseMatrix[{leafPivoterCurve.instanceNumber()}]'], 'matrixIn[1]')
 
         leafPivotName = self.formatName(subname='Pivot', type='vectorProduct')
         leafPivot = self.scene.createNode('vectorProduct', name=leafPivotName)
@@ -225,7 +230,7 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
         leafNormal = self.scene.createNode('vectorProduct', name=leafNormalName)
         leafNormal.operation = 3  # Vector matrix product
         leafNormal.input1 = (1.0, 0.0, 0.0)
-        leafNormal.connectPlugs(leafIntermediateObject['matrix'], 'matrix')
+        leafNormal.connectPlugs(leafPivoterCurve['matrix'], 'matrix')
 
         leafProjectedVectorName = self.formatName(subname='ProjectedVector', type='vectorMath')
         leafProjectedVector = self.scene.createNode('vectorMath', name=leafProjectedVectorName)
@@ -236,9 +241,9 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
 
         leafMaxSizeName = self.formatName(subname='MaxSize', type='max')
         leafMaxSize = self.scene.createNode('max', name=leafMaxSizeName)
-        leafMaxSize.connectPlugs(leafIntermediateObject['boundingBoxSizeX'], 'input[0]')
-        leafMaxSize.connectPlugs(leafIntermediateObject['boundingBoxSizeY'], 'input[1]')
-        leafMaxSize.connectPlugs(leafIntermediateObject['boundingBoxSizeZ'], 'input[2]')
+        leafMaxSize.connectPlugs(leafPivoterCurve['boundingBoxSizeX'], 'input[0]')
+        leafMaxSize.connectPlugs(leafPivoterCurve['boundingBoxSizeY'], 'input[1]')
+        leafMaxSize.connectPlugs(leafPivoterCurve['boundingBoxSizeZ'], 'input[2]')
 
         leafScaledVectorName = self.formatName(subname='ScaledVector', type='vectorMath')
         leafScaledVector = self.scene.createNode('vectorMath', name=leafScaledVectorName)
@@ -254,7 +259,7 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
 
         leafPointOnCurveName = self.formatName(subname='Pivot', type='nearestPointOnCurve')
         leafPointOnCurve = self.scene.createNode('nearestPointOnCurve', name=leafPointOnCurveName)
-        leafPointOnCurve.connectPlugs(leafIntermediateObject['local'], 'inputCurve')
+        leafPointOnCurve.connectPlugs(leafPivoterCurve['local'], 'inputCurve')
         leafPointOnCurve.connectPlugs(leafInput['outFloat'], 'inPosition')
 
         leafVectorLengthName = self.formatName(subname='VectorLength', type='length')
@@ -270,7 +275,7 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
         leafPivotCondition.connectPlugs(leafCenter['outFloat'], 'colorIfFalse')
 
         leafPivotTargetName = self.formatName(subname='Pivot', type='target')
-        leafPivotTarget = self.scene.createNode('transform', name=leafPivotTargetName, parent=leafPivotSpace)
+        leafPivotTarget = self.scene.createNode('transform', name=leafPivotTargetName, parent=leafPivoterCtrl)
         leafPivotTarget.connectPlugs(leafPivotCondition['outColor'], 'rotatePivot')
         leafPivotTarget.connectPlugs(leafPivotCtrl['rotateOrder'], 'rotateOrder')
         leafPivotTarget.connectPlugs(leafPivotCtrl['rotate'], 'rotate')
@@ -287,7 +292,6 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
         leafSpace = self.scene.createNode('transform', name=leafSpaceName, parent=controlsGroup)
         leafSpace.copyTransform(leafExportJoint)
         leafSpace.freezeTransform()
-
         leafSpace.addConstraint('transformConstraint', [leafPivotTarget], maintainOffset=True)
 
         leafCtrl = self.scene.createNode('transform', name=leafSpec.driver, parent=leafSpace)
@@ -299,6 +303,7 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
 
         # Tag controls
         #
-        leafPivotCtrl.tagAsController(children=[leafCtrl])
+        leafPivoterCtrl.tagAsController(children=[leafPivotCtrl])
+        leafPivotCtrl.tagAsController(parent=leafPivoterCtrl, children=[leafCtrl])
         leafCtrl.tagAsController(parent=leafPivotCtrl)
     # endregion

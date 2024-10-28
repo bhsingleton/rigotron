@@ -16,7 +16,7 @@ class LeafComponent(basecomponent.BaseComponent):
     # region Dunderscores
     __version__ = 1.0
     __default_component_name__ = 'Leaf'
-    __default_component_matrix = om.MMatrix.kIdentity
+    __default_component_matrix__ = om.MMatrix.kIdentity
     # endregion
 
     # region Attributes
@@ -64,7 +64,7 @@ class LeafComponent(basecomponent.BaseComponent):
 
         # Update joint transform
         #
-        leafMatrix = leafSpec.getMatrix(default=self.__default_component_matrix)
+        leafMatrix = leafSpec.getMatrix(default=self.__default_component_matrix__)
         leafJoint.setWorldMatrix(leafMatrix)
 
         return (leafJoint,)
