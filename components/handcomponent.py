@@ -577,7 +577,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
         if not hasLimbComponent:
 
-            raise NotImplementedError('buildComponent() limbless hand components have not been implemented!')
+            raise NotImplementedError('buildRig() limbless hand components have not been implemented!')
 
         # Get required limb nodes
         #
