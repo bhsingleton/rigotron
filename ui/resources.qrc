@@ -1,11 +1,14 @@
 <RCC>
   <qresource prefix="rigotron">
+    <file>icons/InsectFootComponent.svg</file>
+    <file>icons/InsectLegComponent.svg</file>
+    <file>icons/PlayerIKComponent.svg</file>
     <file>icons/BeltComponent.svg</file>
     <file>icons/CollarComponent.svg</file>
     <file>icons/DynamicPivotComponent.svg</file>
     <file>icons/PlayerAlignComponent.svg</file>
-    <file>icons/JawComponent.svg</file>
     <file>icons/ChainComponent.svg</file>
+    <file>icons/FaceComponent.svg</file>
     <file>icons/LeafComponent.svg</file>
     <file>icons/PropComponent.svg</file>
     <file>icons/DigitComponent.svg</file>

@@ -3,7 +3,7 @@ from maya.api import OpenMaya as om
 from mpy import mpyscene, mpynode
 from dcc.ui import qsingletonwindow, qdivider, qsignalblocker
 from dcc.python import stringutils
-from dcc.maya.libs import transformutils
+from dcc.maya.libs import transformutils, shapeutils
 from dcc.maya.models import qplugitemmodel, qplugstyleditemdelegate, qplugitemfiltermodel
 from dcc.maya.decorators import undo
 from Qt import QtCore, QtWidgets, QtGui, QtCompat
@@ -98,6 +98,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self._controlRig = self.nullWeakReference
         self._currentComponent = self.nullWeakReference
         self._currentStatus = 0
+        self._shapeCache = {}
         self._callbackIds = om.MCallbackIdArray()
 
     def __setup_ui__(self, *args, **kwargs):
@@ -187,11 +188,23 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.addHeadComponentAction.setToolTip('Adds a head to the selected component.')
         self.addHeadComponentAction.triggered.connect(self.on_addComponentAction_triggered)
 
-        self.addJawComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/JawComponent.svg'), 'Jaw', parent=self.mainToolBar)
-        self.addJawComponentAction.setObjectName('addJawComponentAction')
-        self.addJawComponentAction.setWhatsThis('JawComponent')
-        self.addJawComponentAction.setToolTip('Adds a jaw to the selected component.')
-        self.addJawComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+        self.addInsectLegComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/InsectLegComponent.svg'), 'Insect\nLeg', parent=self.mainToolBar)
+        self.addInsectLegComponentAction.setObjectName('addInsectLegComponentAction')
+        self.addInsectLegComponentAction.setWhatsThis('InsectLegComponent')
+        self.addInsectLegComponentAction.setToolTip('Adds an insect-leg to the selected component.')
+        self.addInsectLegComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addInsectFootComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/InsectFootComponent.svg'), 'Insect\nFoot', parent=self.mainToolBar)
+        self.addInsectFootComponentAction.setObjectName('addInsectFootComponentAction')
+        self.addInsectFootComponentAction.setWhatsThis('InsectFootComponent')
+        self.addInsectFootComponentAction.setToolTip('Adds an insect-foot to the selected component.')
+        self.addInsectFootComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addFaceComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/FaceComponent.svg'), 'Face', parent=self.mainToolBar)
+        self.addFaceComponentAction.setObjectName('addFaceComponentAction')
+        self.addFaceComponentAction.setWhatsThis('FaceComponent')
+        self.addFaceComponentAction.setToolTip('Adds a face to the selected component.')
+        self.addFaceComponentAction.triggered.connect(self.on_addComponentAction_triggered)
         
         self.addCollarComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/CollarComponent.svg'), 'Collar', parent=self.mainToolBar)
         self.addCollarComponentAction.setObjectName('addCollarComponentAction')
@@ -223,17 +236,23 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.addDynamicPivotComponentAction.setToolTip('Adds a dynamic-pivot to the selected component.')
         self.addDynamicPivotComponentAction.triggered.connect(self.on_addComponentAction_triggered)
 
-        self.addPlayerAlignComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/PlayerAlignComponent.svg'), 'Align', parent=self.mainToolBar)
-        self.addPlayerAlignComponentAction.setObjectName('addPlayerAlignComponentAction')
-        self.addPlayerAlignComponentAction.setWhatsThis('PlayerAlignComponent')
-        self.addPlayerAlignComponentAction.setToolTip('Adds a player-alignment to the selected component.')
-        self.addPlayerAlignComponentAction.triggered.connect(self.on_addComponentAction_triggered)
-
         self.addChainComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/ChainComponent.svg'), 'Chain', parent=self.mainToolBar)
         self.addChainComponentAction.setObjectName('addChainComponentAction')
         self.addChainComponentAction.setWhatsThis('ChainComponent')
         self.addChainComponentAction.setToolTip('Adds a chain to the selected component.')
         self.addChainComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addPlayerAlignComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/PlayerAlignComponent.svg'), 'Align', parent=self.mainToolBar)
+        self.addPlayerAlignComponentAction.setObjectName('addPlayerAlignComponentAction')
+        self.addPlayerAlignComponentAction.setWhatsThis('PlayerAlignComponent')
+        self.addPlayerAlignComponentAction.setToolTip('Adds player alignment to the selected component.')
+        self.addPlayerAlignComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
+        self.addPlayerIKComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/PlayerIKComponent.svg'), 'IK', parent=self.mainToolBar)
+        self.addPlayerIKComponentAction.setObjectName('addPlayerIKComponentAction')
+        self.addPlayerIKComponentAction.setWhatsThis('PlayerIKComponent')
+        self.addPlayerIKComponentAction.setToolTip('Adds player IK to the selected component.')
+        self.addPlayerIKComponentAction.triggered.connect(self.on_addComponentAction_triggered)
 
         self.mainToolBar.addAction(self.addRootComponentAction)
         self.mainToolBar.addSeparator()
@@ -244,12 +263,15 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.mainToolBar.addAction(self.addLegComponentAction)
         self.mainToolBar.addAction(self.addFootComponentAction)
         self.mainToolBar.addSeparator()
+        self.mainToolBar.addAction(self.addInsectLegComponentAction)
+        self.mainToolBar.addAction(self.addInsectFootComponentAction)
+        self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.addClavicleComponentAction)
         self.mainToolBar.addAction(self.addArmComponentAction)
         self.mainToolBar.addAction(self.addHandComponentAction)
         self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.addHeadComponentAction)
-        self.mainToolBar.addAction(self.addJawComponentAction)
+        self.mainToolBar.addAction(self.addFaceComponentAction)
         self.mainToolBar.addAction(self.addCollarComponentAction)
         self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.addPropComponentAction)
@@ -257,8 +279,10 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.addLeafComponentAction)
         self.mainToolBar.addAction(self.addDynamicPivotComponentAction)
-        self.mainToolBar.addAction(self.addPlayerAlignComponentAction)
         self.mainToolBar.addAction(self.addChainComponentAction)
+        self.mainToolBar.addSeparator()
+        self.mainToolBar.addAction(self.addPlayerAlignComponentAction)
+        self.mainToolBar.addAction(self.addPlayerIKComponentAction)
 
         self.addToolBar(QtCore.Qt.TopToolBarArea, self.mainToolBar)
 
@@ -697,6 +721,59 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
 
             return None
 
+    def cacheShapes(self):
+        """
+        Caches the shapes from the current control rig.
+
+        :rtype: None
+        """
+
+        # Check if current component is valid
+        #
+        if self.currentComponent is None:
+
+            return
+
+        # Iterate through published nodes
+        #
+        for component in self.currentComponent.walkComponents(includeSelf=True):
+
+            for control in component.publishedNodes():
+
+                self._shapeCache[control.name()] = shapeutils.snapshot(control.object())
+
+    def updateShapes(self):
+        """
+        Updates the shapes on current control rig.
+
+        :rtype: None
+        """
+
+        # Check if current component is valid
+        #
+        if self.currentComponent is None:
+
+            return
+
+        # Iterate through published nodes
+        #
+        for component in self.currentComponent.walkComponents(includeSelf=True):
+            
+            for control in component.publishedNodes():
+
+                # Check if shape state exists
+                #
+                key = control.name()
+                state = self._shapeCache.pop(key, None)
+
+                if not stringutils.isNullOrEmpty(state):
+
+                    shapeutils.assumeSnapshot(control.object(), state)
+
+                else:
+
+                    continue
+
     @undo.Undo(state=False)
     def createControlRig(self, name):
         """
@@ -956,12 +1033,22 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
             # Evaluate pre-rotations
             #
             preEulerRotation = node.preEulerRotation()  # type: om.MEulerRotation
-            hasPreEulerRotations = not preEulerRotation.isEquivalent(om.MEulerRotation.kIdentity)
+            hasPreEulerRotations = not preEulerRotation.isEquivalent(om.MEulerRotation.kIdentity, tolerance=1e-3)
 
             if hasPreEulerRotations:
 
                 node.unfreezePivots()
                 oppositeNode.unfreezePivots()
+
+            # Evaluate offset parent matrix
+            #
+            offsetParentMatrix = node.offsetParentMatrix()
+            hasOffset = not offsetParentMatrix.isEquivalent(om.MMatrix.kIdentity, tolerance=1e-3)
+
+            if hasOffset:
+
+                node.unfreezeTransform()
+                oppositeNode.unfreezeTransform()
 
             # Evaluate joint parent
             # This will impact which attributes get inversed!
@@ -1344,14 +1431,33 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
             log.warning('No component selected to update!')
             self.invalidateStatus()
 
-        # Update rig state
+        # Evaluate requested rig state
         #
         status = Status(index)
+        currentStatus = Status(self.currentComponent.componentStatus)
+
+        requiresCaching = currentStatus == Status.RIG and status == Status.SKELETON
+        requiresUpdating = currentStatus == Status.SKELETON and status == Status.RIG
+
+        if requiresCaching:
+
+            self.cacheShapes()
+
+        # Update rig state
+        #
         success = stateutils.changeState(self.currentComponent, status)
 
-        if not success:
+        if success and requiresUpdating:
+
+            self.updateShapes()
+
+        elif not success:
 
             QtWidgets.QMessageBox.warning(self, 'Change Rig Status', 'Cannot change status while parent is in a different state!')
+
+        else:
+
+            pass
 
         self.invalidateStatus()
     # endregion

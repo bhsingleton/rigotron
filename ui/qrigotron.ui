@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>690</width>
-    <height>460</height>
+    <width>773</width>
+    <height>560</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -460,12 +460,15 @@
    <addaction name="addLegComponentAction"/>
    <addaction name="addFootComponentAction"/>
    <addaction name="separator"/>
+   <addaction name="addInsectLegComponentAction"/>
+   <addaction name="addInsectFootComponentAction"/>
+   <addaction name="separator"/>
    <addaction name="addClavicleComponentAction"/>
    <addaction name="addArmComponentAction"/>
    <addaction name="addHandComponentAction"/>
    <addaction name="separator"/>
    <addaction name="addHeadComponentAction"/>
-   <addaction name="addJawComponentAction"/>
+   <addaction name="addFaceComponentAction"/>
    <addaction name="addCollarComponentAction"/>
    <addaction name="separator"/>
    <addaction name="addPropComponentAction"/>
@@ -473,8 +476,10 @@
    <addaction name="separator"/>
    <addaction name="addLeafComponentAction"/>
    <addaction name="addDynamicPivotComponentAction"/>
-   <addaction name="addPlayerAlignComponentAction"/>
    <addaction name="addChainComponentAction"/>
+   <addaction name="separator"/>
+   <addaction name="addPlayerAlignComponentAction"/>
+   <addaction name="addPlayerIKComponentAction"/>
   </widget>
   <action name="addRootComponentAction">
    <property name="icon">
@@ -715,16 +720,16 @@
     <string>ChainComponent</string>
    </property>
   </action>
-  <action name="addJawComponentAction">
+  <action name="addFaceComponentAction">
    <property name="icon">
     <iconset resource="resources.qrc">
-     <normaloff>:/rigotron/icons/JawComponent.svg</normaloff>:/rigotron/icons/JawComponent.svg</iconset>
+     <normaloff>:/rigotron/icons/FaceComponent.svg</normaloff>:/rigotron/icons/FaceComponent.svg</iconset>
    </property>
    <property name="text">
     <string>Jaw</string>
    </property>
    <property name="toolTip">
-    <string>Adds a jaw to the selected component.</string>
+    <string>Adds a face to the selected component.</string>
    </property>
   </action>
   <action name="addDynamicPivotComponentAction">
@@ -748,7 +753,7 @@
     <string>Align</string>
    </property>
    <property name="toolTip">
-    <string>Adds a player-alignment to the selection component.</string>
+    <string>Adds player alignment to the selection component.</string>
    </property>
   </action>
   <action name="addBeltComponentAction">
@@ -779,6 +784,48 @@
    </property>
    <property name="whatsThis">
     <string>SpineComponent</string>
+   </property>
+  </action>
+  <action name="addPlayerIKComponentAction">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/rigotron/icons/PlayerIKComponent.svg</normaloff>:/rigotron/icons/PlayerIKComponent.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Align</string>
+   </property>
+   <property name="toolTip">
+    <string>Adds player IK to the selection component.</string>
+   </property>
+  </action>
+  <action name="addInsectLegComponentAction">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/rigotron/icons/InsectLegComponent.svg</normaloff>:/rigotron/icons/InsectLegComponent.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Bug-Leg</string>
+   </property>
+   <property name="toolTip">
+    <string>Adds an insect-leg to the selected component.</string>
+   </property>
+   <property name="whatsThis">
+    <string>LegComponent</string>
+   </property>
+  </action>
+  <action name="addInsectFootComponentAction">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/rigotron/icons/InsectFootComponent.svg</normaloff>:/rigotron/icons/InsectFootComponent.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Bug-Foot</string>
+   </property>
+   <property name="toolTip">
+    <string>Adds an insect-foot to the selected component.</string>
+   </property>
+   <property name="whatsThis">
+    <string>FootComponent</string>
    </property>
   </action>
  </widget>
