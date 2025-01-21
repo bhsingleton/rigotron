@@ -116,10 +116,10 @@ class SpineComponent(basecomponent.BaseComponent):
 
         for (pivotType, pivotSpec) in zip(self.SpinePivotType, pivotSpecs):
 
-            isSpineTip = pivotType == self.SpinePivotType.TIP
-
             pivotSpec.name = self.formatName(subname=pivotType.name.title(), type='locator')
-            pivotSpec.enabled = isSpineTip  # For now this is the only pivot I have implemented!
+            pivotSpec.enabled = False
+
+        pivotSpecs[self.SpinePivotType.TIP].enabled = self.spineEnabled
 
         # Call parent method
         #
@@ -393,7 +393,6 @@ class SpineComponent(basecomponent.BaseComponent):
         hipsCtrl = self.scene.createNode('transform', name=hipsCtrlName, parent=hipsSpace)
         hipsCtrl.addShape('HandleBarCurve', size=(45.0 * rigScale), localPosition=localPosition, localRotate=localRotate, localScale=(0.25, 0.25, 1.25), colorRGB=lightColorRGB)
         hipsCtrl.addDivider('Settings')
-        hipsCtrl.addAttr(longName='stretch', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
         hipsCtrl.addAttr(longName='spineInfluence', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
         hipsCtrl.addDivider('Spaces')
         hipsCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
@@ -477,7 +476,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
                     spineFKTransCtrlName = self.formatName(name='Spine', subname='FK', index=index, kinemat='Trans', type='control')
                     spineFKTransCtrl = self.scene.createNode('transform', name=spineFKTransCtrlName, parent=spineFKRotCtrl)
-                    spineFKTransCtrl.addPointHelper('axisView', size=(12.0 * rigScale), localScale=(0.0, 3.0, 0.0), colorRGB=lightColorRGB)
+                    spineFKTransCtrl.addShape('LollipopCurve', size=(28.0 * rigScale), localRotate=(0.0, 90.0, 0.0), colorRGB=lightColorRGB)
                     spineFKTransCtrl.prepareChannelBoxForAnimation()
                     self.publishNode(spineFKTransCtrl, alias=f'Spine{index}_FK_Trans')
 
@@ -533,7 +532,7 @@ class SpineComponent(basecomponent.BaseComponent):
         spineFKTipTarget.setWorldMatrix(spineTipMatrix, skipRotate=True, skipScale=True)
         spineFKTipTarget.freezeTransform()
 
-        self.userProperties['SpineFKTipTarget'] = spineFKTipTarget.uuid()
+        self.userProperties['SpineTipFKTarget'] = spineFKTipTarget.uuid()
 
         # Create chest IK control
         #
@@ -560,7 +559,7 @@ class SpineComponent(basecomponent.BaseComponent):
         chestIKCtrl = self.scene.createNode('transform', name=chestIKCtrlName, parent=chestIKSpace)
         chestIKCtrl.addShape('CradleCurve', size=(25.0 * rigScale), localPosition=(chestShapeOffset.x, 0.0, 0.0), colorRGB=colorRGB, lineWidth=4.0)
         chestIKCtrl.addDivider('Settings')
-        chestIKCtrl.addProxyAttr('stretch', hipsCtrl['stretch'])
+        chestIKCtrl.addAttr(longName='stretch', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
         chestIKCtrl.prepareChannelBoxForAnimation()
         self.publishNode(chestIKCtrl, alias='Chest_IK')
 
@@ -735,18 +734,15 @@ class SpineComponent(basecomponent.BaseComponent):
 
                 spineIKJoints[-1] = lastSpineIKJoint
 
-        spineIKTipJoint = spineIKJoints[-1]
-
         spineIKTipTargetName = self.formatName(name=f'{self.componentName}Tip', subname='IK', type='target')
         spineIKTipTarget = self.scene.createNode('transform', name=spineIKTipTargetName, parent=privateGroup)
         spineIKTipTarget.displayLocalAxis = True
-        spineIKTipTarget.visibility = False
-        spineIKTipTarget.copyTransform(spineIKTipJoint)
 
-        spineIKTipTarget.addConstraint('transformConstraint', [spineIKTipJoint], skipRotate=True)
+        spineIKTipTarget.addConstraint('pointConstraint', [spineIKJoints[-1]])
         spineIKTipTarget.addConstraint('orientConstraint', [chestIKCtrl])
+        spineIKTipTarget.addConstraint('scaleConstraint', [chestIKCtrl])
 
-        self.userProperties['SpineIKTipTarget'] = spineIKTipTarget.uuid()
+        self.userProperties['SpineTipIKTarget'] = spineIKTipTarget.uuid()
 
         # Setup spline IK solver
         #
@@ -795,7 +791,7 @@ class SpineComponent(basecomponent.BaseComponent):
             #
             spineBlendName = self.formatName(subname='Length', index=index, type='blendTwoAttr')
             spineBlend = self.scene.createNode('blendTwoAttr', name=spineBlendName)
-            spineBlend.connectPlugs(hipsCtrl['stretch'], 'attributesBlender')
+            spineBlend.connectPlugs(chestIKCtrl['stretch'], 'attributesBlender')
             spineBlend.connectPlugs(baseDistance['distance'], 'input[0]')
             spineBlend.connectPlugs(stretchDistance['distance'], 'input[1]')
             spineBlend.connectPlugs('output', endJoint['translateX'])
@@ -1068,11 +1064,8 @@ class SpineComponent(basecomponent.BaseComponent):
         pelvisLookAtCtrlName = self.formatName(name='Pelvis', subname='LookAt', type='control')
         pelvisLookAtCtrl = self.scene.createNode('transform', name=pelvisLookAtCtrlName, parent=pelvisLookAtGroup)
         pelvisLookAtCtrl.addPointHelper('sphere', 'centerMarker', size=(20.0 * rigScale), colorRGB=colorRGB)
-        pelvisLookAtCtrl.addDivider('Settings')
-        pelvisLookAtCtrl.addProxyAttr('lookAt', pelvisCtrl['lookAt'])
-        pelvisLookAtCtrl.addProxyAttr('lookAtOffset', pelvisCtrl['lookAtOffset'])
         pelvisLookAtCtrl.addDivider('Spaces')
-        pelvisLookAtCtrl.addAttr(longName='localOrGlobal',attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+        pelvisLookAtCtrl.addAttr(longName='localOrGlobal',attributeType='float', min=0.0, max=1.0, keyable=True)
         pelvisLookAtCtrl.prepareChannelBoxForAnimation()
         self.publishNode(pelvisLookAtCtrl, alias='LookAt')
         
