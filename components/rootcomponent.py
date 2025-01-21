@@ -120,19 +120,36 @@ class RootComponent(basecomponent.BaseComponent):
             rootCtrlName = self.formatName(name='Root', type='control')
             rootCtrl = self.scene.createNode('transform', name=rootCtrlName, parent=rootSpace)
             rootCtrl.addPointHelper('sphere', size=(5.0 * rigScale), colorRGB=darkColorRGB)
+            rootCtrl.addDivider('Spaces')
+            rootCtrl.addAttr(longName='handedness', attributeType='float', min=0.0, max=1.0, keyable=True)
+            rootCtrl.addAttr(longName='stowed', attributeType='float', min=0.0, max=1.0, hidden=True)
             rootCtrl.prepareChannelBoxForAnimation()
             rootCtrl.tagAsController()
             self.publishNode(rootCtrl, alias='Root')
 
-            # Add space switch placeholder
-            # Connections will be handled by the referenced prop interface!
+            # Add space switch placeholders
+            # Connections will be handled by the `ReferencedPropRig` interface!
             #
-            rootSpaceSwitch = rootSpace.addSpaceSwitch([])
-            rootSpaceSwitch.weighted = True
-            rootSpaceSwitch.setAttr('target', [{'targetName': 'Default', 'targetReverse': (True, True, True)}, {'targetName': 'Stow'}])
+            handednessSpaceSwitchName = self.formatName(subname='Handedness', type='spaceSwitch')
+            handednessSpaceSwitch = self.scene.createNode('spaceSwitch', name=handednessSpaceSwitchName)
+            handednessSpaceSwitch.weighted = True
+            handednessSpaceSwitch.setDriven(rootSpace, skipParentInverseMatrix=True, skipTranslate=True, skipRotate=True, skipScale=True)
+            handednessSpaceSwitch.setAttr('target', [{'targetName': 'Primary', 'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (True, True, True)}, {'targetName': 'Secondary', 'targetWeight': (0.0, 0.0, 0.0)}])
+            handednessSpaceSwitch.connectPlugs(rootCtrl['handedness'], 'target[0].targetWeight')
+            handednessSpaceSwitch.connectPlugs(rootCtrl['handedness'], 'target[1].targetWeight')
+
+            stowSpaceSwitchName = self.formatName(subname='Stow', type='spaceSwitch')
+            stowSpaceSwitch = self.scene.createNode('spaceSwitch', name=stowSpaceSwitchName)
+            stowSpaceSwitch.weighted = True
+            stowSpaceSwitch.setDriven(rootSpace)
+            stowSpaceSwitch.setAttr('target', [{'targetName': 'Default', 'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (True, True, True)}, {'targetName': 'Stow', 'targetWeight': (0.0, 0.0, 0.0)}])
+            stowSpaceSwitch.connectPlugs(handednessSpaceSwitch['outputWorldMatrix'], 'target[0].targetMatrix')
+            stowSpaceSwitch.connectPlugs(rootCtrl['stowed'], 'target[0].targetWeight')
+            stowSpaceSwitch.connectPlugs(rootCtrl['stowed'], 'target[1].targetWeight')
 
             rootCtrl.userProperties['space'] = rootSpace.uuid()
-            rootCtrl.userProperties['spaceSwitch'] = rootSpaceSwitch.uuid()
+            rootCtrl.userProperties['handednessSpaceSwitch'] = handednessSpaceSwitch.uuid()
+            rootCtrl.userProperties['stowSpaceSwitch'] = stowSpaceSwitch.uuid()
 
         else:
 
@@ -163,7 +180,7 @@ class RootComponent(basecomponent.BaseComponent):
             rootCtrl = self.scene.createNode('transform', name=rootCtrlName, parent=rootSpace)
             rootCtrl.addPointHelper('sphere', size=(15.0 * rigScale), colorRGB=darkColorRGB)
             rootCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=(0.0, (-7.5 * rigScale), 0.0), localRotate=(0.0, 0.0, -90.0), colorRGB=darkColorRGB)
-            rootCtrl.addDivider('Space')
+            rootCtrl.addDivider('Spaces')
             rootCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
             rootCtrl.prepareChannelBoxForAnimation()
             self.publishNode(rootCtrl, alias='Root')
