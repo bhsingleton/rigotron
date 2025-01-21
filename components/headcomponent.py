@@ -159,6 +159,45 @@ class HeadComponent(basecomponent.BaseComponent):
 
         return (*neckJoints, headJoint)
 
+    def getAttachmentTargets(self):
+        """
+        Returns the attachment targets for this component.
+        If we're attaching to a spine component then we wanna use a different target!
+
+        :rtype: Tuple[mpynode.MPyNode, mpynode.MPyNode]
+        """
+
+        # Evaluate component parent
+        #
+        componentParent = self.componentParent()
+        isSpineComponent = componentParent.className.endswith('SpineComponent')
+
+        if not isSpineComponent:
+
+            return super(HeadComponent, self).getAttachmentTargets()
+
+        # Evaluate attachment position
+        #
+        skeletonSpecs = self.getAttachmentOptions()
+        numSkeletonSpecs = len(skeletonSpecs)
+
+        attachmentIndex = int(self.attachmentId)
+        lastIndex = numSkeletonSpecs - 1
+
+        if attachmentIndex == lastIndex:
+
+            skeletonSpec = skeletonSpecs[attachmentIndex]
+            return self.scene(skeletonSpec.uuid), self.scene(componentParent.userProperties['SpineTipIKTarget'])
+
+        elif 0 <= attachmentIndex < numSkeletonSpecs:
+
+            skeletonSpec = skeletonSpecs[attachmentIndex]
+            return self.scene(skeletonSpec.uuid), self.scene(skeletonSpec.driver)
+
+        else:
+
+            return None, None
+
     def buildRig(self):
         """
         Builds the control rig for this component.
@@ -195,10 +234,17 @@ class HeadComponent(basecomponent.BaseComponent):
         rootComponent = self.findRootComponent()
         motionCtrl = rootComponent.getPublishedNode('Motion')
 
-        spineComponent = self.findComponentAncestors('SpineComponent')[0]
-        cogCtrl = spineComponent.getPublishedNode('COG')
-        waistCtrl = spineComponent.getPublishedNode('Waist')
-        chestCtrl = spineComponent.getPublishedNode('Chest')
+        spineComponents = self.findComponentAncestors('SpineComponent')
+        spineExists = len(spineComponents) == 1
+
+        cogCtrl, waistCtrl, chestCtrl = None, None, None
+
+        if spineExists == 1:
+
+            spineComponent = spineComponents[0]
+            cogCtrl = spineComponent.getPublishedNode('COG')
+            waistCtrl = spineComponent.getPublishedNode('Waist')
+            chestCtrl = spineComponent.getPublishedNode('Chest')
 
         # Create head control
         #
@@ -220,15 +266,17 @@ class HeadComponent(basecomponent.BaseComponent):
         headCtrl.addDivider('Settings')
         headCtrl.addAttr(longName='stretch', attributeType='float', min=0.0, max=1.0, keyable=True)
         headCtrl.addAttr(longName='lookAt', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-        headCtrl.addAttr(longName='lookAtOffset', niceName='Look-At Offset', attributeType='distance', min=1.0, default=rigDiameter, channelBox=True)
         headCtrl.prepareChannelBoxForAnimation()
         self.publishNode(headCtrl, alias='Head')
 
         # Create head look-at control
         #
+        firstNeckExportJoint = neckExportJoints[0]
+        headLookAtMatrix = waistCtrl.worldMatrix() if (waistCtrl is not None) else firstNeckExportJoint.worldMatrix()
+
         headLookAtSpaceName = self.formatName(subname='LookAt', type='space')
         headLookAtSpace = self.scene.createNode('transform', name=headLookAtSpaceName, parent=controlsGroup)
-        headLookAtSpace.copyTransform(waistCtrl, skipRotate=True, skipScale=True)
+        headLookAtSpace.setWorldMatrix(headLookAtMatrix, skipRotate=True, skipScale=True)
         headLookAtSpace.freezeTransform()
 
         headLookAtGroupName = self.formatName(subname='LookAt', type='transform')
@@ -239,19 +287,26 @@ class HeadComponent(basecomponent.BaseComponent):
         headLookAtCtrlName = self.formatName(subname='LookAt', type='control')
         headLookAtCtrl = self.scene.createNode('transform', name=headLookAtCtrlName, parent=headLookAtGroup)
         headLookAtCtrl.addPointHelper('sphere', 'centerMarker', size=(20.0 * rigScale), colorRGB=colorRGB)
-        headLookAtCtrl.addDivider('Settings')
-        headLookAtCtrl.addProxyAttr('lookAt', headCtrl['lookAt'])
-        headLookAtCtrl.addProxyAttr('lookAtOffset', headCtrl['lookAtOffset'])
-        headLookAtCtrl.addDivider('Spaces')
-        headLookAtCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
+        headLookAtCtrl.addAttr(longName='lookAtOffset', niceName='Look-At Offset', attributeType='distance', min=1.0, default=rigDiameter, channelBox=True)
         headLookAtCtrl.hideAttr('scale', lock=True)
         headLookAtCtrl.prepareChannelBoxForAnimation()
         self.publishNode(headLookAtCtrl, alias='LookAt')
 
-        headLookAtSpaceSwitch = headLookAtSpace.addSpaceSwitch([waistCtrl, motionCtrl], weighted=True, maintainOffset=True)
-        headLookAtSpaceSwitch.setAttr('target', [{'targetReverse': (True, False, False), 'targetWeight': (0.0, 0.0, 1.0)}, {'targetWeight': (0.0, 1.0, 0.0)}])
-        headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['localOrGlobal'], 'target[0].targetTranslateWeight')
-        headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['localOrGlobal'], 'target[1].targetTranslateWeight')
+        if spineExists:
+
+            headLookAtCtrl.addDivider('Spaces')
+            headLookAtCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
+
+            headLookAtSpaceSwitch = headLookAtSpace.addSpaceSwitch([waistCtrl, motionCtrl], weighted=True, maintainOffset=True)
+            headLookAtSpaceSwitch.setAttr('target', [{'targetReverse': (True, False, False), 'targetWeight': (0.0, 0.0, 1.0)}, {'targetWeight': (0.0, 1.0, 0.0)}])
+            headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['localOrGlobal'], 'target[0].targetTranslateWeight')
+            headLookAtSpaceSwitch.connectPlugs(headLookAtCtrl['localOrGlobal'], 'target[1].targetTranslateWeight')
+
+            headLookAtCtrl.userProperties['spaceSwitch'] = headLookAtSpaceSwitch.uuid()
+
+        else:
+
+            headLookAtSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
 
         # Setup head look-at offset
         #
@@ -266,7 +321,7 @@ class HeadComponent(basecomponent.BaseComponent):
         headLookAtOffsetInverseName = self.formatName(subname='LookAt', type='floatMath')
         headLookAtOffsetInverse = self.scene.createNode('floatMath', name=headLookAtOffsetInverseName)
         headLookAtOffsetInverse.setAttr('operation', 5)  # Negate
-        headLookAtOffsetInverse.connectPlugs(headCtrl['lookAtOffset'], 'inDistanceA')
+        headLookAtOffsetInverse.connectPlugs(headLookAtCtrl['lookAtOffset'], 'inDistanceA')
 
         headLookAtOffsetComposeMatrixName = self.formatName(subname='LookAtOffset', type='composeMatrix')
         headLookAtOffsetComposeMatrix = self.scene.createNode('composeMatrix', name=headLookAtOffsetComposeMatrixName)
@@ -321,7 +376,6 @@ class HeadComponent(basecomponent.BaseComponent):
         )
 
         headLookAtCtrl.userProperties['space'] = headLookAtSpace.uuid()
-        headLookAtCtrl.userProperties['spaceSwitch'] = headLookAtSpaceSwitch.uuid()
         headLookAtCtrl.userProperties['group'] = headLookAtGroup.uuid()
         headLookAtCtrl.userProperties['target'] = headLookAtTarget.uuid()
 
@@ -356,11 +410,7 @@ class HeadComponent(basecomponent.BaseComponent):
 
                 # Setup neck space switching
                 #
-                componentParent = self.componentParent()
-                isSpineComponent = componentParent.className.endswith('SpineComponent')
-                neckFKTarget = self.scene(componentParent.userProperties['SpineIKTipTarget']) if isSpineComponent else parentExportCtrl
-
-                neckFKSpaceSwitch = neckFKSpace.addSpaceSwitch([neckFKTarget, motionCtrl], weighted=True, maintainOffset=True)
+                neckFKSpaceSwitch = neckFKSpace.addSpaceSwitch([parentExportCtrl, motionCtrl], weighted=True, maintainOffset=True)
                 neckFKSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
                 neckFKSpaceSwitch.connectPlugs(neckFKCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
                 neckFKSpaceSwitch.connectPlugs(neckFKCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
@@ -373,36 +423,50 @@ class HeadComponent(basecomponent.BaseComponent):
 
                 # Setup head space switching
                 #
-                headCtrl.addDivider('Spaces')
-                headCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
-                headCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
-                headCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
-                headCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (Chest)', attributeType='float', min=0.0, max=1.0, keyable=True)
-                headCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (Neck)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-                headCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
-                headCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
-                headCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
-                headCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (Chest)', attributeType='float', min=0.0, max=1.0, keyable=True)
-                headCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (Neck)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-
                 headDefaultTargetName = self.formatName(subname='Default', type='target')
                 headDefaultTarget = self.scene.createNode('transform', name=headDefaultTargetName, parent=privateGroup)
                 headDefaultTarget.displayLocalAxis = True
                 headDefaultTarget.setWorldMatrix(headMatrix)
                 headDefaultTarget.freezeTransform()
 
-                headDefaultSpaceSwitch = headDefaultTarget.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl, chestCtrl, neckFKCtrl], weighted=True, maintainOffset=True)
-                headDefaultSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (1.0, 1.0, 1.0)}])
-                headDefaultSpaceSwitch.connectPlugs(headCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
-                headDefaultSpaceSwitch.connectPlugs(headCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
-                headDefaultSpaceSwitch.connectPlugs(headCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
-                headDefaultSpaceSwitch.connectPlugs(headCtrl['positionSpaceW3'], 'target[3].targetTranslateWeight')
-                headDefaultSpaceSwitch.connectPlugs(headCtrl['positionSpaceW4'], 'target[4].targetTranslateWeight')
-                headDefaultSpaceSwitch.connectPlugs(headCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
-                headDefaultSpaceSwitch.connectPlugs(headCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
-                headDefaultSpaceSwitch.connectPlugs(headCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
-                headDefaultSpaceSwitch.connectPlugs(headCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
-                headDefaultSpaceSwitch.connectPlugs(headCtrl['rotationSpaceW4'], 'target[4].targetRotateWeight')
+                headDefaultSpaceSwitch = None
+
+                if spineExists:
+
+                    headCtrl.addDivider('Spaces')
+                    headCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
+                    headCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
+                    headCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+                    headCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (Chest)', attributeType='float', min=0.0, max=1.0, keyable=True)
+                    headCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (Neck)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+                    headCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
+                    headCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
+                    headCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+                    headCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (Chest)', attributeType='float', min=0.0, max=1.0, keyable=True)
+                    headCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (Neck)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+
+                    headDefaultSpaceSwitch = headDefaultTarget.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl, chestCtrl, neckFKCtrl], weighted=True, maintainOffset=True)
+                    headDefaultSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (1.0, 1.0, 1.0)}])
+                    headDefaultSpaceSwitch.connectPlugs(headCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
+                    headDefaultSpaceSwitch.connectPlugs(headCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
+                    headDefaultSpaceSwitch.connectPlugs(headCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
+                    headDefaultSpaceSwitch.connectPlugs(headCtrl['positionSpaceW3'], 'target[3].targetTranslateWeight')
+                    headDefaultSpaceSwitch.connectPlugs(headCtrl['positionSpaceW4'], 'target[4].targetTranslateWeight')
+                    headDefaultSpaceSwitch.connectPlugs(headCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
+                    headDefaultSpaceSwitch.connectPlugs(headCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
+                    headDefaultSpaceSwitch.connectPlugs(headCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
+                    headDefaultSpaceSwitch.connectPlugs(headCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
+                    headDefaultSpaceSwitch.connectPlugs(headCtrl['rotationSpaceW4'], 'target[4].targetRotateWeight')
+
+                else:
+
+                    headCtrl.addDivider('Spaces')
+                    headCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
+
+                    headDefaultSpaceSwitch = headDefaultTarget.addSpaceSwitch([neckFKCtrl, motionCtrl], weighted=True, maintainOffset=True)
+                    headDefaultSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
+                    headDefaultSpaceSwitch.connectPlugs(headCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
+                    headDefaultSpaceSwitch.connectPlugs(headCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
 
                 headSpaceSwitch = headSpace.addSpaceSwitch([headDefaultTarget, headLookAtTarget], weighted=True, maintainOffset=True)
                 headSpaceSwitch.setAttr('target[0].targetReverse', (True, True, True))

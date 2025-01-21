@@ -90,6 +90,45 @@ class ClavicleComponent(basecomponent.BaseComponent):
 
         return (clavicleJoint,)
 
+    def getAttachmentTargets(self):
+        """
+        Returns the attachment targets for this component.
+        If we're attaching to a spine component then we wanna use a different target!
+
+        :rtype: Tuple[mpynode.MPyNode, mpynode.MPyNode]
+        """
+
+        # Evaluate component parent
+        #
+        componentParent = self.componentParent()
+        isSpineComponent = componentParent.className.endswith('SpineComponent')
+
+        if not isSpineComponent:
+
+            return super(ClavicleComponent, self).getAttachmentTargets()
+
+        # Evaluate attachment position
+        #
+        skeletonSpecs = self.getAttachmentOptions()
+        numSkeletonSpecs = len(skeletonSpecs)
+
+        attachmentIndex = int(self.attachmentId)
+        lastIndex = numSkeletonSpecs - 1
+
+        if attachmentIndex == lastIndex:
+
+            skeletonSpec = skeletonSpecs[attachmentIndex]
+            return self.scene(skeletonSpec.uuid), self.scene(componentParent.userProperties['SpineTipIKTarget'])
+
+        elif 0 <= attachmentIndex < numSkeletonSpecs:
+
+            skeletonSpec = skeletonSpecs[attachmentIndex]
+            return self.scene(skeletonSpec.uuid), self.scene(skeletonSpec.driver)
+
+        else:
+
+            return None, None
+
     def buildRig(self):
         """
         Builds the control rig for this component.
