@@ -46,7 +46,7 @@ class ArmComponent(TwoBoneLimbComponent):
                     (60.0, 0.0, 160.0, 1.0)
                 ]
             ),
-            LimbType.EXTREMITY: om.MMatrix(
+            LimbType.TIP: om.MMatrix(
                 [
                     (1.0, 0.0, 0.0, 0.0),
                     (0.0, -1.0, 0.0, 0.0),
@@ -80,7 +80,7 @@ class ArmComponent(TwoBoneLimbComponent):
                     (-60.0, 0.0, 160.0, 1.0)
                 ]
             ),
-            LimbType.EXTREMITY: om.MMatrix(
+            LimbType.TIP: om.MMatrix(
                 [
                     (-1.0, 0.0, 0.0, 0.0),
                     (0.0, -1.0, 0.0, 0.0),

@@ -23,7 +23,7 @@ class LimbType(IntEnum):
     UPPER = 0
     HINGE = 1
     LOWER = 2
-    EXTREMITY = 3
+    TIP = 3
 
 
 class TwoBoneLimbComponent(limbcomponent.LimbComponent):
@@ -70,7 +70,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         # Resize skeleton specs
         #
         numMembers = len(self.LimbType)
-        upperLimbSpec, hingeSpec, lowerLimbSpec, extremitySpec = self.resizeSkeletonSpecs(numMembers, skeletonSpecs)
+        upperLimbSpec, hingeSpec, lowerLimbSpec, limbTipSpec = self.resizeSkeletonSpecs(numMembers, skeletonSpecs)
 
         # Iterate through limb specs
         #
@@ -97,9 +97,10 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
                 twistSpec.driver = self.formatName(name=limbName, subname='Twist', index=j, type='control')
                 twistSpec.enabled = twistEnabled
 
-        extremityName = self.__default_limb_names__[-1]
-        extremitySpec.name = self.formatName(name=extremityName)
-        extremitySpec.driver = self.formatName(name=extremityName, type='joint')
+        limbTipName = self.__default_limb_names__[-1]
+        limbTipSpec.name = self.formatName(name=limbTipName)
+        limbTipSpec.driver = self.formatName(name=limbTipName, type='joint')
+        limbTipSpec.enabled = not self.hasExtremityComponent()
 
         # Edit hinge spec
         #
@@ -123,20 +124,20 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         componentSide = self.Side(self.componentSide)
 
         upperLimbSpec, hingeSpec, lowerLimbSpec, limbTipSpec = self.skeletonSpecs()
-        upperType, lowerType, extremityType = self.__default_limb_types__
+        upperLimbType, lowerLimbType, limbTipType = self.__default_limb_types__
 
         # Create upper joint
         #
-        upperJoint = self.scene.createNode('joint', name=upperLimbSpec.name)
-        upperJoint.side = componentSide
-        upperJoint.type = upperType
-        upperJoint.drawStyle = self.Style.BOX
-        upperJoint.displayLocalAxis = True
-        upperLimbSpec.uuid = upperJoint.uuid()
+        upperLimbJoint = self.scene.createNode('joint', name=upperLimbSpec.name)
+        upperLimbJoint.side = componentSide
+        upperLimbJoint.type = upperLimbType
+        upperLimbJoint.drawStyle = self.Style.BOX
+        upperLimbJoint.displayLocalAxis = True
+        upperLimbSpec.uuid = upperLimbJoint.uuid()
 
         defaultUpperLimbMatrix = self.__default_limb_matrices__[componentSide][LimbType.UPPER]
         upperLimbMatrix = upperLimbSpec.getMatrix(default=defaultUpperLimbMatrix)
-        upperJoint.setWorldMatrix(upperLimbMatrix)
+        upperLimbJoint.setWorldMatrix(upperLimbMatrix)
 
         # Create upper-twist joints
         #
@@ -147,7 +148,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         for (i, twistSpec) in enumerate(upperTwistSpecs):
             
-            twistJoint = self.scene.createNode('joint', name=twistSpec.name, parent=upperJoint)
+            twistJoint = self.scene.createNode('joint', name=twistSpec.name, parent=upperLimbJoint)
             twistJoint.side = componentSide
             twistJoint.type = self.Type.NONE
             twistJoint.drawStyle = self.Style.JOINT
@@ -158,16 +159,16 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         # Create lower  joint
         #
-        lowerJoint = self.scene.createNode('joint', name=lowerLimbSpec.name, parent=upperJoint)
-        lowerJoint.side = componentSide
-        lowerJoint.type = lowerType
-        lowerJoint.drawStyle = self.Style.BOX
-        lowerJoint.displayLocalAxis = True
-        lowerLimbSpec.uuid = lowerJoint.uuid()
+        lowerLimbJoint = self.scene.createNode('joint', name=lowerLimbSpec.name, parent=upperLimbJoint)
+        lowerLimbJoint.side = componentSide
+        lowerLimbJoint.type = lowerLimbType
+        lowerLimbJoint.drawStyle = self.Style.BOX
+        lowerLimbJoint.displayLocalAxis = True
+        lowerLimbSpec.uuid = lowerLimbJoint.uuid()
 
-        defaultLowerMatrix = self.__default_limb_matrices__[componentSide][LimbType.LOWER]
-        lowerMatrix = lowerLimbSpec.getMatrix(default=defaultLowerMatrix)
-        lowerJoint.setWorldMatrix(lowerMatrix)
+        defaultLowerLimbMatrix = self.__default_limb_matrices__[componentSide][LimbType.LOWER]
+        lowerLimbMatrix = lowerLimbSpec.getMatrix(default=defaultLowerLimbMatrix)
+        lowerLimbJoint.setWorldMatrix(lowerLimbMatrix)
 
         # Create lower-twist joints
         #
@@ -178,7 +179,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         for (i, twistSpec) in enumerate(lowerTwistSpecs):
 
-            twistJoint = self.scene.createNode('joint', name=twistSpec.name, parent=lowerJoint)
+            twistJoint = self.scene.createNode('joint', name=twistSpec.name, parent=lowerLimbJoint)
             twistJoint.side = componentSide
             twistJoint.type = self.Type.NONE
             twistJoint.drawStyle = self.Style.JOINT
@@ -193,7 +194,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         if hingeSpec.enabled:
 
-            hingeJoint = self.scene.createNode('joint', name=hingeSpec.name, parent=lowerJoint)
+            hingeJoint = self.scene.createNode('joint', name=hingeSpec.name, parent=lowerLimbJoint)
             hingeJoint.side = componentSide
             hingeJoint.type = self.Type.NONE
             hingeJoint.drawStyle = self.Style.JOINT
@@ -206,17 +207,21 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         # Create extremity joint
         #
-        extremityJoint = self.scene.createNode('joint', name=limbTipSpec.name, parent=lowerJoint)
-        extremityJoint.side = componentSide
-        extremityJoint.type = extremityType
-        extremityJoint.displayLocalAxis = True
-        limbTipSpec.uuid = extremityJoint.uuid()
+        limbTipJoint = None
 
-        defaultExtremityMatrix = self.__default_limb_matrices__[componentSide][LimbType.EXTREMITY]
-        extremityMatrix = limbTipSpec.getMatrix(default=defaultExtremityMatrix)
-        extremityJoint.setWorldMatrix(extremityMatrix)
+        if limbTipSpec.enabled:
 
-        return (upperJoint, hingeJoint, lowerJoint, extremityJoint)
+            limbTipJoint = self.scene.createNode('joint', name=limbTipSpec.name, parent=lowerLimbJoint)
+            limbTipJoint.side = componentSide
+            limbTipJoint.type = limbTipType
+            limbTipJoint.displayLocalAxis = True
+            limbTipSpec.uuid = limbTipJoint.uuid()
+
+            defaultLimbTipMatrix = self.__default_limb_matrices__[componentSide][LimbType.TIP]
+            limbTipMatrix = limbTipSpec.getMatrix(default=defaultLimbTipMatrix)
+            limbTipJoint.setWorldMatrix(limbTipMatrix)
+
+        return (upperLimbJoint, hingeJoint, lowerLimbJoint, limbTipJoint)
 
     def buildRig(self):
         """
@@ -229,24 +234,28 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         #
         limbName = self.componentName
         hingeName = self.__default_hinge_name__
-        upperLimbName, lowerLimbName, extremityName = self.__default_limb_names__
+        upperLimbName, lowerLimbName, limbTipName = self.__default_limb_names__
 
-        upperLimbSpec, hingeSpec, lowerLimbSpec, extremitySpec = self.skeletonSpecs()
-        upperExportJoint = self.scene(upperLimbSpec.name)
-        lowerExportJoint = self.scene(lowerLimbSpec.name)
-        extremityExportJoint = self.scene(extremitySpec.name)
+        upperLimbSpec, hingeSpec, lowerLimbSpec, limbTipSpec = self.skeletonSpecs()
+        upperLimbExportJoint = self.scene(upperLimbSpec.uuid)
+        lowerLimbExportJoint = self.scene(lowerLimbSpec.uuid)
+        limbTipExportJoint = self.scene(limbTipSpec.uuid)
 
-        upperMatrix = upperExportJoint.worldMatrix()
-        lowerMatrix = lowerExportJoint.worldMatrix()
-        extremityMatrix = extremityExportJoint.worldMatrix()
+        upperLimbMatrix = upperLimbExportJoint.worldMatrix()
+        lowerLimbMatrix = lowerLimbExportJoint.worldMatrix()
+        extremityMatrix = self.extremityMatrix()
+        effectorMatrix = self.effectorMatrix()
+
+        defaultLimbTipMatrix = transformutils.createRotationMatrix(lowerLimbMatrix) * transformutils.createTranslateMatrix(extremityMatrix)
+        limbTipMatrix = limbTipExportJoint.worldMatrix() if (limbTipExportJoint is not None) else defaultLimbTipMatrix
 
         componentSide = self.Side(self.componentSide)
         requiresMirroring = componentSide == self.Side.RIGHT
         mirrorSign = -1.0 if requiresMirroring else 1.0
         mirrorMatrix = self.__default_mirror_matrices__[componentSide]
 
-        limbOrigin = transformutils.breakMatrix(upperMatrix)[3]
-        hingePoint = transformutils.breakMatrix(lowerMatrix)[3]
+        limbOrigin = transformutils.breakMatrix(upperLimbMatrix)[3]
+        hingePoint = transformutils.breakMatrix(lowerLimbMatrix)[3]
         limbGoal = transformutils.breakMatrix(extremityMatrix)[3]
 
         controlsGroup = self.scene(self.controlsGroup)
@@ -294,14 +303,14 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         # Create kinematic limb joints
         #
-        jointTypes = (upperLimbName, lowerLimbName, extremityName)
+        jointTypes = (upperLimbName, lowerLimbName, limbTipName)
         kinematicTypes = ('FK', 'IK', 'RIK', 'Blend')
 
         limbFKJoints = [None] * 3
         limbIKJoints = [None] * 3
         limbRIKJoints = [None] * 3
         limbBlendJoints = [None] * 3
-        limbMatrices = (upperMatrix, lowerMatrix, extremityMatrix)
+        limbMatrices = (upperLimbMatrix, lowerLimbMatrix, limbTipMatrix)
         kinematicJoints = (limbFKJoints, limbIKJoints, limbRIKJoints, limbBlendJoints)
 
         for (i, kinematicType) in enumerate(kinematicTypes):
@@ -310,7 +319,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
                 parent = kinematicJoints[i][j - 1] if j > 0 else jointsGroup
 
-                jointName = self.formatName(subname=jointType, kinemat=kinematicType, type='joint')
+                jointName = self.formatName(name=jointType, kinemat=kinematicType, type='joint')
                 joint = self.scene.createNode('joint', name=jointName, parent=parent)
                 joint.displayLocalAxis = True
                 joint.setWorldMatrix(limbMatrices[j])
@@ -330,7 +339,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         switchCtrlName = self.formatName(subname='Switch', type='control')
         switchCtrl = self.scene.createNode('transform', name=switchCtrlName, parent=controlsGroup)
-        switchCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=(0.0, 25.0 * limbSign, 0.0), localRotate=(0.0, 0.0, -90.0 * limbSign), colorRGB=darkColorRGB)
+        switchCtrl.addPointHelper('pyramid', 'fill', 'shaded', size=(10.0 * rigScale), localPosition=(0.0, 25.0 * limbSign, 0.0), localRotate=(0.0, 0.0, -90.0 * limbSign), colorRGB=darkColorRGB)
         switchCtrl.addConstraint('transformConstraint', [extremityBlendJoint])
         switchCtrl.addDivider('Settings')
         switchCtrl.addAttr(longName='length', attributeType='doubleLinear', array=True, hidden=True)
@@ -461,7 +470,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         upperBlender.setName(self.formatName(subname=upperLimbName, type='blendTransform'))
         lowerBlender.setName(self.formatName(subname=lowerLimbName, type='blendTransform'))
-        extremityBlender.setName(self.formatName(subname=extremityName, type='blendTransform'))
+        extremityBlender.setName(self.formatName(subname=limbTipName, type='blendTransform'))
 
         # Setup limb length nodes
         #
@@ -497,7 +506,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         # Create FK controls
         #
-        upperFKMatrix = mirrorMatrix * upperMatrix
+        upperFKMatrix = mirrorMatrix * upperLimbMatrix
 
         upperFKSpaceName = self.formatName(name=upperLimbName, kinemat='FK', type='space')
         upperFKSpace = self.scene.createNode('transform', name=upperFKSpaceName, parent=controlsGroup)
@@ -517,7 +526,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         upperFKSpaceSwitch.connectPlugs(upperFKCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
         upperFKSpaceSwitch.connectPlugs(upperFKCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
 
-        lowerFKMatrix = mirrorMatrix * lowerMatrix
+        lowerFKMatrix = mirrorMatrix * lowerLimbMatrix
 
         lowerFKSpaceName = self.formatName(name=lowerLimbName, kinemat='FK', type='space')
         lowerFKSpace = self.scene.createNode('transform', name=lowerFKSpaceName, parent=upperFKCtrl)
@@ -557,11 +566,11 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             upperInverseLength.connectPlugs('outFloat', lowerFKComposeMatrix['inputTranslateX'], force=True)
             upperInverseLength.connectPlugs('outFloat', lowerFKSpaceSwitch['target[0].targetOffsetTranslateX'], force=True)
         
-        extremityFKTargetName = self.formatName(name=extremityName, kinemat='FK', type='target')
+        extremityFKTargetName = self.formatName(name=limbTipName, kinemat='FK', type='target')
         extremityFKTarget = self.scene.createNode('transform', name=extremityFKTargetName, parent=lowerFKCtrl)
 
-        translation, eulerRotation, scale = transformutils.decomposeTransformMatrix(extremityMatrix * lowerMatrix.inverse())
-        extremityFKComposeMatrixName = self.formatName(name=extremityName, kinemat='FK', type='composeMatrix')
+        translation, eulerRotation, scale = transformutils.decomposeTransformMatrix(limbTipMatrix * lowerLimbMatrix.inverse())
+        extremityFKComposeMatrixName = self.formatName(name=limbTipName, kinemat='FK', type='composeMatrix')
         extremityFKComposeMatrix = self.scene.createNode('composeMatrix', name=extremityFKComposeMatrixName)
         extremityFKComposeMatrix.setAttr('inputTranslate', translation)
         extremityFKComposeMatrix.setAttr('inputRotate', eulerRotation, convertUnits=False)
@@ -616,12 +625,12 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         defaultLimbSpace = 1.0 if isArm else 0.0
         preEulerRotation = transformutils.decomposeTransformMatrix(extremityIKMatrix)[1]
 
-        extremityIKSpaceName = self.formatName(name=extremityName, kinemat='IK', type='space')
+        extremityIKSpaceName = self.formatName(name=limbTipName, kinemat='IK', type='space')
         extremityIKSpace = self.scene.createNode('transform', name=extremityIKSpaceName, parent=controlsGroup)
         extremityIKSpace.setWorldMatrix(extremityIKMatrix, skipRotate=True)
         extremityIKSpace.freezeTransform()
 
-        extremityIKCtrlName = self.formatName(name=extremityName, kinemat='IK', type='control')
+        extremityIKCtrlName = self.formatName(name=limbTipName, kinemat='IK', type='control')
         extremityIKCtrl = self.scene.createNode('freeform', name=extremityIKCtrlName, parent=extremityIKSpace)
         extremityIKCtrl.addPointHelper('diamond', size=(30.0 * rigScale), lineWidth=3.0, colorRGB=colorRGB)
         extremityIKCtrl.setPreEulerRotation(preEulerRotation)
@@ -637,13 +646,13 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         extremityIKCtrl.addAttr(longName='rotationSpaceW3', niceName=f'Rotation Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
         extremityIKCtrl.addAttr(longName='rotationSpaceW4', niceName=f'Rotation Space ({limbName})', attributeType='float', min=0.0, max=1.0, keyable=True)
         extremityIKCtrl.prepareChannelBoxForAnimation()
-        self.publishNode(extremityIKCtrl, alias=f'{extremityName}_IK')
+        self.publishNode(extremityIKCtrl, alias=f'{limbTipName}_IK')
 
-        extremityIKOffsetCtrlName = self.formatName(name=extremityName, kinemat='IK', subname='Offset', type='control')
+        extremityIKOffsetCtrlName = self.formatName(name=limbTipName, kinemat='IK', subname='Offset', type='control')
         extremityIKOffsetCtrl = self.scene.createNode('transform', name=extremityIKOffsetCtrlName, parent=extremityIKCtrl)
-        extremityIKOffsetCtrl.addPointHelper('axisView', size=10.0, localScale=(3.0 * rigScale, 3.0 * rigScale, 3.0 * rigScale), colorRGB=lightColorRGB)
+        extremityIKOffsetCtrl.addPointHelper('cross', size=(15.0 * rigScale), colorRGB=lightColorRGB)
         extremityIKOffsetCtrl.prepareChannelBoxForAnimation()
-        self.publishNode(extremityIKOffsetCtrl, alias=f'{extremityName}_IK_Offset')
+        self.publishNode(extremityIKOffsetCtrl, alias=f'{limbTipName}_IK_Offset')
 
         extremityIKSpaceSwitch = extremityIKSpace.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl, spineCtrl, limbCtrl], maintainOffset=True)
         extremityIKSpaceSwitch.weighted = True
@@ -743,12 +752,12 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         # Calculate default PV matrix
         #
-        upVector = -((transformutils.breakMatrix(upperMatrix, normalize=True)[1] * 0.5) + (transformutils.breakMatrix(lowerMatrix, normalize=True)[1] * 0.5)).normal()
+        upVector = -((transformutils.breakMatrix(upperLimbMatrix, normalize=True)[1] * 0.5) + (transformutils.breakMatrix(lowerLimbMatrix, normalize=True)[1] * 0.5)).normal()
         forwardVector = (transformutils.breakMatrix(extremityMatrix)[3] - limbOrigin).normal()
         rightVector = (forwardVector ^ upVector).normal()
         poleVector = (rightVector ^ forwardVector).normal()
 
-        upperVector = (transformutils.breakMatrix(lowerMatrix)[3] - limbOrigin)
+        upperVector = (transformutils.breakMatrix(lowerLimbMatrix)[3] - limbOrigin)
         upperDot = forwardVector * upperVector
 
         poleOrigin = limbOrigin + (forwardVector * upperDot)
@@ -985,14 +994,14 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         lowerJoint.addConstraint('aimConstraint', [extremityBlendJoint], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpVector=(0.0, 0.0, 1.0), worldUpObject=lowerBlendJoint)
         lowerJoint.connectPlugs(lowerBlendJoint['scale'], 'scale')
 
-        extremityJointName = self.formatName(name=extremityName, type='joint')
+        extremityJointName = self.formatName(name=limbTipName, type='joint')
         extremityJoint = self.scene.createNode('joint', name=extremityJointName, parent=lowerJoint)
         extremityJoint.addConstraint('pointConstraint', [extremityBlendJoint], skipTranslateY=True, skipTranslateZ=True)
         extremityJoint.connectPlugs(extremityBlendJoint['scale'], 'scale')
 
         # Create PV handle curve
         #
-        controlPoints = [transformutils.breakMatrix(matrix)[3] for matrix in (poleMatrix, lowerMatrix)]
+        controlPoints = [transformutils.breakMatrix(matrix)[3] for matrix in (poleMatrix, lowerLimbMatrix)]
         curveData = shapeutils.createCurveFromPoints(controlPoints, degree=1)
 
         limbPVShapeName = self.formatName(kinemat='PV', subname='Handle', type='control')
@@ -1091,7 +1100,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             #
             upperLimbOutSpaceName = self.formatName(name=upperLimbName, subname='Out', type='space')
             upperLimbOutSpace = self.scene.createNode('transform', name=upperLimbOutSpaceName, parent=controlsGroup)
-            upperLimbOutSpace.setWorldMatrix(upperMatrix)
+            upperLimbOutSpace.setWorldMatrix(upperLimbMatrix)
             upperLimbOutSpace.freezeTransform()
 
             upperLimbOutCtrlName = self.formatName(name=upperLimbName, subname='Out', type='control')
@@ -1201,20 +1210,20 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
             # Create lower-limb in-handle control
             #
-            lowerLimbInSpaceName = self.formatName(name=extremityName, subname='In', type='space')
+            lowerLimbInSpaceName = self.formatName(name=limbTipName, subname='In', type='space')
             lowerLimbInSpace = self.scene.createNode('transform', name=lowerLimbInSpaceName, parent=controlsGroup)
             lowerLimbInSpace.copyTransform(extremityJoint)
             lowerLimbInSpace.freezeTransform()
 
-            lowerLimbInCtrlName = self.formatName(name=extremityName, subname='In', type='control')
+            lowerLimbInCtrlName = self.formatName(name=limbTipName, subname='In', type='control')
             lowerLimbInCtrl = self.scene.createNode('transform', name=lowerLimbInCtrlName, parent=lowerLimbInSpace)
             lowerLimbInCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=((-5.0 * rigScale), 0.0, 0.0), side=componentSide)
             lowerLimbInCtrl.addDivider('Spaces')
             lowerLimbInCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
             lowerLimbInCtrl.prepareChannelBoxForAnimation()
-            self.publishNode(lowerLimbInCtrl, alias=f'{extremityName}_In')
+            self.publishNode(lowerLimbInCtrl, alias=f'{limbTipName}_In')
 
-            lowerLimbInNegateName = self.formatName(name=extremityName, subname='In', type='floatMath')
+            lowerLimbInNegateName = self.formatName(name=limbTipName, subname='In', type='floatMath')
             lowerLimbInNegate = self.scene.createNode('floatMath', name=lowerLimbInNegateName)
             lowerLimbInNegate.setAttr('operation', 5)  # Negate
             lowerLimbInNegate.connectPlugs(hingeCtrl['handleInset'], 'inDistanceA')

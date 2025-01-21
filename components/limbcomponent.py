@@ -86,7 +86,24 @@ class LimbComponent(basecomponent.BaseComponent):
 
         return self.findExtremityComponent() is not None
 
-    def preferredEffectorMatrix(self):
+    def extremityMatrix(self):
+        """
+        Returns theextremity matrix for this component.
+
+        :rtype: om.MMatrix
+        """
+
+        component = self.findExtremityComponent()
+
+        if component is not None:
+
+            return component.effectorMatrix()
+
+        else:
+
+            return self.scene(self.skeletonSpecs()[-1].uuid).worldMatrix()
+
+    def effectorMatrix(self):
         """
         Returns the preferred effector matrix for this component.
 
@@ -101,5 +118,5 @@ class LimbComponent(basecomponent.BaseComponent):
 
         else:
 
-            return self.skeletonSpecs()[0].worldMatrix
+            return self.scene(self.skeletonSpecs()[-1].uuid).worldMatrix()
     # endregion

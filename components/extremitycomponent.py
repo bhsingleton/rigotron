@@ -47,7 +47,7 @@ class ExtremityComponent(basecomponent.BaseComponent):
 
         if hasSkeletonSpecs:
 
-            return skeletonSpecs[0].worldMatrix
+            return self.scene(skeletonSpecs[0].uuid).worldMatrix()
 
         else:
 
