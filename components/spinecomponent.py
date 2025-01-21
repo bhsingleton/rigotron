@@ -516,7 +516,7 @@ class SpineComponent(basecomponent.BaseComponent):
                 #
                 chestFKTransCtrlName = self.formatName(name='Chest', subname='FK', kinemat='Trans', type='control')
                 chestFKTransCtrl = self.scene.createNode('transform', name=chestFKTransCtrlName, parent=chestFKRotCtrl)
-                chestFKTransCtrl.addPointHelper('axisView', size=(12.0 * rigScale), localScale=(0.0, 3.0, 0.0), colorRGB=lightColorRGB)
+                chestFKTransCtrl.addShape('LollipopCurve', size=(28.0 * rigScale), localRotate=(0.0, 90.0, 0.0), colorRGB=lightColorRGB)
                 chestFKTransCtrl.prepareChannelBoxForAnimation()
                 self.publishNode(chestFKTransCtrl, alias=f'Chest_FK_Trans')
 
