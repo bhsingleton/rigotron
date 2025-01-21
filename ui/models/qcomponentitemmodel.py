@@ -369,7 +369,7 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
             component = self.componentFromIndex(index)
             componentStatus = Status(component.componentStatus)
 
-            if componentStatus == Status.META:
+            if componentStatus != Status.RIG:
 
                 hashCodes.append(component.hashCode())
 
@@ -396,26 +396,10 @@ class QComponentItemModel(QtCore.QAbstractItemModel):
         :rtype: bool
         """
 
-        # Get component from index
-        #
         index = self.index(row, column, parent=parent) if (row >= 0) else parent
         component = self.componentFromIndex(index)
 
-        if component is None:
-
-            return False
-
-        # Evaluate component status
-        #
-        componentStatus = Status(component.componentStatus)
-
-        if componentStatus == Status.META:
-
-            return True  # TODO: Test if incoming components are also in the meta state!
-
-        else:
-
-            return False
+        return component is not None
 
     def dropMimeData(self, data, action, row, column, parent):
         """
