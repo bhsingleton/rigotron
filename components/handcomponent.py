@@ -288,15 +288,6 @@ class HandComponent(extremitycomponent.ExtremityComponent):
     # endregion
 
     # region Methods
-    def locomotionType(self):
-        """
-        Returns the locomotion type for this component.
-
-        :rtype: LocomotionType
-        """
-
-        return self.LocomotionType.DIGITGRADE
-
     def fingerFlags(self):
         """
         Returns the enabled flags for each finger.
@@ -676,12 +667,6 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         knuckleRollCtrl.addPointHelper('tearDrop', size=(5.0 * rigScale), localPosition=(0.0, -10.0 * mirrorSign, 0.0), localRotate=(-90.0 * mirrorSign, 90.0, 0.0), side=componentSide)
         knuckleRollCtrl.setWorldMatrix(knuckleMatrix, skipRotate=True, skipScale=True)
         knuckleRollCtrl.freezeTransform()
-        knuckleRollCtrl.addDivider('Settings')
-        knuckleRollCtrl.addProxyAttr('pin', handCtrl['pin'])
-        knuckleRollCtrl.addDivider('Poses')
-        knuckleRollCtrl.addProxyAttr('curl', handCtrl['curl'])
-        knuckleRollCtrl.addProxyAttr('spread', handCtrl['spread'])
-        knuckleRollCtrl.addProxyAttr('splay', handCtrl['splay'])
         knuckleRollCtrl.hideAttr('scale', lock=True)
         knuckleRollCtrl.prepareChannelBoxForAnimation()
         self.publishNode(knuckleRollCtrl, alias='Knuckle')
@@ -1025,20 +1010,14 @@ class HandComponent(extremitycomponent.ExtremityComponent):
             masterFingerCtrlName = self.formatName(subname=fullFingerName, kinemat='Master', type='control')
             masterFingerCtrl = self.scene.createNode('transform', name=masterFingerCtrlName, parent=masterFingerSpace)
             masterFingerCtrl.addPointHelper('square', size=(5.0 * rigScale), localScale=(1.0, 2.0, 0.25), colorRGB=lightColorRGB)
-            masterFingerCtrl.addDivider('Settings')
-            masterFingerCtrl.addProxyAttr('pin', knuckleRollCtrl['pin'])
-            masterFingerCtrl.addDivider('Poses')
-            masterFingerCtrl.addProxyAttr('curl', handCtrl['curl'])
-            masterFingerCtrl.addProxyAttr('spread', handCtrl['spread'])
-            masterFingerCtrl.addProxyAttr('splay', handCtrl['splay'])
             masterFingerCtrl.prepareChannelBoxForAnimation()
             self.publishNode(masterFingerCtrl, alias=f'{fullFingerName}_Master')
 
             masterFingerSpaceSwitch = masterFingerSpace.addSpaceSwitch([fingerIKTarget, fingerPinTarget], maintainOffset=True)
             masterFingerSpaceSwitch.weighted = True
             masterFingerSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 1.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
-            masterFingerSpaceSwitch.connectPlugs(knuckleRollCtrl['pin'], 'target[0].targetRotateWeight')
-            masterFingerSpaceSwitch.connectPlugs(knuckleRollCtrl['pin'], 'target[1].targetRotateWeight')
+            masterFingerSpaceSwitch.connectPlugs(handCtrl['pin'], 'target[0].targetRotateWeight')
+            masterFingerSpaceSwitch.connectPlugs(handCtrl['pin'], 'target[1].targetRotateWeight')
 
             # Iterate through finger group
             #
@@ -1221,7 +1200,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         # Override end-value on parent limb's scale remapper
         #
         scaleRemapper = self.scene(limbComponent.userProperties['scaleRemappers'][-1])
-        self.overrideLimbRemapper(handCtrl, scaleRemapper)
+        self.overrideLimbRemapper(limbIKCtrl, handCtrl, scaleRemapper)
 
         # Override local space on parent limb's extremity-in control
         #
