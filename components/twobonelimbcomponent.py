@@ -45,9 +45,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
     # region Attributes
     hingeEnabled = mpyattribute.MPyAttribute('hingeEnabled', attributeType='bool', default=False)
-    # endregion
 
-    # region Properties
     @hingeEnabled.changed
     def hingeEnabled(self, hingeEnabled):
         """
@@ -374,20 +372,22 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         if hasClavicleComponent:
 
-            defaultWorldSpace = 1.0 if isArm else 0.0
-            defaultClavicleSpace = 0.0 if isArm else 1.0
+            defaultWorldWeight = 1.0 if isArm else 0.0
+            defaultClavicleWeight = 0.0 if isArm else 1.0
 
+            limbCtrl.addDivider('Settings')
+            limbCtrl.addAttr(longName='followBody', attributeType='float', min=0.0, max=1.0, keyable=True)
             limbCtrl.addDivider('Spaces')
             limbCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
             limbCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
             limbCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
             limbCtrl.addAttr(longName='positionSpaceW3', niceName=f'Position Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
             limbCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (Clavicle)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-            limbCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, default=defaultWorldSpace, keyable=True)
+            limbCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, default=defaultWorldWeight, keyable=True)
             limbCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
             limbCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
             limbCtrl.addAttr(longName='rotationSpaceW3', niceName=f'Rotation Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
-            limbCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (Clavicle)', attributeType='float', min=0.0, max=1.0, default=defaultClavicleSpace, keyable=True)
+            limbCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (Clavicle)', attributeType='float', min=0.0, max=1.0, default=defaultClavicleWeight, keyable=True)
 
             limbSpaceSwitch = limbSpace.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl, spineCtrl, limbTarget], maintainOffset=True)
             limbSpaceSwitch.weighted = True
@@ -402,6 +402,28 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
             limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
             limbSpaceSwitch.connectPlugs(limbCtrl['rotationSpaceW4'], 'target[4].targetRotateWeight')
+
+            limbAimMatrixName = self.formatName(subname='FollowBody', type='aimMatrix')
+            limbAimMatrix = self.scene.createNode('aimMatrix', name=limbAimMatrixName)
+            limbAimMatrix.connectPlugs(limbCtrl['followBody'], 'envelope')
+            limbAimMatrix.connectPlugs(limbSpaceSwitch['outputWorldMatrix'], 'inputMatrix')
+            limbAimMatrix.setAttr('primary', {'primaryInputAxis': (0.0, 0.0, -1.0 * mirrorSign), 'primaryMode': 2, 'primaryTargetVector': (0.0, 0.0, 1.0)})  # Align
+            limbAimMatrix.connectPlugs(cogCtrl[f'worldMatrix[{cogCtrl.instanceNumber()}]'], 'primaryTargetMatrix')
+            limbAimMatrix.setAttr('secondary', {'secondaryInputAxis': (1.0, 0.0, 0.0), 'secondaryMode': 2, 'secondaryTargetVector': (0.0, 0.0, 1.0)})  # Align
+            limbAimMatrix.connectPlugs(spineCtrl[f'worldMatrix[{spineCtrl.instanceNumber()}]'], 'secondaryTargetMatrix')
+
+            limbAimMultMatrixName = self.formatName(subname='FollowBody', type='multMatrix')
+            limbAimMultMatrix = self.scene.createNode('multMatrix', name=limbAimMultMatrixName)
+            limbAimMultMatrix.connectPlugs(limbAimMatrix['outputMatrix'], 'matrixIn[0]')
+            limbAimMultMatrix.connectPlugs(limbSpace[f'parentInverseMatrix[{limbSpace.instanceNumber()}]'], 'matrixIn[1]')
+
+            limbAimDecomposeMatrixName = self.formatName(subname='FollowBody', type='decomposeMatrix')
+            limbAimDecomposeMatrix = self.scene.createNode('decomposeMatrix', name=limbAimDecomposeMatrixName)
+            limbAimDecomposeMatrix.connectPlugs(limbSpace['rotateOrder'], 'inputRotateOrder')
+            limbAimDecomposeMatrix.connectPlugs(limbAimMultMatrix['matrixSum'], 'inputMatrix')
+            limbAimDecomposeMatrix.connectPlugs('outputTranslate', limbSpace['translate'], force=True)
+            limbAimDecomposeMatrix.connectPlugs('outputRotate', limbSpace['rotate'], force=True)
+            limbAimDecomposeMatrix.connectPlugs('outputScale', limbSpace['scale'], force=True)
 
         else:
 
@@ -1042,10 +1064,6 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             upperLimbCtrl.addPointHelper('tearDrop', 'centerMarker', size=(20.0 * rigScale), localRotate=(90.0, 0.0, 0.0), lineWidth=3.0, colorRGB=darkColorRGB)
             upperLimbCtrl.addDivider('Settings')
             upperLimbCtrl.addAttr(longName='inheritsTwist', attributeType='angle', min=0.0, max=1.0, default=1.0, keyable=True)
-            upperLimbCtrl.addDivider('Handles')
-            upperLimbCtrl.addProxyAttr('straighten', hingeCtrl['straighten'])
-            upperLimbCtrl.addProxyAttr('handleOffset', hingeCtrl['handleOffset'])
-            upperLimbCtrl.addProxyAttr('handleInset', hingeCtrl['handleInset'])
             upperLimbCtrl.prepareChannelBoxForAnimation()
             self.publishNode(upperLimbCtrl, alias=upperLimbName)
 
@@ -1058,7 +1076,8 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             limbRollSolver.connectPlugs(limbTarget[f'worldMatrix[{limbTarget.instanceNumber()}]'], 'startMatrix')
             limbRollSolver.connectPlugs(upperJoint[f'worldMatrix[{upperJoint.instanceNumber()}]'], 'endMatrix')
 
-            limbRollEnvelope = self.scene.createNode('floatMath')
+            limbRollEnvelopeName = self.formatName(name=upperLimbName, subname='RollEnvelope', type='floatMath')
+            limbRollEnvelope = self.scene.createNode('floatMath', name=limbRollEnvelopeName)
             limbRollEnvelope.setAttr('operation', 2)  # Multiply
             limbRollEnvelope.connectPlugs(limbRollSolver['roll'], 'inAngleA')
             limbRollEnvelope.connectPlugs(upperLimbCtrl['inheritsTwist'], 'inAngleB')
@@ -1078,10 +1097,6 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             upperLimbOutCtrlName = self.formatName(name=upperLimbName, subname='Out', type='control')
             upperLimbOutCtrl = self.scene.createNode('transform', name=upperLimbOutCtrlName, parent=upperLimbOutSpace)
             upperLimbOutCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=((5.0 * rigScale), 0.0, 0.0), localRotate=(0.0, 0.0, 180.0), side=componentSide)
-            upperLimbOutCtrl.addDivider('Handles')
-            upperLimbOutCtrl.addProxyAttr('straighten', hingeCtrl['straighten'])
-            upperLimbOutCtrl.addProxyAttr('handleOffset', hingeCtrl['handleOffset'])
-            upperLimbOutCtrl.addProxyAttr('handleInset', hingeCtrl['handleInset'])
             upperLimbOutCtrl.addDivider('Spaces')
             upperLimbOutCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
             upperLimbOutCtrl.prepareChannelBoxForAnimation()
@@ -1125,10 +1140,6 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             hingeInCtrl = self.scene.createNode('transform', name=hingeInCtrlName, parent=hingeCtrl)
             hingeInCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=((-5.0 * rigScale), 0.0, 0.0), colorRGB=darkColorRGB)
             hingeInCtrl.hideAttr('rotate')
-            hingeInCtrl.addDivider('Handles')
-            hingeInCtrl.addProxyAttr('straighten', hingeCtrl['straighten'])
-            hingeInCtrl.addProxyAttr('handleOffset', hingeCtrl['handleOffset'])
-            hingeInCtrl.addProxyAttr('handleInset', hingeCtrl['handleInset'])
             hingeInCtrl.prepareChannelBoxForAnimation()
             self.publishNode(hingeInCtrl, alias=f'{hingeName}_In')
 
@@ -1148,10 +1159,6 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             hingeOutCtrl = self.scene.createNode('transform', name=hingeOutCtrlName, parent=hingeCtrl)
             hingeOutCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=((5.0 * rigScale), 0.0, 0.0), localRotate=(0.0, 0.0, 180.0), colorRGB=darkColorRGB)
             hingeOutCtrl.hideAttr('rotate')
-            hingeOutCtrl.addDivider('Handles')
-            hingeOutCtrl.addProxyAttr('straighten', hingeCtrl['straighten'])
-            hingeOutCtrl.addProxyAttr('handleOffset', hingeCtrl['handleOffset'])
-            hingeOutCtrl.addProxyAttr('handleInset', hingeCtrl['handleInset'])
             hingeOutCtrl.prepareChannelBoxForAnimation()
             self.publishNode(hingeOutCtrl, alias=f'{hingeName}_Out')
 
@@ -1202,10 +1209,6 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             lowerLimbInCtrlName = self.formatName(name=extremityName, subname='In', type='control')
             lowerLimbInCtrl = self.scene.createNode('transform', name=lowerLimbInCtrlName, parent=lowerLimbInSpace)
             lowerLimbInCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=((-5.0 * rigScale), 0.0, 0.0), side=componentSide)
-            lowerLimbInCtrl.addDivider('Handles')
-            lowerLimbInCtrl.addProxyAttr('straighten', hingeCtrl['straighten'])
-            lowerLimbInCtrl.addProxyAttr('handleOffset', hingeCtrl['handleOffset'])
-            lowerLimbInCtrl.addProxyAttr('handleInset', hingeCtrl['handleInset'])
             lowerLimbInCtrl.addDivider('Spaces')
             lowerLimbInCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
             lowerLimbInCtrl.prepareChannelBoxForAnimation()
@@ -1357,11 +1360,14 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
                     scaleRemapper.setAttr(f'parameter[{j}]', parameter)
                     scaleRemapper.connectPlugs(f'outValue[{j}]', scaleConstraint['offset'])
 
-                    # Finally, align export joint to control
+                    # Finally, re-align export joint to control
                     # This will ensure there are no unwanted offsets when binding the skeleton!
                     #
                     twistExportJoint = self.scene(twistSpec.uuid)
-                    twistExportJoint.copyTransform(twistCtrl)
+                    twistExportJoint.copyTransform(twistCtrl, skipScale=True)
+
+                    twistSpec.matrix = twistExportJoint.matrix(asTransformationMatrix=True)
+                    twistSpec.worldMatrix = twistExportJoint.worldMatrix()
 
             # Cache twist components
             #
