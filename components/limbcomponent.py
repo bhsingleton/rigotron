@@ -19,9 +19,7 @@ class LimbComponent(basecomponent.BaseComponent):
     # region Attributes
     twistEnabled = mpyattribute.MPyAttribute('twistEnabled', attributeType='bool', default=True)
     numTwistLinks = mpyattribute.MPyAttribute('numTwistLinks', attributeType='int', min=2, default=3)
-    # endregion
 
-    # region Properties
     @twistEnabled.changed
     def twistEnabled(self, twistEnabled):
         """
@@ -43,4 +41,65 @@ class LimbComponent(basecomponent.BaseComponent):
         """
 
         self.markSkeletonDirty()
+
+    @basecomponent.BaseComponent.componentChildren.changed
+    def componentChildren(self, componentChildren):
+        """
+        Changed method that notifies any component children changes.
+
+        :type componentChildren: List[om.MObject]
+        :rtype: None
+        """
+
+        self.markSkeletonDirty()
+    # endregion
+
+    # region Methods
+    def findExtremityComponent(self):
+        """
+        Returns the extremity component related to this limb component.
+
+        :rtype: Union[rigotron.components.extremitycomponent.ExtremityComponent, None]
+        """
+
+        components = self.findComponentDescendants('ExtremityComponent')
+        numComponents = len(components)
+
+        if numComponents == 0:
+
+            return None
+
+        elif numComponents == 1:
+
+            return components[0]
+
+        else:
+
+            raise TypeError(f'findExtremityComponent() expects 1 extremity component ({numComponents} found)!')
+
+    def hasExtremityComponent(self):
+        """
+        Evaluates if this limb component has an extremity component.
+
+        :rtype: bool
+        """
+
+        return self.findExtremityComponent() is not None
+
+    def preferredEffectorMatrix(self):
+        """
+        Returns the preferred effector matrix for this component.
+
+        :rtype: om.MMatrix
+        """
+
+        component = self.findExtremityComponent()
+
+        if component is not None:
+
+            return component.preferredEffectorMatrix()
+
+        else:
+
+            return self.skeletonSpecs()[0].worldMatrix
     # endregion
