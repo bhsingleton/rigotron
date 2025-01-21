@@ -390,6 +390,10 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
             raise TypeError(f'popComponentChild() expects an int ({type(index).__name__} given)!')
 
+        # Notify child change
+        #
+        self.__class__.componentChildren.notify(self)
+
     def insertComponentChild(self, insertAt, child):
         """
         Inserts a child, at the specified index, to this component.
@@ -426,6 +430,10 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
         log.info(f'Inserting child component @ {destination.info}')
         self.connectPlugs(source, destination)
+
+        # Notify child change
+        #
+        self.__class__.componentChildren.notify(self)
 
     def appendComponentChild(self, child):
         """
