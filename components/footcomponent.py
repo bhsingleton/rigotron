@@ -5,6 +5,7 @@ from dcc.dataclasses.colour import Colour
 from dcc.python import stringutils
 from dcc.maya.libs import transformutils, shapeutils
 from dcc.maya.json import mshapeparser
+from rigomatic.libs import kinematicutils
 from . import extremitycomponent
 from ..libs import Side, setuputils
 
@@ -351,15 +352,6 @@ class FootComponent(extremitycomponent.ExtremityComponent):
     # endregion
 
     # region Methods
-    def locomotionType(self):
-        """
-        Returns the locomotion type for this component.
-
-        :rtype: LocomotionType
-        """
-
-        return self.LocomotionType.PLANTIGRADE
-
     def toeFlags(self):
         """
         Returns the enabled flags for each toe.
@@ -707,9 +699,14 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
         # Add foot control shape
         #
-        localMin, localMax = om.MVector(footIntermediateObject.getAttr('boundingBoxMin')), om.MVector(footIntermediateObject.getAttr('boundingBoxMax'))
+        worldCurveBox = footIntermediateObject.curveBox()
+
+        localCurveBox = om.MBoundingBox(worldCurveBox)
+        localCurveBox.transformUsing(footIntermediateObject.parentInverseMatrix())
+
+        localMin, localMax = om.MVector(localCurveBox.min), om.MVector(localCurveBox.max)
         localCenter = (localMin * 0.5) + (localMax * 0.5)
-        localWidth, localHeight, localDepth = footIntermediateObject.getAttr('boundingBoxSize')
+        localWidth, localHeight, localDepth = localCurveBox.width, localCurveBox.height, localCurveBox.depth
 
         footCtrl.addPointHelper(
             'square',
@@ -834,16 +831,17 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
         # Compose heel and toe-tip matrices
         #
-        forwardAxisVector = transformutils.breakMatrix(footExportMatrix)[1]
-        dotProducts = [forwardAxisVector * om.MVector(point) for point in pivotCurvePoints]
-        minPoint = pivotCurvePoints[dotProducts.index(min(dotProducts))] * footExportMatrix.inverse()
-        maxPoint = pivotCurvePoints[dotProducts.index(max(dotProducts))] * footExportMatrix.inverse()
+        footForwardVector, footUpVector, footRightVector, footPoint = transformutils.breakMatrix(footExportMatrix, normalize=True)
+        footRotationMatrix = transformutils.createRotationMatrix(footExportMatrix)
+        
+        groundDot = footForwardVector * (worldCurveBox.center - footPoint)
+        groundPoint = footPoint + (footForwardVector * groundDot)
 
-        toeTipPoint = om.MPoint(minPoint.x, minPoint.y, 0.0) * footExportMatrix
-        toeTipMatrix = transformutils.createRotationMatrix(footExportMatrix) * transformutils.createTranslateMatrix(toeTipPoint)
+        toeTipPoint = groundPoint + (footUpVector * localCurveBox.min.y)
+        toeTipMatrix = footRotationMatrix * transformutils.createTranslateMatrix(toeTipPoint)
 
-        heelPoint = om.MPoint(maxPoint.x, maxPoint.y, 0.0) * footExportMatrix
-        heelMatrix = transformutils.createRotationMatrix(footExportMatrix) * transformutils.createTranslateMatrix(heelPoint)
+        heelPoint = groundPoint + (footUpVector * localCurveBox.max.y)
+        heelMatrix = footRotationMatrix * transformutils.createTranslateMatrix(heelPoint)
 
         # Create heel roll control
         #
@@ -931,15 +929,24 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
         limbRIKSoftener.connectPlugs(footIKTarget[f'worldMatrix[{footIKTarget.instanceNumber()}]'], 'endMatrix', force=True)
 
-        # Constraint foot IK joints
+        # Add single-chain solver to foot IK joints
         #
         footIKJoint.addConstraint('pointConstraint', [limbTipRIKJoint])
-        footIKJoint.addConstraint('aimConstraint', [ballRollCtrl], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpObject=ballRollCtrl, maintainOffset=True)
         footIKJoint.addConstraint('scaleConstraint', [footCtrl])
         footIKJoint.connectPlugs('scale', ballIKJoint['scale'])
-
-        ballIKJoint.addConstraint('aimConstraint', [toeRollCtrl], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpObject=toeRollCtrl, maintainOffset=True)
         ballIKJoint.connectPlugs('scale', toeTipIKJoint['scale'])
+
+        footIKHandle, footIKEffector = kinematicutils.applySingleChainSolver(footIKJoint, ballIKJoint)
+        footIKHandle.setName(self.formatName(subname='Ankle', type='ikHandle'))
+        footIKHandle.setParent(privateGroup)
+        footIKHandle.addConstraint('transformConstraint', [ballRollCtrl], maintainOffset=True, skipScale=True)
+        footIKEffector.setName(self.formatName(subname='Ankle', type='ikEffector'))
+
+        ballIKHandle, ballIKEffector = kinematicutils.applySingleChainSolver(ballIKJoint, toeTipIKJoint)
+        ballIKHandle.setName(self.formatName(subname='Ball', type='ikHandle'))
+        ballIKHandle.setParent(privateGroup)
+        ballIKHandle.addConstraint('transformConstraint', [toeRollCtrl], maintainOffset=True, skipScale=True)
+        ballIKEffector.setName(self.formatName(subname='Ball', type='ikEffector'))
 
         # Add foot space to limb's pole-vector control
         #
@@ -956,7 +963,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         # Override end-value on limb's scale remapper
         #
         scaleRemapper = self.scene(limbComponent.userProperties['scaleRemappers'][-1])
-        self.overrideLimbRemapper(footCtrl, scaleRemapper)
+        self.overrideLimbRemapper(limbIKCtrl, footCtrl, scaleRemapper)
 
         # Override extremity-in control space
         #
@@ -994,11 +1001,6 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             footCtrl.addAttr(longName='curl', attributeType='angle', keyable=True)
             footCtrl.addAttr(longName='spread', attributeType='angle', keyable=True)
             footCtrl.addAttr(longName='splay', attributeType='angle', keyable=True)
-
-            toesCtrl.addDivider('Poses')
-            toesCtrl.addProxyAttr('curl', footCtrl['curl'])
-            toesCtrl.addProxyAttr('spread', footCtrl['spread'])
-            toesCtrl.addProxyAttr('splay', footCtrl['splay'])
 
             # Create pose driver negate nodes
             #
@@ -1063,10 +1065,6 @@ class FootComponent(extremitycomponent.ExtremityComponent):
                 masterToeCtrl.addPointHelper('square', size=(5.0 * rigScale), localScale=(1.0, 2.0, 0.25), colorRGB=lightColorRGB)
                 masterToeCtrl.copyTransform(firstToeExportJoint)
                 masterToeCtrl.freezeTransform()
-                masterToeCtrl.addDivider('Poses')
-                masterToeCtrl.addProxyAttr('curl', footCtrl['curl'])
-                masterToeCtrl.addProxyAttr('spread', footCtrl['spread'])
-                masterToeCtrl.addProxyAttr('splay', footCtrl['splay'])
                 masterToeCtrl.prepareChannelBoxForAnimation()
                 self.publishNode(masterToeCtrl, alias=fullToeName)
 
