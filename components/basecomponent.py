@@ -95,15 +95,21 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         return specs
 
-    @staticmethod
-    def flattenSpecs(skeletonSpecs, **kwargs):
+    @classmethod
+    def flattenSpecs(cls, skeletonSpecs, **kwargs):
         """
         Returns a generator that yields all skeleton specs.
 
-        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
+        :type skeletonSpecs: Union[skeletonspec.SkeletonSpec, List[skeletonspec.SkeletonSpec]]
         :key skipDisabled: bool
         :rtype: Iterator[skeletonspec.SkeletonSpec]
         """
+
+        # Evaluate supplied argument
+        #
+        if isinstance(skeletonSpecs, skeletonspec.SkeletonSpec):
+
+            skeletonSpecs = [skeletonSpecs]
 
         # Iterate through skeleton specs
         #
@@ -111,39 +117,25 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         for skeletonSpec in skeletonSpecs:
 
-            # Check if spec is enabled
+            # Evaluate item type
             #
-            if not skeletonSpec.enabled and skipDisabled:
+            if not isinstance(skeletonSpec, skeletonspec.SkeletonSpec):
 
                 continue
 
-            # Iterate through children
+            # Check if skeleton spec is enabled
             #
-            yield skeletonSpec
+            if (skeletonSpec.enabled and skipDisabled) or not skipDisabled:
 
-            for childSpec in skeletonSpec.children:
+                yield skeletonSpec
 
-                if not childSpec.enabled and skipDisabled:
-
-                    continue
-
-                else:
-
-                    yield childSpec
-
-            # Iterate through groups
+            # Repeat for children and group skeleton specs!
             #
+            yield from cls.flattenSpecs(skeletonSpec.children, **kwargs)
+
             for (groupId, groupSpecs) in skeletonSpec.groups.items():
 
-                for groupSpec in groupSpecs:
-
-                    if not groupSpec.enabled and skipDisabled:
-
-                        continue
-
-                    else:
-
-                        yield groupSpec
+                yield from cls.flattenSpecs(groupSpecs, **kwargs)
 
     def markSkeletonDirty(self):
         """
@@ -256,6 +248,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         for skeletonSpec in skeletonSpecs:
 
+            log.info(f'Caching "{skeletonSpec.name}" skeleton spec...')
             skeletonSpec.cacheMatrix()
 
         # Check if skeleton should be deleted
@@ -270,6 +263,58 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         #
         self.save()
 
+    def parentSkeleton(self):
+        """
+        Parents the skeleton for this component.
+
+        :rtype: None
+        """
+
+        # Check if attachment target exists
+        #
+        parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
+
+        if parentExportJoint is None:
+
+            return
+
+        # Re-parent export skeleton
+        #
+        skeletonSpecs = self.skeletonSpecs(flatten=True, skipDisabled=True)
+        firstSkeletonSpec = skeletonSpecs[0]
+
+        exportJoint = firstSkeletonSpec.getNode()
+
+        if exportJoint is not None:
+
+            exportJoint.setParent(parentExportJoint, absolute=True)
+
+        else:
+
+            log.warning(f'Unable to parent "{firstSkeletonSpec.name}" joint!')
+
+    def unparentSkeleton(self):
+        """
+        Un-parents the skeleton for this component.
+
+        :rtype: None
+        """
+
+        # Un-parent export skeleton
+        #
+        skeletonSpecs = self.skeletonSpecs(flatten=True, skipDisabled=True)
+        firstSkeletonSpec = skeletonSpecs[0]
+
+        exportJoint = firstSkeletonSpec.getNode()
+
+        if exportJoint is not None:
+
+            exportJoint.setParent(None, absolute=True)
+
+        else:
+
+            log.warning(f'Unable to un-parent "{firstSkeletonSpec.name}" joint!')
+
     def bindSkeleton(self):
         """
         Binds the skeleton for this component.
@@ -277,20 +322,14 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         :rtype: None
         """
 
-        # Re-parent export skeleton
+        # Reparent export skeleton
         #
-        parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
-
-        skeletonSpecs = self.skeletonSpecs(flatten=True, skipDisabled=True)
-        exportJoint = skeletonSpecs[0].getNode()
-
-        if parentExportJoint is not None:
-
-            exportJoint.setParent(parentExportJoint, absolute=True)
+        self.parentSkeleton()
 
         # Constrain export skeleton
         #
-        maintainOffset = self.Side(self.componentSide) == self.Side.RIGHT
+        skeletonSpecs = self.skeletonSpecs(flatten=True, skipDisabled=True)
+        parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
 
         for skeletonSpec in skeletonSpecs:
 
@@ -320,6 +359,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
             # Constrain export joint
             #
             log.info(f'Constraining "{skeletonSpec.driver}" > "{skeletonSpec.name}"')
+            maintainOffset = self.Side(exportJoint.side) == self.Side.RIGHT
 
             constraint = exportJoint.addConstraint('transformConstraint', [exportDriver], maintainOffset=maintainOffset)
             constraint.hiddenInOutliner = True
@@ -337,16 +377,27 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         for skeletonSpec in skeletonSpecs:
 
+            # Check if export joint still exists
+            #
             exportJoint = skeletonSpec.getNode()
+
+            if exportJoint is None:
+
+                log.warning(f'Unable to locate export joint: {skeletonSpec.name}')
+                continue
+
+            # Remove constraints
+            #
             exportJoint.removeConstraints()
 
+            # Reassign transform matrix
+            #
             matrix = skeletonSpec.getMatrix(asTransformationMatrix=True)
             exportJoint.setMatrix(matrix)
 
         # Un-parent export skeleton
         #
-        exportJoint = skeletonSpecs[0].getNode()
-        exportJoint.setParent(None, absolute=True)
+        self.unparentSkeleton()
 
     def markPivotsDirty(self):
         """
@@ -587,9 +638,19 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
                 continue
 
+            # Check if node is an IK solver
+            # If so, go ahead and skip it since these are meant to be shared!
+            #
+            node = handle.object()
+            isIKSolver = node.hasFn(om.MFn.kIkSolver)
+
+            if isIKSolver:
+
+                continue
+
             # Add new member
             #
-            hyperLayout.addMember(handle.object())
+            hyperLayout.addMember(node)
 
     def prepareToBuildRig(self):
         """
