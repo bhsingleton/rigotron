@@ -1,6 +1,6 @@
 from . import Side, Status
 from ..components import basecomponent
-from dcc.maya.decorators import undo
+from dcc.maya.decorators import undo, animate
 
 import logging
 logging.basicConfig()
@@ -115,62 +115,64 @@ def changeState(component, state):
 
     # Process state change
     #
-    if currentState == Status.META:
+    with animate.Animate(state=False):
 
-        # Evaluate requested state change
-        #
-        if state == Status.META:
+        if currentState == Status.META:
 
-            pass
+            # Evaluate requested state change
+            #
+            if state == Status.META:
 
-        elif state == Status.SKELETON:
+                pass
 
-            metaToSkeleton(component)
+            elif state == Status.SKELETON:
+
+                metaToSkeleton(component)
+
+            else:
+
+                metaToSkeleton(component)
+                skeletonToRig(component)
+
+            return True
+
+        elif currentState == Status.SKELETON:
+
+            # Evaluate requested state change
+            #
+            if state == Status.META:
+
+                skeletonToMeta(component)
+
+            elif state == Status.SKELETON:
+
+                pass
+
+            else:
+
+                skeletonToRig(component)
+
+            return True
+
+        elif currentState == Status.RIG:
+
+            # Evaluate requested state change
+            #
+            if state == Status.META:
+
+                metaToSkeleton(component)
+                skeletonToRig(component)
+
+            elif state == Status.SKELETON:
+
+                rigToSkeleton(component)
+
+            else:
+
+                pass
+
+            return True
 
         else:
 
-            metaToSkeleton(component)
-            skeletonToRig(component)
-
-        return True
-
-    elif currentState == Status.SKELETON:
-
-        # Evaluate requested state change
-        #
-        if state == Status.META:
-
-            skeletonToMeta(component)
-
-        elif state == Status.SKELETON:
-
-            pass
-
-        else:
-
-            skeletonToRig(component)
-
-        return True
-
-    elif currentState == Status.RIG:
-
-        # Evaluate requested state change
-        #
-        if state == Status.META:
-
-            metaToSkeleton(component)
-            skeletonToRig(component)
-
-        elif state == Status.SKELETON:
-
-            rigToSkeleton(component)
-
-        else:
-
-            pass
-
-        return True
-
-    else:
-
-        return False
+            return False
