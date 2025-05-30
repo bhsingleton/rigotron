@@ -158,6 +158,12 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.addLegComponentAction.setToolTip('Adds a leg to the selected component.')
         self.addLegComponentAction.triggered.connect(self.on_addComponentAction_triggered)
 
+        self.addHindLegComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/LegComponent.svg'), 'Hind-Leg', parent=self.mainToolBar)
+        self.addHindLegComponentAction.setObjectName('addHindLegComponentAction')
+        self.addHindLegComponentAction.setWhatsThis('HindLegComponent')
+        self.addHindLegComponentAction.setToolTip('Adds a hind-leg to the selected component.')
+        self.addHindLegComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
         self.addFootComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/FootComponent.svg'), 'Foot', parent=self.mainToolBar)
         self.addFootComponentAction.setObjectName('addFootComponentAction')
         self.addFootComponentAction.setWhatsThis('FootComponent')
@@ -218,6 +224,12 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.addPropComponentAction.setToolTip('Adds a prop to the selected component.')
         self.addPropComponentAction.triggered.connect(self.on_addComponentAction_triggered)
 
+        self.addWeaponComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/PropComponent.svg'), 'Weapon', parent=self.mainToolBar)
+        self.addWeaponComponentAction.setObjectName('addWeaponComponentAction')
+        self.addWeaponComponentAction.setWhatsThis('WeaponComponent')
+        self.addWeaponComponentAction.setToolTip('Adds a weapon to the selected component.')
+        self.addWeaponComponentAction.triggered.connect(self.on_addComponentAction_triggered)
+
         self.addStowComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/StowComponent.svg'), 'Stow', parent=self.mainToolBar)
         self.addStowComponentAction.setObjectName('addStowComponentAction')
         self.addStowComponentAction.setWhatsThis('StowComponent')
@@ -261,6 +273,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.mainToolBar.addAction(self.addTailComponentAction)
         self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.addLegComponentAction)
+        self.mainToolBar.addAction(self.addHindLegComponentAction)
         self.mainToolBar.addAction(self.addFootComponentAction)
         self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.addInsectLegComponentAction)
@@ -275,6 +288,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.mainToolBar.addAction(self.addCollarComponentAction)
         self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.addPropComponentAction)
+        self.mainToolBar.addAction(self.addWeaponComponentAction)
         self.mainToolBar.addAction(self.addStowComponentAction)
         self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.addLeafComponentAction)
