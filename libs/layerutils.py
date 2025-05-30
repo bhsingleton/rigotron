@@ -14,7 +14,6 @@ __spine_controls__ = (
     'Waist_CTRL',
     'Hips_CTRL',
     '*_FK??_Rot_CTRL',
-    '*_FK??_Trans_CTRL',
     'Chest_FK_Rot_CTRL',
     'Chest_IK_CTRL'
 )
@@ -23,6 +22,8 @@ __leg_ik_controls__ = (
     '?_Leg_CTRL',
     '?_Knee_CTRL',
     '?_Ankle_IK_CTRL',
+    '?_Ankle_IK_Rot_CTRL',
+    '?_Ankle_IK_Trans_CTRL',
     '*_PV_CTRL'
 )
 __leg_switch_controls__ = ('*_Switch_CTRL',)
@@ -121,7 +122,7 @@ def createDisplayLayers(controlRig, prefix='Controls'):
 
     # Decompose leg components
     #
-    legCtrls = groups.pop('Leg', [])
+    legCtrls = groups.pop('Leg', groups.pop('HindLeg', []))
     legFKCtrls = filterNodesByPattern(legCtrls, *__leg_fk_controls__)
     legIKCtrls = filterNodesByPattern(legCtrls, *__leg_ik_controls__)
     legSwitchCtrls = filterNodesByPattern(legCtrls, *__leg_switch_controls__)
