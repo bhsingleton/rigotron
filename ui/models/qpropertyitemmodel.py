@@ -37,7 +37,7 @@ class QPropertyItemModel(qplugitemmodel.QPlugItemModel):
             useLongNames=True,
             includeInstancedIndices=True,
             includeNonMandatoryIndices=True,
-            useFullAttributePath=True
+            useFullAttributePath=False
         )
 
         if hasattr(node, plugName):
