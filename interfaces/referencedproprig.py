@@ -21,9 +21,7 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
 
     # region Attributes
     referenceNode = mpyattribute.MPyAttribute('referenceNode', attributeType='message')
-    handednessName = mpyattribute.MPyAttribute('handednessName', attributeType='str')
-    primaryPropComponent = mpyattribute.MPyAttribute('primaryPropComponent', attributeType='message')
-    secondaryPropComponent = mpyattribute.MPyAttribute('secondaryPropComponent', attributeType='message')
+    propComponent = mpyattribute.MPyAttribute('propComponent', attributeType='message')
     stowName = mpyattribute.MPyAttribute('stowName', attributeType='str')
     stowComponent = mpyattribute.MPyAttribute('stowComponent', attributeType='message')
     # endregion
@@ -41,7 +39,7 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
         :key name: Union[str, Dict[str, Any]]
         :key parent: Union[str, om.MObject, om.MDagPath, None]
         :key filePath: str
-        :rtype: PropRig
+        :rtype: ReferencedPropRig
         """
 
         # Check if a reference path was supplied
@@ -72,30 +70,15 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
         reference = cls.scene.createReference(filePath, namespace=namespace)
         referencedPropRig.referenceNode = reference.object()
 
-        controlRig = kwargs.get('controlRig', None)
-
-        if controlRig is not None:
-
-            referencedPropRig.controlRig = controlRig
-
         # Check if a prop component was supplied
         #
-        handednessName = kwargs.get('handednessName', '')
-        referencedPropRig.handednessName = handednessName
+        propComponent = kwargs.pop('propComponent', None)
 
-        primaryPropComponent = kwargs.pop('primaryPropComponent', None)
+        if propComponent is not None:
 
-        if primaryPropComponent is not None:
+            referencedPropRig.propComponent = propComponent.object()
 
-            referencedPropRig.primaryPropComponent = primaryPropComponent.object()
-
-        secondaryPropComponent = kwargs.pop('secondaryPropComponent', None)
-
-        if secondaryPropComponent is not None:
-
-            referencedPropRig.secondaryPropComponent = secondaryPropComponent.object()
-
-        # Check if a stowed component was supplied
+        # Check if a stow component was supplied
         #
         stowName = kwargs.get('stowName', '')
         referencedPropRig.stowName = stowName
@@ -115,17 +98,12 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
         :rtype: rigotron.interfaces.controlrig.ControlRig
         """
 
-        primaryPropComponent = self.scene(self.primaryPropComponent)
-        secondaryPropComponent = self.scene(self.secondaryPropComponent)
+        propComponent = self.scene(self.propComponent)
         stowComponent = self.scene(self.stowComponent)
 
-        if primaryPropComponent is not None:
+        if propComponent is not None:
 
-            return primaryPropComponent.findControlRig()
-
-        elif secondaryPropComponent is not None:
-
-            return secondaryPropComponent.findControlRig()
+            return propComponent.findControlRig()
 
         elif stowComponent is not None:
 
@@ -151,7 +129,7 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
 
         if numControlRigs == 0:
 
-            return None
+            return None, None
 
         elif numControlRigs == 1:
 
@@ -168,9 +146,17 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
         :rtype: None
         """
 
-        # Re-parent referenced prop rig
+        # Check if referenced prop rig exists
         #
         referenceNode, referencedRig = self.findReferencedPropRig()
+
+        if referenceNode is None or referencedRig is None:
+
+            log.warning('Unable to locate referenced prop rig!')
+            return
+
+        # Re-parent referenced prop rig
+        #
         referencedRig.setParent(self)
 
         referencedRootComponent = self.scene(referencedRig.rootComponent)
@@ -178,82 +164,75 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
         referencedRootJoint = self.scene.getNodeByUuid(referencedRootSpec.uuid, referenceNode=referenceNode)
         referencedRootJoint.setParent(self)
 
-        # Find referenced root control and space switches
+        # Check if prop component exists
         #
         referencedRootCtrl = referencedRootComponent.getPublishedNode('Root')
+        referencedStowSpaceSwitch = self.scene.getNodeByUuid(referencedRootCtrl.userProperties['stowSpaceSwitch'], referenceNode=referenceNode)
 
-        handednessSpaceSwitch = self.scene.getNodeByUuid(referencedRootCtrl.userProperties['handednessSpaceSwitch'], referenceNode=referenceNode)
-        stowSpaceSwitch = self.scene.getNodeByUuid(referencedRootCtrl.userProperties['stowSpaceSwitch'], referenceNode=referenceNode)
+        propComponent = self.scene(self.propComponent)
 
-        # Connect referenced root control to control rig's export root
-        #
-        controlRig = self.findControlRig()
-        rootComponent = controlRig.findRootComponent()
+        if propComponent is not None:
 
-        rootSpec, = rootComponent.skeletonSpecs()
-        rootJoint = self.scene(rootSpec.uuid)
+            # Update referenced stow space switch
+            #
+            propCtrl = propComponent.getPublishedNode('Prop')
+            referencedStowSpaceSwitch.connectPlugs(propCtrl[f'worldMatrix[{propCtrl.instanceNumber()}]'], 'target[0].targetMatrix', force=True)
 
-        if not stringutils.isNullOrEmpty(self.handednessName):
-
-            if not rootJoint.hasAttr(self.handednessName):
-
-                rootJoint.addAttr(longName=self.handednessName, niceName=self.handednessName, attributeType='float', min=0.0, max=1.0, keyable=True)
-
-            referencedRootCtrl.connectPlugs('handedness', rootJoint[self.handednessName], force=True)
+            propSide = Side(propComponent.componentSide)
+            offsetEulerRotation = om.MEulerRotation(0.0, 0.0, math.pi) if (propSide == Side.RIGHT) else om.MEulerRotation.kIdentity
+            referencedStowSpaceSwitch.setAttr('target[0].targetOffsetRotate', offsetEulerRotation, convertUnits=False)
 
         else:
 
-            log.debug('Skipping handedness custom attribute...')
+            log.debug('No prop component specified to attach to!')
 
-        if not stringutils.isNullOrEmpty(self.stowName):
-
-            if not rootJoint.hasAttr(self.stowName):
-
-                rootJoint.addAttr(longName=self.stowName, niceName=self.stowName, attributeType='float', min=0.0, max=1.0, keyable=True)
-
-            referencedRootCtrl.connectPlugs('stowed', rootJoint[self.stowName], force=True)
-
-        else:
-
-            log.debug('Skipping stow custom attribute...')
-
-        # Connect prop offset controls to handedness space switch
-        #
-        primaryPropComponent = self.scene(self.primaryPropComponent)
-
-        if primaryPropComponent is not None:
-
-            propOffsetCtrl = primaryPropComponent.getPublishedNode('Offset')
-            handednessSpaceSwitch.connectPlugs(propOffsetCtrl[f'worldMatrix[{propOffsetCtrl.instanceNumber()}]'], 'target[0].targetMatrix', force=True)
-
-            propSide = Side(primaryPropComponent.componentSide)
-            offsetEulerRotation = om.MEulerRotation(0.0, 0.0, math.pi) if (propSide == Side.RIGHT) else om.MEulerRotation.kIdentity
-            handednessSpaceSwitch.setAttr('target[0].targetOffsetRotate', offsetEulerRotation, convertUnits=False)
-
-        secondaryPropComponent = self.scene(self.secondaryPropComponent)
-
-        if secondaryPropComponent is not None:
-
-            propOffsetCtrl = secondaryPropComponent.getPublishedNode('Offset')
-            handednessSpaceSwitch.connectPlugs(propOffsetCtrl[f'worldMatrix[{propOffsetCtrl.instanceNumber()}]'], 'target[1].targetMatrix', force=True)
-
-            propSide = Side(secondaryPropComponent.componentSide)
-            offsetEulerRotation = om.MEulerRotation(0.0, 0.0, math.pi) if (propSide == Side.RIGHT) else om.MEulerRotation.kIdentity
-            handednessSpaceSwitch.setAttr('target[1].targetOffsetRotate', offsetEulerRotation, convertUnits=False)
-
-        # Connect stowed control to space switch
+        # Check if stow component exists
         #
         stowComponent = self.scene(self.stowComponent)
 
         if stowComponent is not None:
 
+            # Check if a stow attribute is required
+            #
             stowCtrl = stowComponent.getPublishedNode('Stow')
-            stowCtrl.connectPlugs('stowed', referencedRootCtrl['stowed'])
+
+            if not stringutils.isNullOrEmpty(self.stowName):
+
+                # Find root joint and ensure attribute exists
+                # Finally, connect stow attributes
+                #
+                controlRig = self.findControlRig()
+                rootComponent = controlRig.findRootComponent()
+                rootSpec, = rootComponent.skeletonSpecs()
+
+                rootJoint = self.scene(rootSpec.uuid)
+
+                if not rootJoint.hasAttr(self.stowName):
+
+                    rootJoint.addAttr(
+                        longName=self.stowName,
+                        niceName=self.stowName,
+                        attributeType='float',
+                        min=0.0,
+                        max=1.0,
+                        keyable=True
+                    )
+
+                stowCtrl.connectPlugs('stowed', rootJoint[self.stowName], force=True)
+
+            # Update referenced stow space switch
+            #
+            referencedStowSpaceSwitch.connectPlugs(stowCtrl['stowed'], 'target[0].targetWeight', force=True)
+            referencedStowSpaceSwitch.connectPlugs(stowCtrl['stowed'], 'target[1].targetWeight', force=True)
 
             stowOffsetCtrl = stowComponent.getPublishedNode('Offset')
-            stowSpaceSwitch.connectPlugs(stowOffsetCtrl[f'worldMatrix[{stowOffsetCtrl.instanceNumber()}]'], 'target[1].targetMatrix', force=True)
+            referencedStowSpaceSwitch.connectPlugs(stowOffsetCtrl[f'worldMatrix[{stowOffsetCtrl.instanceNumber()}]'], 'target[1].targetMatrix', force=True)
 
             stowSide = Side(stowComponent.componentSide)
             offsetEulerRotation = om.MEulerRotation(0.0, 0.0, math.pi) if (stowSide == Side.RIGHT) else om.MEulerRotation.kIdentity
-            stowSpaceSwitch.setAttr('target[1].targetOffsetRotate', offsetEulerRotation, convertUnits=False)
+            referencedStowSpaceSwitch.setAttr('target[1].targetOffsetRotate', offsetEulerRotation, convertUnits=False)
+
+        else:
+
+            log.debug('No stow component specified to attach to!')
     # endregion
