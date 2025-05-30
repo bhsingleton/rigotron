@@ -16,11 +16,6 @@ class HeadComponent(basecomponent.BaseComponent):
     Overload of `AbstractComponent` that implements head components.
     """
 
-    # region Attributes
-    neckEnabled = mpyattribute.MPyAttribute('neckEnabled', attributeType='bool', default=True)
-    numNeckLinks = mpyattribute.MPyAttribute('numNeckLinks', attributeType='int', min=1, default=1)
-    # endregion
-
     # region Dunderscores
     __version__ = 1.0
     __default_component_name__ = 'Head'
@@ -43,7 +38,10 @@ class HeadComponent(basecomponent.BaseComponent):
     )
     # endregion
 
-    # region Properties
+    # region Attributes
+    neckEnabled = mpyattribute.MPyAttribute('neckEnabled', attributeType='bool', default=True)
+    numNeckLinks = mpyattribute.MPyAttribute('numNeckLinks', attributeType='int', min=1, default=1)
+
     @neckEnabled.changed
     def neckEnabled(self, neckEnabled):
         """
@@ -187,7 +185,7 @@ class HeadComponent(basecomponent.BaseComponent):
         if attachmentIndex == lastIndex:
 
             skeletonSpec = skeletonSpecs[attachmentIndex]
-            return self.scene(skeletonSpec.uuid), self.scene(componentParent.userProperties['SpineTipIKTarget'])
+            return self.scene(skeletonSpec.uuid), componentParent.getPublishedNode('Chest_IK')
 
         elif 0 <= attachmentIndex < numSkeletonSpecs:
 
@@ -244,7 +242,7 @@ class HeadComponent(basecomponent.BaseComponent):
             spineComponent = spineComponents[0]
             cogCtrl = spineComponent.getPublishedNode('COG')
             waistCtrl = spineComponent.getPublishedNode('Waist')
-            chestCtrl = spineComponent.getPublishedNode('Chest')
+            chestCtrl = spineComponent.getPublishedNode('Chest_IK')
 
         # Create head control
         #
@@ -403,10 +401,25 @@ class HeadComponent(basecomponent.BaseComponent):
                 neckFKCtrl.addPointHelper('disc', size=(15.0 * rigScale), colorRGB=lightColorRGB, lineWidth=2.0)
                 neckFKCtrl.addDivider('Settings')
                 neckFKCtrl.addAttr(longName='inheritsTwist', attributeType='angle', min=0.0, max=1.0, default=0.5, keyable=True)
+                neckFKCtrl.addAttr(longName='affectsSpine', attributeType='angle', min=0.0, max=1.0, default=0.5, keyable=True)
                 neckFKCtrl.addDivider('Spaces')
                 neckFKCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
                 neckFKCtrl.prepareChannelBoxForAnimation()
                 self.publishNode(neckFKCtrl, alias='Neck_FK')
+
+                spineTipFKTarget = self.scene(spineComponents[0].userProperties['spineTipFKTarget'])
+                constraint = spineTipFKTarget.findConstraint('transformConstraint')
+
+                hasConstraint = constraint is not None
+
+                if hasConstraint:
+
+                    constraint.clean()
+                    constraint.addTarget(neckFKCtrl, maintainOffset=True)
+
+                else:
+
+                    constraint = spineTipFKTarget.addConstraint('transformConstraint', [neckFKCtrl], maintainOffset=True)
 
                 # Setup neck space switching
                 #
