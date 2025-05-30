@@ -38,9 +38,7 @@ class TailComponent(basecomponent.BaseComponent):
 
     # region Attributes
     numTailLinks = mpyattribute.MPyAttribute('numTailLinks', attributeType='int', min=3, default=5)
-    # endregion
 
-    # region Properties
     @numTailLinks.changed
     def numTailLinks(self, numTailLinks):
         """
@@ -296,6 +294,7 @@ class TailComponent(basecomponent.BaseComponent):
         tailIKTipCtrl.addDivider('Settings')
         tailIKTipCtrl.addAttr(longName='stretch', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
         tailIKTipCtrl.addAttr(longName='retract', attributeType='float', min=0.0, max=1.0, keyable=True)
+        tailIKTipCtrl.addAttr(longName='twist', attributeType='float', keyable=True)
         tailIKTipCtrl.prepareChannelBoxForAnimation()
         self.publishNode(tailIKTipCtrl, alias=f'{self.componentName}_IK_Tip')
 
@@ -462,23 +461,29 @@ class TailComponent(basecomponent.BaseComponent):
         tailEndTwistSolver.connectPlugs(tailIKTipCtrl[f'parentMatrix[{tailIKTipCtrl.instanceNumber()}]'], 'startMatrix')
         tailEndTwistSolver.connectPlugs(tailIKTipCtrl[f'worldMatrix[{tailIKTipCtrl.instanceNumber()}]'], 'endMatrix')
 
-        tailFKRotatorSumName = self.formatName(subname='RotatorSum', kinemat='FK', type='arrayMath')
-        tailFKRotatorSum = self.scene.createNode('arrayMath', name=tailFKRotatorSumName)
-
         tailFKTwistSumName = self.formatName(subname='TwistSum', kinemat='FK', type='arrayMath')
         tailFKTwistSum = self.scene.createNode('arrayMath', name=tailFKTwistSumName)
 
-        for (i, tailFKPair) in enumerate(tailFKPairs):
+        tailFKtwistSource = [baseCtrl] + [tailFKPair.rot for tailFKPair in tailFKPairs]
 
-            tailFKPair.group.connectPlugs('rotateX', tailFKRotatorSum[f'inAngle[{i}].inAngleX'])
-            tailFKPair.rot.connectPlugs('rotateX', tailFKTwistSum[f'inAngle[{i}].inAngleX'])
+        for (i, (startFKCtrl, endFKCtrl)) in enumerate(zip(tailFKtwistSource[:-1], tailFKtwistSource[1:])):
+
+            multMatrixName = self.formatName(subname='Twist', kinemat='FK', type='multMatrix')
+            multMatrix = self.scene.createNode('multMatrix', name=multMatrixName)
+            multMatrix.connectPlugs(endFKCtrl[f'worldMatrix[{endFKCtrl.instanceNumber()}]'], 'matrixIn[0]')
+            multMatrix.connectPlugs(startFKCtrl[f'worldInverseMatrix[{startFKCtrl.instanceNumber()}]'], 'matrixIn[1]')
+
+            decomposeMatrixName = self.formatName(subname='Twist', kinemat='FK', type='multMatrix')
+            decomposeMatrix = self.scene.createNode('decomposeMatrix', name=decomposeMatrixName)
+            decomposeMatrix.connectPlugs(multMatrix['matrixSum'], 'inputMatrix')
+            decomposeMatrix.connectPlugs('outputRotateX', tailFKTwistSum[f'inAngle[{i}].inAngleX'])
 
         tailTwistSumName = self.formatName(subname='TwistSum', type='arrayMath')
         tailTwistSum = self.scene.createNode('arrayMath', name=tailTwistSumName)
-        tailTwistSum.connectPlugs(tailFKRotatorSum['outAngleX'], 'inAngle[0].inAngleX')
-        tailTwistSum.connectPlugs(tailFKTwistSum['outAngleX'], 'inAngle[1].inAngleX')
-        tailTwistSum.connectPlugs(tailStartTwistSolver['roll'], 'inAngle[2].inAngleX')
-        tailTwistSum.connectPlugs(tailEndTwistSolver['roll'], 'inAngle[3].inAngleX')
+        tailTwistSum.connectPlugs(tailFKTwistSum['outAngleX'], 'inAngle[0].inAngleX')
+        tailTwistSum.connectPlugs(tailStartTwistSolver['roll'], 'inAngle[1].inAngleX')
+        tailTwistSum.connectPlugs(tailEndTwistSolver['roll'], 'inAngle[2].inAngleX')
+        tailTwistSum.connectPlugs(tailIKTipCtrl['twist'], 'inAngle[3].inAngleX')
         tailTwistSum.connectPlugs('outAngleX', splineIKHandle['twist'])
 
         # Setup spline IK stretch
