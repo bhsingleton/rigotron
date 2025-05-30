@@ -118,7 +118,7 @@ class ClavicleComponent(basecomponent.BaseComponent):
         if attachmentIndex == lastIndex:
 
             skeletonSpec = skeletonSpecs[attachmentIndex]
-            return self.scene(skeletonSpec.uuid), self.scene(componentParent.userProperties['SpineTipIKTarget'])
+            return self.scene(skeletonSpec.uuid), self.scene(componentParent.userProperties['spineTipIKTarget'])
 
         elif 0 <= attachmentIndex < numSkeletonSpecs:
 

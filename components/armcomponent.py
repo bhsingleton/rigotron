@@ -11,7 +11,7 @@ log.setLevel(logging.INFO)
 
 class ArmComponent(TwoBoneLimbComponent):
     """
-    Overload of `AbstractComponent` that implements arm components.
+    Overload of `TwoBoneLimbComponent` that implements arm components.
     """
 
     # region Dunderscores

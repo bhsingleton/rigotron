@@ -579,8 +579,10 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         limbIKCtrl = self.scene(limbComponent.userProperties['ikControls'][-1])
         limbIKOffsetCtrl = self.scene(limbIKCtrl.userProperties['offset'])
         limbTipIKJoint = self.scene(limbComponent.userProperties['ikJoints'][-1])
-        limbTipRIKJoint = self.scene(limbComponent.userProperties['rikJoints'][-1])
-        limbRIKSoftener = self.scene(limbComponent.userProperties['rikSoftener'])
+
+        hasReverseIKJoints = 'rikJoints' in limbComponent.userProperties
+        limbTipIKJoint = self.scene(limbComponent.userProperties['ikJoints'][-1])
+        limbTipRIKJoint = self.scene(limbComponent.userProperties['rikJoints'][-1]) if hasReverseIKJoints else limbTipIKJoint
 
         # Create hand control
         #
@@ -679,7 +681,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         handIKTarget.freezeTransform()
         handIKTarget.lock()
 
-        limbRIKSoftener.connectPlugs(handIKTarget[f'worldMatrix[{handIKTarget.instanceNumber()}]'], 'endMatrix', force=True)
+        self.userProperties['ikTarget'] = handIKTarget.uuid()
 
         # Create kinematic metacarpal joints
         #
@@ -960,6 +962,18 @@ class HandComponent(extremitycomponent.ExtremityComponent):
                 fingerBlender.setName(self.formatName(subname=jointTypes[0], type='blendTransform'))
                 fingerTipBlender.setName(self.formatName(subname=jointTypes[1], type='blendTransform'))
 
+                # Create finger-tip IK target
+                #
+                fingerTipIKTargetName = self.formatName(subname=f'{fullFingerName}Tip', kinemat='IK', type='target')
+                fingerTipIKTarget = self.scene.createNode('transform', name=fingerTipIKTargetName, parent=handCtrl)
+                fingerTipIKTarget.displayLocalAxis = True
+                fingerTipIKTarget.visibility = False
+                fingerTipIKTarget.copyTransform(fingerTipIKJoint, skipScale=True)
+                fingerTipIKTarget.freezeTransform()
+                fingerTipIKTarget.lock()
+
+                fingerIKJoint.addConstraint('aimConstraint', [fingerTipIKTarget], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpVector=(0.0, 0.0, 1.0), worldUpObject=fingerTipIKTarget, maintainOffset=True)
+
             # Create finger IK control
             #
             fingerIKSpaceName = self.formatName(subname=f'{fullFingerName}', kinemat='IK', type='space')
@@ -1189,34 +1203,14 @@ class HandComponent(extremitycomponent.ExtremityComponent):
                 metacarpalScaleRemap.setAttr(f'parameter[{i}]', weight)
                 metacarpalScaleRemap.connectPlugs(f'outValue[{i}]', metacarpalSpace['scale'])
 
-        # Override end-matrix on parent limb's twist solver
-        #
-        twistSolver = self.scene(limbComponent.userProperties['twistSolvers'][-1])
-        rotateMatrix = transformutils.createRotationMatrix([-90.0 * mirrorSign, 0.0, 0.0])
-        offsetMatrix = rotateMatrix * (handExportJoint.worldMatrix() * handCtrl.worldInverseMatrix())
-
-        self.overrideLimbTwist(handCtrl, twistSolver, offsetMatrix=offsetMatrix)
-
-        # Override end-value on parent limb's scale remapper
-        #
-        scaleRemapper = self.scene(limbComponent.userProperties['scaleRemappers'][-1])
-        self.overrideLimbRemapper(limbIKCtrl, handCtrl, scaleRemapper)
-
-        # Override local space on parent limb's extremity-in control
-        #
-        hingeCtrl = self.scene(limbComponent.userProperties['hingeControl'])
-        otherHandles = hingeCtrl.userProperties.get('otherHandles', [])
-
-        hasOtherHandles = len(otherHandles) == 2
-
-        if hasOtherHandles:
-
-            self.overrideLimbHandle(handCtrl, self.scene(otherHandles[-1]))
-
-        # Tag hand controls
+        # Tag remaining hand controls
         #
         handCtrl.tagAsController(children=metacarpalCtrls)
         knuckleRollCtrl.tagAsController(parent=handCtrl)
+
+        # Call parent method
+        #
+        return super(HandComponent, self).buildRig()
 
     def buildPartialRig(self):
         """

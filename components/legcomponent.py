@@ -10,7 +10,7 @@ log.setLevel(logging.INFO)
 
 class LegComponent(TwoBoneLimbComponent):
     """
-    Overload of `BasicLimbComponent` that implements leg components.
+    Overload of `TwoBoneLimbComponent` that implements leg components.
     """
 
     # region Dunderscores
