@@ -27,9 +27,7 @@ class ControlRig(abstractinterface.AbstractInterface):
     componentsGroup = mpyattribute.MPyAttribute('componentsGroup', attributeType='message')
     propsGroup = mpyattribute.MPyAttribute('propsGroup', attributeType='message')
     meshesGroup = mpyattribute.MPyAttribute('meshesGroup', attributeType='message')
-    # endregion
 
-    # region Properties
     @rigName.changed
     def rigName(self, rigName):
         """
