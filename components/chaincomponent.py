@@ -21,7 +21,7 @@ class ChainComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Attributes
-    numLinks = mpyattribute.MPyAttribute('numLinks', attributeType='int', min=2)
+    numLinks = mpyattribute.MPyAttribute('numLinks', attributeType='int', min=2, default=2)
     # endregion
 
     # region Methods
