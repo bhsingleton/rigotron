@@ -1,7 +1,7 @@
 from maya.api import OpenMaya as om
 from mpy import mpyscene
 from dcc.maya.json import melsonobject
-from six import string_types
+from dcc.vendor.six import string_types
 
 import logging
 logging.basicConfig()
