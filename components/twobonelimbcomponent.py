@@ -1001,6 +1001,8 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             hingeExportJoint = self.scene(hingeSpec.uuid)
             hingeExportJoint.copyTransform(hingeCtrl)
 
+            hingeSpec.cacheMatrix(delete=False)
+
         # Create PV handle curve
         #
         limbPVShapeName = self.formatName(kinemat='PV', subname='Handle', type='control')
