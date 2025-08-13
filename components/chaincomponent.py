@@ -22,6 +22,17 @@ class ChainComponent(basecomponent.BaseComponent):
 
     # region Attributes
     numLinks = mpyattribute.MPyAttribute('numLinks', attributeType='int', min=2, default=2)
+
+    @numLinks.changed
+    def numLinks(self, numLinks):
+        """
+        Changed method that notifies of any state changes.
+
+        :type numLinks: bool
+        :rtype: None
+        """
+
+        self.markSkeletonDirty()
     # endregion
 
     # region Methods
@@ -107,6 +118,10 @@ class ChainComponent(basecomponent.BaseComponent):
         chainTipExportJoint = self.scene(chainTipSpec.uuid)
 
         componentSide = self.Side(self.componentSide)
+        requiresMirroring = (componentSide == self.Side.RIGHT)
+        mirrorSign = -1.0 if requiresMirroring else 1.0
+        mirrorMatrix = self.__default_mirror_matrices__[componentSide]
+
         rigScale = self.findControlRig().getRigScale()
 
         parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
@@ -121,13 +136,14 @@ class ChainComponent(basecomponent.BaseComponent):
             # Evaluate position in chain
             #
             index = i + 1
+            chainMatrix = mirrorMatrix * chainExportJoint.worldMatrix()
             chainCtrl = None
 
             if i == 0:
 
                 chainSpaceName = self.formatName(index=index, type='space')
                 chainSpace = self.scene.createNode('transform', name=chainSpaceName, parent=controlsGroup)
-                chainSpace.copyTransform(chainExportJoint)
+                chainSpace.setWorldMatrix(chainMatrix, skipScale=True)
                 chainSpace.freezeTransform()
 
                 chainSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
@@ -144,7 +160,7 @@ class ChainComponent(basecomponent.BaseComponent):
                 chainCtrlName = self.formatName(index=index, type='control')
                 chainCtrl = self.scene.createNode('transform', name=chainCtrlName, parent=chainCtrls[i - 1])
                 chainCtrl.addPointHelper('box', size=(10.0 * rigScale), side=componentSide)
-                chainCtrl.copyTransform(chainExportJoint)
+                chainCtrl.setWorldMatrix(chainMatrix, skipScale=True)
                 chainCtrl.freezeTransform()
                 chainCtrl.prepareChannelBoxForAnimation()
 
