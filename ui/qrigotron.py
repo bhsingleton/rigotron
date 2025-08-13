@@ -803,14 +803,15 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         return controlRig
 
     @undo.Undo(state=False)
-    def addComponent(self, typeName, componentParent=None, componentSide=None):
+    def addComponent(self, typeName, componentParent=None, componentSide=None, componentId=None):
         """
         Adds a component, of the specified typename, to the current control-rig.
 
         :type typeName: str
         :type componentParent: abstractcomponent.AbstractComponent
         :type componentSide: Side
-        :rtype: abstractcomponent.AbstractComponent
+        :type componentId: str
+        :rtype: Union[abstractcomponent.AbstractComponent, None]
         """
 
         # Redundancy check
@@ -832,6 +833,12 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
 
             componentSide = componentParent.componentSide
 
+        # Check if an ID was supplied
+        #
+        if componentId is None:
+
+            componentId = componentParent.componentId
+
         # Get class constructor
         #
         Component = self.componentManager.getClass(typeName)
@@ -839,7 +846,11 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         if callable(Component):
 
             log.debug(f'Adding "{typeName}" to {componentParent}!')
-            component = Component.create(componentSide=componentSide, parent=self.controlRig.componentsGroup)
+            component = Component.create(
+                componentSide=componentSide,
+                componentId=componentId,
+                parent=self.controlRig.componentsGroup
+            )
 
             parentIndex = self.outlinerModel.indexFromComponent(componentParent)
             self.outlinerModel.appendRow(component, parent=parentIndex)
