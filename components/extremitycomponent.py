@@ -35,6 +35,24 @@ class ExtremityComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Methods
+    def getAssociatedLimbComponent(self):
+        """
+        Returns the associated limb component.
+
+        :rtype: rigotron.components.limbcomponent.LimbComponent
+        """
+
+        limbComponents = self.findComponentAncestors('LimbComponent')
+        hasLimbComponent = len(limbComponents) == 1
+
+        if hasLimbComponent:
+
+            return limbComponents[0]
+
+        else:
+
+            return None
+
     def buildRig(self):
         """
         Builds the control rig for this component.
