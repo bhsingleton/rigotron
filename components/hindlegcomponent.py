@@ -1036,9 +1036,6 @@ class HindLegComponent(limbcomponent.LimbComponent):
 
         upperSIKJoint, midSIKJoint, lowerSIKJoint, tipSIKJoint = limbSIKJoints
         upperSIKJoint.addConstraint('pointConstraint', [limbCtrl])
-        upperSIKJoint.preferEulerRotation()
-        midSIKJoint.preferEulerRotation(skipPreferredAngleX=True, skipPreferredAngleY=True)
-        lowerSIKJoint.preferEulerRotation(skipPreferredAngleX=True, skipPreferredAngleY=True)
 
         limbSpringHandle, limbSpringEffector = kinematicutils.applySpringSolver(upperSIKJoint, tipSIKJoint)
         limbSpringHandle.setName(self.formatName(kinemat='Spring', type='ikHandle'))
