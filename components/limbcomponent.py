@@ -206,6 +206,12 @@ class LimbComponent(basecomponent.BaseComponent):
             scaleRemapper.connectPlugs(decomposeMatrix['outputScale'], 'outputMax', force=True)
 
     def connectExtremityToIKHandle(self, extremityComponent):
+        """
+        Adds the supplied extremity control to the limb's IK softener.
+
+        :type extremityComponent: rigotron.component.extremity.ExtremityComponent
+        :rtype: None
+        """
 
         extremityIKTarget = self.scene(extremityComponent.userProperties['ikTarget'])
         usesIKEmulator = 'ikEmulator' in self.userProperties
