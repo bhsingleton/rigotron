@@ -137,9 +137,9 @@ class StowComponent(basecomponent.BaseComponent):
         parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
 
         rootComponent = self.findRootComponent()
-        propComponents = rootComponent.findComponentDescendants('PropComponent')
-        leftPropComponents = [component for component in propComponents if component.componentSide == self.Side.LEFT]
-        rightPropComponents = [component for component in propComponents if component.componentSide == self.Side.RIGHT]
+        handComponents = rootComponent.findComponentDescendants('HandComponent')
+        leftHandComponents = [component for component in handComponents if component.componentId == self.componentId and component.componentSide == self.Side.LEFT]
+        rightHandComponents = [component for component in handComponents if component.componentId == self.componentId and component.componentSide == self.Side.RIGHT]
 
         # Check if space switching is required
         #
@@ -147,25 +147,24 @@ class StowComponent(basecomponent.BaseComponent):
         stowOffsetCtrl = self.getPublishedNode('Offset')
         stowSpace = self.scene(stowCtrl.userProperties['space'])
 
-        hasPropComponents = len(propComponents)
+        hasLeftHandComponent = len(leftHandComponents) > 0
+        hasRightHandComponent = len(rightHandComponents) > 0
+        requiresSpaceSwitching = hasLeftHandComponent or hasRightHandComponent
 
-        if not hasPropComponents:
+        if not requiresSpaceSwitching:
 
             stowSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
             return
 
         # Evaluate prop components
         #
-        hasLeftPropComponent = len(leftPropComponents) > 0
-        hasRightPropComponent = len(rightPropComponents) > 0
-
         stowCtrl.addDivider('Spaces')
         stowCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (Default)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-        stowCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftPropComponent, hidden=(not hasLeftPropComponent))
-        stowCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasRightPropComponent, hidden=(not hasRightPropComponent))
+        stowCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftHandComponent, hidden=(not hasLeftHandComponent))
+        stowCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasRightHandComponent, hidden=(not hasRightHandComponent))
         stowCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (Default)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-        stowCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftPropComponent, hidden=(not hasLeftPropComponent))
-        stowCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasRightPropComponent, hidden=(not hasRightPropComponent))
+        stowCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftHandComponent, hidden=(not hasLeftHandComponent))
+        stowCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasRightHandComponent, hidden=(not hasRightHandComponent))
 
         stowOffsetCtrl.addDivider('Spaces')
         stowOffsetCtrl.addProxyAttr('positionSpaceW0', stowCtrl['positionSpaceW0'])
@@ -180,33 +179,55 @@ class StowComponent(basecomponent.BaseComponent):
         spaceSwitch.connectPlugs(stowCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
         spaceSwitch.connectPlugs(stowCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
 
-        if hasLeftPropComponent:
+        if hasLeftHandComponent:
 
-            propComponent = leftPropComponents[0]
-            handComponent = propComponent.componentParent()
+            # Add left hand to space switch
+            #
+            handComponent = leftHandComponents[0]
             handCtrl = handComponent.getPublishedNode('Hand')
 
             index = spaceSwitch.addTarget(handCtrl)
             spaceSwitch.connectPlugs(stowCtrl['positionSpaceW1'], f'target[{index}].targetTranslateWeight')
             spaceSwitch.connectPlugs(stowCtrl['rotationSpaceW1'], f'target[{index}].targetRotateWeight')
 
-            propCtrl = propComponent.getPublishedNode('Prop')
-            offsetMatrix = propCtrl.worldMatrix() * handCtrl.worldInverseMatrix()
-            targetOffsetTranslate, targetOffsetRotate, targetOffsetScale = transformutils.decomposeTransformMatrix(offsetMatrix)
-            spaceSwitch.setAttr(f'target[{index}]', {'targetOffsetTranslate': targetOffsetTranslate, 'targetOffsetRotate': targetOffsetRotate}, convertUnits=False)
+            # Check if prop component exists
+            # If so, update target offset matrix for left hand target
+            #
+            propComponents = handComponent.findComponentDescendants('PropComponent')
+            hasPropComponent = len(propComponents) > 0
 
-        if hasRightPropComponent:
+            if hasPropComponent:
 
-            propComponent = rightPropComponents[0]
-            handComponent = propComponent.componentParent()
+                propComponent = propComponents[0]
+                propCtrl = propComponent.getPublishedNode('Prop')
+
+                offsetMatrix = propCtrl.worldMatrix() * handCtrl.worldInverseMatrix()
+                targetOffsetTranslate, targetOffsetRotate, targetOffsetScale = transformutils.decomposeTransformMatrix(offsetMatrix)
+                spaceSwitch.setAttr(f'target[{index}]', {'targetOffsetTranslate': targetOffsetTranslate, 'targetOffsetRotate': targetOffsetRotate}, convertUnits=False)
+
+        if hasRightHandComponent:
+
+            # Add right hand to space switch
+            #
+            handComponent = rightHandComponents[0]
             handCtrl = handComponent.getPublishedNode('Hand')
 
             index = spaceSwitch.addTarget(handCtrl)
             spaceSwitch.connectPlugs(stowCtrl['positionSpaceW2'], f'target[{index}].targetTranslateWeight')
             spaceSwitch.connectPlugs(stowCtrl['rotationSpaceW2'], f'target[{index}].targetRotateWeight')
 
-            propCtrl = propComponent.getPublishedNode('Prop')
-            offsetMatrix = propCtrl.worldMatrix() * handCtrl.worldInverseMatrix()
-            targetOffsetTranslate, targetOffsetRotate, targetOffsetScale = transformutils.decomposeTransformMatrix(offsetMatrix)
-            spaceSwitch.setAttr(f'target[{index}]', {'targetOffsetTranslate': targetOffsetTranslate, 'targetOffsetRotate': targetOffsetRotate}, convertUnits=False)
+            # Check if prop component exists
+            # If so, update target offset matrix for right hand target
+            #
+            propComponents = handComponent.findComponentDescendants('PropComponent')
+            hasPropComponent = len(propComponents) > 0
+
+            if hasPropComponent:
+
+                propComponent = propComponents[0]
+                propCtrl = propComponent.getPublishedNode('Prop')
+
+                offsetMatrix = propCtrl.worldMatrix() * handCtrl.worldInverseMatrix()
+                targetOffsetTranslate, targetOffsetRotate, targetOffsetScale = transformutils.decomposeTransformMatrix(offsetMatrix)
+                spaceSwitch.setAttr(f'target[{index}]', {'targetOffsetTranslate': targetOffsetTranslate, 'targetOffsetRotate': targetOffsetRotate}, convertUnits=False)
     # endregion

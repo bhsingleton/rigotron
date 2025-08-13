@@ -150,7 +150,7 @@ class PropComponent(basecomponent.BaseComponent):
         self.publishNode(propCtrl, alias='Prop')
 
         propOffsetCtrlName = self.formatName(subname='Offset', type='control')
-        propOffsetCtrl = self.scene.createNode('transform', name=propSpec.driver, parent=propCtrl)
+        propOffsetCtrl = self.scene.createNode('transform', name=propOffsetCtrlName, parent=propCtrl)
         propOffsetCtrl.addPointHelper('cylinder', size=15.0, colorRGB=lightColorRGB, lineWidth=2.0)
         propOffsetCtrl.prepareChannelBoxForAnimation()
         self.publishNode(propOffsetCtrl, alias='Offset')
@@ -179,13 +179,8 @@ class PropComponent(basecomponent.BaseComponent):
 
         # Get opposite space switch
         #
-        oppositePropOffsetCtrl = self.scene(oppositePropCtrl.userProperties['offset'])
         oppositePropSpaceSwitch = self.scene(oppositePropCtrl.userProperties['spaceSwitch'])
-
-        for target in oppositePropSpaceSwitch.targets():
-
-            targetNode = self.scene(target.name())
-            targetNode.connectPlugs(f'worldMatrix[{targetNode.instanceNumber()}]', oppositePropSpaceSwitch[f'target[{target.index}].targetMatrix'], force=True)
+        oppositePropSpaceSwitch.repair()
 
     def finalizeRig(self):
         """
