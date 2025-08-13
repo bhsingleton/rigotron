@@ -326,15 +326,14 @@ class SpineComponent(basecomponent.BaseComponent):
         # Check if spine tip exists
         #
         neckComponents = [component for component in self.findComponentDescendants('HeadComponent') if component.neckEnabled]
-        numNeckComponents = len(neckComponents)
+        neckExists = len(neckComponents) == 1
+        neckComponent = neckComponents[0] if neckExists else None
 
-        hasSpineTip = numNeckComponents > 0
         spineTipPoint = None
 
-        if hasSpineTip:
+        if neckExists:
 
-            neckPoints = [self.scene(component.skeletonSpecs()[0].uuid).translation(space=om.MSpace.kWorld) for component in neckComponents]
-            spineTipPoint = sum(neckPoints, start=om.MPoint.kOrigin) / numNeckComponents
+            spineTipPoint = self.scene(neckComponent.skeletonSpecs()[0].uuid).translation(space=om.MSpace.kWorld)
 
         # Create COG controller
         #
@@ -554,7 +553,7 @@ class SpineComponent(basecomponent.BaseComponent):
         #
         spineFKTipTarget = None
 
-        if hasSpineTip:
+        if neckExists:
 
             spineTipMatrix = transformutils.createTranslateMatrix(spineTipPoint)
 
@@ -664,7 +663,7 @@ class SpineComponent(basecomponent.BaseComponent):
         #
         controlNodes = [spineFKTransCtrl if (spineFKTransCtrl is not None) else spineFKRotCtrl for (spineFKRotCtrl, spineFKTransCtrl) in spineFKCtrls]
 
-        if hasSpineTip:
+        if neckExists:
 
             controlNodes.append(spineFKTipTarget)
 
@@ -710,6 +709,10 @@ class SpineComponent(basecomponent.BaseComponent):
             reverseWeight = self.scene.createNode('revDoubleLinear', name=reverseWeightName)
             reverseWeight.connectPlugs(weightRemap[f'outValue[{i}].outValueX'], 'input')
             reverseWeight.connectPlugs('output', skinCluster[f'weightList[{i}].weights[0]'])
+
+        self.userProperties['curve'] = curveShape.uuid()
+        self.userProperties['intermediateCurve'] = intermediateCurve.uuid()
+        self.userProperties['skinCluster'] = skinCluster.uuid()
 
         # Override control-points on intermediate-object
         #
@@ -800,13 +803,16 @@ class SpineComponent(basecomponent.BaseComponent):
         splineIKHandle.connectPlugs(spineIKBaseJoint[f'worldMatrix[{spineIKBaseJoint.instanceNumber()}]'], 'dWorldUpMatrix')
         splineIKHandle.connectPlugs(spineIKTipJoint[f'worldMatrix[{spineIKTipJoint.instanceNumber()}]'], 'dWorldUpMatrixEnd')
 
+        self.userProperties['ikHandle'] = splineIKHandle.uuid()
+        self.userProperties['ikEffector'] = splineIKEffector.uuid()
+
         # Setup spline IK stretch
         #
         curveInfoName = self.formatName(type='curveInfo')
         curveInfo = self.scene.createNode('curveInfo', name=curveInfoName)
         curveInfo.connectPlugs(curveShape[f'worldSpace[{curveShape.instanceNumber()}]'], 'inputCurve')
 
-        intermediateInfoName = self.formatName(subname='intermediate', type='curveInfo')
+        intermediateInfoName = self.formatName(subname='Intermediate', type='curveInfo')
         intermediateInfo = self.scene.createNode('curveInfo', name=intermediateInfoName)
         intermediateInfo.connectPlugs(intermediateCurve[f'worldSpace[{intermediateCurve.instanceNumber()}]'], 'inputCurve')
 
