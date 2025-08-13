@@ -167,11 +167,6 @@ class TailComponent(basecomponent.BaseComponent):
         baseCtrl.prepareChannelBoxForAnimation()
         self.publishNode(baseCtrl, alias='Base')
 
-        baseDecomposeMatrixName = self.formatName(subname='Base', type='decomposeMatrix')
-        baseDecomposeMatrix = self.scene.createNode('decomposeMatrix', name=baseDecomposeMatrixName)
-        baseDecomposeMatrix.connectPlugs(baseCtrl[f'worldMatrix[{baseCtrl.instanceNumber()}]'], 'inputMatrix')
-        baseDecomposeMatrix.connectPlugs(baseCtrl['rotateOrder'], 'inputRotateOrder')
-
         # Create tail FK controls
         #
         rootComponent = self.findRootComponent()
@@ -207,7 +202,7 @@ class TailComponent(basecomponent.BaseComponent):
             tailFKScaleSumName = self.formatName(subname='FK', index=index, kinemat='ScaleSum', type='arrayMath')
             tailFKScaleSum = self.scene.createNode('arrayMath', name=tailFKScaleSumName)
             tailFKScaleSum.setAttr('operation', 2)  # Multiply
-            tailFKScaleSum.connectPlugs(baseDecomposeMatrix['outputScale'], 'inFloat[0]')
+            tailFKScaleSum.connectPlugs(baseCtrl['scale'], 'inFloat[0]')
             tailFKScaleSum.connectPlugs('outFloat', tailFKRotCtrl['preScale'])
 
             for j in range(i):
