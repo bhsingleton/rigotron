@@ -1,3 +1,5 @@
+import json
+
 from maya.api import OpenMaya as om
 from mpy import mpyattribute
 from enum import IntEnum
@@ -74,9 +76,9 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             FootType.BALL: om.MMatrix(
                 [
                     (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (20.0, -10.0, 5.0, 1.0)
+                    (0.0, 0.0, 1.0, 0.0),
+                    (5.0, -10.0, 0.0, 1.0)
                 ]
             )
         },
@@ -92,22 +94,22 @@ class FootComponent(extremitycomponent.ExtremityComponent):
             FootType.BALL: om.MMatrix(
                 [
                     (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (-20.0, -10.0, 5.0, 1.0)
+                    (0.0, 0.0, 1.0, 0.0),
+                    (5.0, -10.0, 0.0, 1.0)
                 ]
             )
         }
     }
     __default_pivot_points__ = [
-        om.MVector(0.0, -10.0, 0.0),
-        om.MVector(0.0, -10.0, -5.0),
-        om.MVector(0.0, 0.0, -5.0),
-        om.MVector(0.0, 10.0, -5.0),
-        om.MVector(0.0, 10.0, 0.0),
-        om.MVector(0.0, 10.0, 5.0),
-        om.MVector(0.0, 0.0, 5.0),
-        om.MVector(0.0, -10.0, 5.0)
+        (0.0, -10.0, 0.0),
+        (0.0, -10.0, -5.0),
+        (0.0, 0.0, -5.0),
+        (0.0, 10.0, -5.0),
+        (0.0, 10.0, 0.0),
+        (0.0, 10.0, 5.0),
+        (0.0, 0.0, 5.0),
+        (0.0, -10.0, 5.0)
     ]
     __default_pivot_matrices__ = {
         Side.LEFT: {
@@ -186,84 +188,84 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         Side.LEFT: {
             ToeType.BIG: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (10.0, -15.0, 5.0, 1.0)
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, -10.0, 1.0)
                 ]
             ),
             ToeType.LONG: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (15.0, -15.0, 5.0, 1.0)
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, -5.0, 1.0)
                 ]
             ),
             ToeType.MIDDLE: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (20.0, -15.0, 5.0, 1.0)
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 0.0, 1.0)
                 ]
             ),
             ToeType.RING: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (25.0, -15.0, 5.0, 1.0)
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 5.0, 1.0)
                 ]
             ),
             ToeType.PINKY: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (30.0, -15.0, 5.0, 1.0)
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 10.0, 1.0)
                 ]
             )
         },
         Side.RIGHT: {
             ToeType.BIG: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (-10.0, -15.0, 5.0, 1.0)
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 10.0, 1.0)
                 ]
             ),
             ToeType.LONG: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (-15.0, -15.0, 5.0, 1.0)
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 5.0, 1.0)
                 ]
             ),
             ToeType.MIDDLE: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (-20.0, -15.0, 5.0, 1.0)
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 0.0, 1.0)
                 ]
             ),
             ToeType.RING: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (-25.0, -15.0, 5.0, 1.0)
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, -5.0, 1.0)
                 ]
             ),
             ToeType.PINKY: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (-30.0, -15.0, 5.0, 1.0)
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, -10.0, 1.0)
                 ]
             )
         }
@@ -363,251 +365,129 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
             return {ToeType.BIG: bigToeEnabled, ToeType.LONG: longToeEnabled, ToeType.MIDDLE: True, ToeType.RING: True, ToeType.PINKY: True}
 
-    def invalidatePivotSpecs(self, pivotSpecs):
+    def invalidatePivots(self, pivotSpecs, **kwargs):
         """
         Rebuilds the internal pivot specs for this component.
 
         :type pivotSpecs: List[pivotspec.PivotSpec]
-        :rtype: None
+        :rtype: List[pivotspec.PivotSpec]
         """
 
-        # Concatenate pivot name
+        # Edit pivot spec
         #
-        pivotSpec, = self.resizePivotSpecs(1, pivotSpecs)
+        referenceNode = self.skeletonReference()
+
+        pivotSpec, = self.resizePivots(1, pivotSpecs)
         pivotSpec.name = self.formatName(subname='Pivot', type='nurbsCurve')
+        pivotSpec.driver.name = self.formatName()
+        pivotSpec.driver.namespace = referenceNode.namespace()
+        pivotSpec.driver.type = pivotSpec.driver.Type.CONSTRAINT
+        pivotSpec.driver.skipTranslate = (False, False, True)
+
+        # Check if default shape exists
+        # If not, go ahead and populate default shape!
+        #
+        if stringutils.isNullOrEmpty(pivotSpec.shapes):
+
+            controlPoints = list(self.__default_pivot_points__)
+            controlPoints.extend(controlPoints[:3])  # Periodic curves require overlapping points equal to the degree!
+
+            count, degree, form = len(controlPoints), 3, om.MFnNurbsCurve.kPeriodic
+            knots, degree = shapeutils.createKnotVector(count, degree, form=form)
+
+            shape = {
+                'typeName': 'nurbsCurve',
+                'degree': degree,
+                'form': form,
+                'controlPoints': controlPoints,
+                'knots': knots,
+                'lineWidth': -1.0
+            }
+
+            pivotSpec.shapes = json.dumps([shape])
 
         # Call parent method
         #
-        super(FootComponent, self).invalidatePivotSpecs(pivotSpecs)
+        return super(FootComponent, self).invalidatePivots(pivotSpecs, **kwargs)
 
-    def buildPivots(self):
-        """
-        Builds the pivots for this component.
-
-        :rtype: Union[Tuple[mpynode.MPyNode], None]
-        """
-
-        # Create pivot
-        #
-        pivotSpec, = self.pivotSpecs()
-        componentSide = self.Side(self.componentSide)
-
-        pivot = self.scene.createNode('transform', name=pivotSpec.name)
-        pivotSpec.uuid = pivot.uuid()
-
-        defaultMatrix = self.__default_component_matrices__[componentSide][self.FootType.FOOT]
-        matrix = pivotSpec.getMatrix(default=defaultMatrix)
-        pivot.setWorldMatrix(matrix, skipTranslateZ=True)
-
-        # Constrain pivot
-        #
-        footSpec, ballSpec = self.skeletonSpecs()
-        footExportJoint = self.scene(footSpec.uuid)
-
-        pivot.addConstraint('transformConstraint', [footExportJoint], skipTranslateZ=True)
-
-        # Check if shape data exists
-        #
-        hasShape = not stringutils.isNullOrEmpty(pivotSpec.shapes)
-
-        if hasShape:
-
-            pivot.loadShapes(pivotSpec.shapes)
-
-        else:
-
-            controlPoints = list(map(om.MVector, self.__default_pivot_points__))
-            controlPoints.extend(controlPoints[:3])  # Periodic curves require overlapping points equal to the degree!
-
-            pivot.addCurve(controlPoints, degree=3, form=om.MFnNurbsCurve.kPeriodic)
-
-        return (pivotSpec,)
-
-    def isSkeletonDirty(self):
-        """
-        Evaluates if the skeleton specs are outdated.
-
-        :rtype: bool
-        """
-
-        isDirty = super(FootComponent, self).isSkeletonDirty()
-        isOutdated = len(self.userProperties[self.SKELETON_KEY]) != len(self.FootType)
-
-        return isDirty or isOutdated
-
-    def repairSkeletonSpecs(self, skeletonSpecs):
-        """
-        Remaps any skeleton specs from the previous version of this component.
-
-        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
-        :rtype: None
-        """
-
-        # Evaluate skeleton spec size
-        # The previous version of this component used to use 3 specs
-        #
-        size = len(skeletonSpecs)
-
-        if size != 3:
-
-            return
-
-        # Check if specs require remapping
-        # If the toes were enabled we need to push those parameters to the ball spec
-        #
-        footSpec, ballSpec, toesSpec = skeletonSpecs
-
-        if toesSpec.enabled:
-
-            ballSpec.name = toesSpec.name
-            ballSpec.uuid = toesSpec.uuid
-            ballSpec.matrix = toesSpec.matrix
-            ballSpec.worldMatrix = toesSpec.worldMatrix
-            ballSpec.driver = toesSpec.driver
-
-        return skeletonSpecs
-
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
-        :type skeletonSpecs: List[Dict[str, Any]]
-        :rtype: None
+        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
+        :rtype: List[skeletonspec.SkeletonSpec]
         """
 
-        # Resize skeleton specs
+        # Edit foot spec
         #
-        self.repairSkeletonSpecs(skeletonSpecs)
+        footSide = self.Side(self.componentSide)
 
-        size = len(self.FootType)
-        footSpec, ballSpec = self.resizeSkeletonSpecs(size, skeletonSpecs)
-
-        # Edit skeleton specs
-        #
+        footSpec, = self.resizeSkeleton(1, skeletonSpecs, hierarchical=False)
         footSpec.name = self.formatName()
-        footSpec.driver = self.formatName(subname='Ankle', kinemat='Blend', type='joint')
+        footSpec.side = footSide
+        footSpec.type = self.Type.FOOT
+        footSpec.defaultMatrix = self.__default_component_matrices__[footSide][self.FootType.FOOT]
+        footSpec.driver.name = self.formatName(subname='Ankle', kinemat='Blend', type='joint')
 
-        ballSpec.name = self.formatName(subname='Ball')
-        ballSpec.driver = self.formatName(subname='Toes', type='control')
-
-        # Check if toe spec groups exist
+        # Edit ball spec
         #
-        toeGroups = ballSpec.groups
-        numToeGroups = len(toeGroups)
+        ballSpec, = self.resizeSkeleton(1, footSpec.children, hierarchical=False)
+        ballSpec.name = self.formatName(subname='Ball')
+        ballSpec.side = footSide
+        ballSpec.type = self.Type.TOE
+        ballSpec.defaultMatrix = self.__default_component_matrices__[footSide][self.FootType.BALL]
+        ballSpec.driver.name = self.formatName(subname='Toes', type='control')
 
-        toeMembers = self.ToeType.__members__
-        numToeMembers = len(toeMembers)
-
-        if numToeGroups != numToeMembers:
-
-            toeGroups.update([(i, []) for i in range(numToeMembers)])
-
-        # Iterate through toe spec groups
+        # Iterate through toe specs
         #
         toeFlags = self.toeFlags()
+        numBigToeLinks, numToeLinks = int(self.numBigToeLinks), int(self.numToeLinks)
+        jointTypes = (self.Type.BIG_TOE, self.Type.INDEX_TOE, self.Type.MIDDLE_TOE, self.Type.RING_TOE, self.Type.PINKY_TOE)
 
-        for (toeType, toeGroup) in toeGroups.items():
+        numToeMembers = len(self.ToeType)
+        topLevelToeSpecs = self.resizeSkeleton(numToeMembers, ballSpec.children, hierarchical=False)
+
+        for (toeType, baseToeSpec) in enumerate(topLevelToeSpecs):
+
+            # Decompose toes
+            #
+            toeType = self.ToeType(toeType)
+            toeEnabled = toeFlags.get(toeType, False)
+            toeName = toeType.name.title()
+            fullToeName = f'{toeName}Toe'
+            jointType = jointTypes[toeType]
 
             # Iterate through digit specs
             #
-            toeType = self.ToeType(toeType)
-            toeName = toeType.name.title()
-            toeEnabled = toeFlags.get(toeType, False)
-            fullToeName = f'{toeName}Toe'
+            isBig = (toeType == self.ToeType.BIG)
+            toeSize = numBigToeLinks if isBig else numToeLinks
 
-            numToeLinks = self.numBigToeLinks if (toeType == ToeType.BIG) else self.numToeLinks
-            *toeSpecs, toeTipSpec = self.resizeSkeletonSpecs(numToeLinks + 1, toeGroup)
+            *inbetweenToeSpecs, toeTipSpec = self.resizeSkeleton(toeSize, baseToeSpec, hierarchical=True)
 
-            for (j, toeSpec) in enumerate(toeSpecs, start=1):
+            for (i, toeSpec) in enumerate((baseToeSpec, *inbetweenToeSpecs), start=1):
 
-                toeSpec.name = self.formatName(subname=fullToeName, index=j)
-                toeSpec.driver = self.formatName(subname=fullToeName, index=j, type='control')
+                isFirstToe = (i == 1)
+                defaultMatrix = self.__default_digit_matrices__[footSide][toeType] if isFirstToe else transformutils.createTranslateMatrix((self.__default_digit_spacing__, 0.0, 0.0))
+
                 toeSpec.enabled = toeEnabled
+                toeSpec.name = self.formatName(subname=fullToeName, index=i)
+                toeSpec.type = jointType
+                toeSpec.defaultMatrix = defaultMatrix
+                toeSpec.driver.name = self.formatName(subname=fullToeName, index=i, type='control')
 
+            # Edit tip spec
+            #
             fullToeTipName = f'{fullToeName}Tip'
-            toeTipSpec.name = self.formatName(subname=fullToeTipName)
-            toeTipSpec.driver = self.formatName(subname=fullToeTipName, type='target')
+
             toeTipSpec.enabled = toeEnabled
+            toeTipSpec.name = self.formatName(subname=fullToeTipName)
+            toeTipSpec.type = jointType
+            toeTipSpec.defaultMatrix = transformutils.createTranslateMatrix((self.__default_digit_spacing__, 0.0, 0.0))
+            toeTipSpec.driver.name = self.formatName(subname=fullToeTipName, type='target')
 
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: List[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
+        # Call parent method
         #
-        footSpec, ballSpec = self.skeletonSpecs()
-        side = self.Side(self.componentSide)
-
-        # Create foot joint
-        #
-        footJoint = self.scene.createNode('joint', name=footSpec.name)
-        footJoint.side = side
-        footJoint.type = self.Type.FOOT
-        footJoint.displayLocalAxis = True
-        footSpec.uuid = footJoint.uuid()
-
-        footMatrix = footSpec.getMatrix(default=self.__default_component_matrices__[side][FootType.FOOT])
-        footJoint.setWorldMatrix(footMatrix)
-
-        # Create ball joint
-        #
-        ballJoint = self.scene.createNode('joint', name=ballSpec.name, parent=footJoint)
-        ballJoint.side = side
-        ballJoint.type = self.Type.NONE
-        ballJoint.displayLocalAxis = True
-        ballSpec.uuid = ballJoint.uuid()
-
-        ballMatrix = ballSpec.getMatrix(default=self.__default_component_matrices__[side][FootType.BALL])
-        ballJoint.setWorldMatrix(ballMatrix)
-
-        # Create toe joints
-        #
-        toeGroups = ballSpec.groups
-        jointTypes = (self.Type.BIG_TOE, self.Type.INDEX_TOE, self.Type.MIDDLE_TOE, self.Type.RING_TOE, self.Type.PINKY_TOE)
-
-        toeJoints = []
-
-        for (i, toeLinkSpecs) in toeGroups.items():
-
-            # Check if toe is enabled
-            #
-            toeType = self.ToeType(i)
-            isEnabled = toeLinkSpecs[0].enabled
-
-            if not isEnabled:
-
-                continue
-
-            # Create toe joints
-            #
-            numToeLinks = len(toeLinkSpecs)
-            toeLinks = [None] * numToeLinks
-
-            defaultToeMatrix = self.__default_digit_matrices__[side][toeType]
-
-            for (j, toeLinkSpec) in enumerate(toeLinkSpecs):
-
-                # Create toe-link
-                #
-                parent = toeLinks[j - 1] if (j > 0) else ballJoint
-                toeLink = self.scene.createNode('joint', name=toeLinkSpec.name, parent=parent)
-                toeLink.side = side
-                toeLink.type = jointTypes[i]
-                toeLink.displayLocalAxis = True
-                toeLinkSpec.uuid = toeLink.uuid()
-
-                defaultToeLinkMatrix = transformutils.createTranslateMatrix([(self.__default_digit_spacing__ * j), 0.0, 0.0]) * defaultToeMatrix
-                toeLinkMatrix = toeLinkSpec.getMatrix(default=defaultToeLinkMatrix)
-                toeLink.setWorldMatrix(toeLinkMatrix)
-
-                toeLinks[j] = toeLink
-
-            toeJoints.append(toeLinks)
-
-        return (footJoint, ballJoint, *toeJoints)
+        return super(FootComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def buildRig(self):
         """
@@ -618,12 +498,14 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
         # Decompose component
         #
-        footSpec, ballSpec = self.skeletonSpecs()
+        referenceNode = self.skeletonReference()
 
-        footExportJoint = footSpec.getNode()
+        footSpec, = self.skeleton()
+        footExportJoint = footSpec.getNode(referenceNode=referenceNode)
         footExportMatrix = footExportJoint.worldMatrix()
 
-        ballExportJoint = ballSpec.getNode()
+        ballSpec, = footSpec.children
+        ballExportJoint = ballSpec.getNode(referenceNode=referenceNode)
         ballExportMatrix = ballExportJoint.worldMatrix()
 
         controlsGroup = self.scene(self.controlsGroup)
@@ -705,11 +587,12 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
         # Decompose foot pivot curve
         #
-        pivotSpec, = self.pivotSpecs()
+        pivotSpec, = self.pivots()
         pivotCurveData = mshapeparser.loads(pivotSpec.shapes)[0]
         fnPivotCurve = om.MFnNurbsCurve(pivotCurveData)
 
-        pivotCurvePoints = [om.MPoint(point) * pivotSpec.matrix for point in fnPivotCurve.cvPositions()]
+        pivotMatrix = pivotSpec.matrix.asMatrix()
+        pivotCurvePoints = [om.MPoint(point) * pivotMatrix for point in fnPivotCurve.cvPositions()]
 
         # Add intermediate shape to foot control
         #
@@ -851,7 +734,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         footForwardVector, footUpVector, footRightVector, footPoint = transformutils.breakMatrix(footExportMatrix, normalize=True)
         footRotationMatrix = transformutils.createRotationMatrix(footExportMatrix)
         ballRotationMatrix = transformutils.createRotationMatrix(ballExportMatrix)
-        
+
         groundDot = footForwardVector * (worldCenter - footPoint)
         groundPoint = footPoint + (footForwardVector * groundDot)
 
@@ -1133,23 +1016,22 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
             # Iterate through toe groups
             #
-            for (toeId, toeGroup) in ballSpec.groups.items():
+            for (toeType, firstToeSpec) in enumerate(ballSpec.children):
 
-                # Check if toe group is enabled
+                # Check if toe spec is enabled
                 #
-                *toeSpecs, toeTipSpec = toeGroup
-                isEnabled = toeSpecs[0].enabled
-
-                if not isEnabled:
+                if not firstToeSpec.enabled:
 
                     continue
 
                 # Create toe master control
                 #
-                toeType = self.ToeType(toeId)
+                *toeSpecs, toeTipSpec = self.flattenSpecs(firstToeSpec, skipDisabled=False)
+
+                toeType = self.ToeType(toeType)
                 toeName = toeType.name.title()
                 fullToeName = f'{toeName}Toe'
-                firstToeExportJoint = self.scene(toeSpecs[0].uuid)
+                firstToeExportJoint = firstToeSpec.getNode(referenceNode=referenceNode)
 
                 masterToeCtrlName = self.formatName(subname=fullToeName, type='control')
                 masterToeCtrl = self.scene.createNode('transform', name=masterToeCtrlName, parent=toesCtrl)
@@ -1215,7 +1097,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
                 # Create toe tip target
                 #
-                toeTipExportJoint = self.scene(toeTipSpec.uuid)
+                toeTipExportJoint = toeTipSpec.getNode(referenceNode=referenceNode)
 
                 toeTipTargetName = self.formatName(subname=f'{fullToeName}Tip', type='target')
                 toeTipTarget = self.scene.createNode('transform', name=toeTipTargetName, parent=toeCtrls[-1])

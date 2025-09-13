@@ -125,13 +125,14 @@ class InterfaceFactory(proxyfactory.ProxyFactory):
 
         return list(self.iterControlRigs())
 
-    def createControlRig(self, name):
+    def createControlRig(self, name, referencePath=''):
         """
         Returns a new control rig.
 
         :type name: str
+        :type referencePath: str
         :rtype: controlrig.ControlRig
         """
 
-        return self.createInterface('ControlRig', rigName=name)
+        return self.createInterface('ControlRig', rigName=name, referencePath=referencePath)
     # endregion

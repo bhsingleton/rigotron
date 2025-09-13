@@ -20,7 +20,7 @@ class PropComponent(basecomponent.BaseComponent):
     # region Dunderscores
     __version__ = 1.0
     __default_component_name__ = 'Prop'
-    __default_prop_matrices__ = {
+    __default_component_matrices__ = {
         Side.LEFT: om.MMatrix(
             [
                 (0.0, -1.0, 0.0, 0.0),
@@ -60,65 +60,44 @@ class PropComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Methods
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
-        :type skeletonSpecs: List[Dict[str, Any]]
-        :rtype: None
+        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
+        :rtype: List[skeletonspec.SkeletonSpec]
         """
 
         # Edit skeleton specs
         #
-        propSpec, = self.resizeSkeletonSpecs(1, skeletonSpecs)
+        propSide = self.Side(self.componentSide)
+        propType = self.Type.PROP_A if (propSide == self.Side.LEFT) else self.Type.PROP_B if (propSide == self.Side.RIGHT) else self.Type.PROP_C
+
+        propSpec, = self.resizeSkeleton(1, skeletonSpecs, hierarchical=False)
         propSpec.name = self.formatName()
-        propSpec.driver = self.formatName(subname='Offset', type='control')
+        propSpec.side = propSide
+        propSpec.type = propType
+        propSpec.defaultMatrix = self.__default_component_matrices__[propSide]
+        propSpec.driver.name = self.formatName(subname='Offset', type='control')
 
         # Call parent method
         #
-        super(PropComponent, self).invalidateSkeletonSpecs(skeletonSpecs)
-
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: List[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
-        #
-        componentSide = self.Side(self.componentSide)
-        propSpec, = self.skeletonSpecs()
-
-        # Create upper joint
-        #
-        jointType = self.Type.PROP_A if (componentSide == self.Side.LEFT) else self.Type.PROP_B if (componentSide == self.Side.RIGHT) else self.Type.PROP_C
-
-        propJoint = self.scene.createNode('joint', name=propSpec.name)
-        propJoint.side = componentSide
-        propJoint.type = jointType
-        propJoint.drawStyle = self.Style.JOINT
-        propJoint.displayLocalAxis = True
-        propSpec.uuid = propJoint.uuid()
-
-        defaultPropMatrix = self.__default_prop_matrices__[componentSide]
-        propMatrix = propSpec.getMatrix(default=defaultPropMatrix)
-        propJoint.setWorldMatrix(propMatrix)
-
-        return (propJoint,)
+        return super(PropComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def buildRig(self):
         """
         Builds the control rig for this component.
+        TODO: Add forearm space to space switcher!
 
         :rtype: None
         """
 
         # Decompose component
         #
+        referenceNode = self.skeletonReference()
         propSpec, = self.skeletonSpecs()
-        propExportJoint = self.scene(propSpec.uuid)
-        propMatrix = propExportJoint.worldMatrix()
+        propExportJoint = propSpec.getNode(referenceNode=referenceNode)
+        propExportMatrix = propExportJoint.worldMatrix()
 
         componentSide = self.Side(self.componentSide)
         requiresMirroring = componentSide == self.Side.RIGHT
@@ -135,9 +114,11 @@ class PropComponent(basecomponent.BaseComponent):
 
         # Create prop control
         #
+        propMatrix = mirrorMatrix * propExportMatrix
+
         propSpaceName = self.formatName(type='space')
         propSpace = self.scene.createNode('transform', name=propSpaceName, parent=controlsGroup)
-        propSpace.setWorldMatrix(mirrorMatrix * propMatrix)
+        propSpace.setWorldMatrix(propMatrix)
         propSpace.freezeTransform()
 
         propSpaceSwitch = propSpace.addSpaceSwitch([], maintainOffset=True)
@@ -259,9 +240,15 @@ class PropComponent(basecomponent.BaseComponent):
             if hasRightHand:
 
                 propMatrix = propCtrl.worldMatrix()
-                handMirrorMatrix = transformutils.createRotationMatrix([0.0, 0.0, 180.0])
-                propMirrorMatrix = transformutils.createRotationMatrix([0.0, 180.0, 0.0])
-                targetOffsetMatrix = propMirrorMatrix * (propMatrix * (handMirrorMatrix * leftHandCtrl.worldMatrix()).inverse())
+                handMatrix = leftHandCtrl.worldMatrix()
+                handOffsetMatrix = transformutils.createRotationMatrix([0.0, 0.0, 180.0])
+                propOffsetMatrix = propMatrix * (handOffsetMatrix * handMatrix).inverse()
+                propOffsetTranslation, propOffsetEulerRotation, propOffsetScale = transformutils.decomposeTransformMatrix(propOffsetMatrix)
+                propOffsetTranslation.z *= -1.0
+                propOffsetEulerRotation.x *= -1.0
+                propOffsetEulerRotation.y *= -1.0
+
+                targetOffsetMatrix = transformutils.composeMatrix(propOffsetTranslation, propOffsetEulerRotation, propOffsetScale)
                 targetOffsetTranslate, targetOffsetRotate, targetOffsetScale = transformutils.decomposeTransformMatrix(targetOffsetMatrix)
 
                 index = propSpaceSwitch.addTarget(rightHandCtrl)
@@ -308,9 +295,15 @@ class PropComponent(basecomponent.BaseComponent):
             if hasLeftHand:
 
                 propMatrix = propCtrl.worldMatrix()
-                handMirrorMatrix = transformutils.createRotationMatrix([0.0, 0.0, 180.0])
-                propMirrorMatrix = transformutils.createRotationMatrix([0.0, 180.0, 0.0])
-                targetOffsetMatrix = propMirrorMatrix * (propMatrix * (handMirrorMatrix * rightHandCtrl.worldMatrix()).inverse())
+                handMatrix = rightHandCtrl.worldMatrix()
+                handOffsetMatrix = transformutils.createRotationMatrix([0.0, 0.0, 180.0])
+                propOffsetMatrix = propMatrix * (handOffsetMatrix * handMatrix).inverse()
+                propOffsetTranslation, propOffsetEulerRotation, propOffsetScale = transformutils.decomposeTransformMatrix(propOffsetMatrix)
+                propOffsetTranslation.z *= -1.0
+                propOffsetEulerRotation.x *= -1.0
+                propOffsetEulerRotation.y *= -1.0
+
+                targetOffsetMatrix = transformutils.composeMatrix(propOffsetTranslation, propOffsetEulerRotation, propOffsetScale)
                 targetOffsetTranslate, targetOffsetRotate, targetOffsetScale = transformutils.decomposeTransformMatrix(targetOffsetMatrix)
 
                 index = propSpaceSwitch.addTarget(leftHandCtrl)

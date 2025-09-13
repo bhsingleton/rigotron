@@ -17,6 +17,14 @@ class ChainComponent(basecomponent.BaseComponent):
     # region Dunderscores
     __version__ = 1.0
     __default_component_name__ = 'Chain'
+    __default_component_matrix__ = om.MMatrix(
+        [
+            (1.0, 0.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0, 0.0),
+            (0.0, 0.0, 1.0, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+        ]
+    )
     __default_component_spacing__ = 10.0
     # endregion
 
@@ -36,69 +44,45 @@ class ChainComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Methods
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
-        :type skeletonSpecs: List[Dict[str, Any]]
-        :rtype: None
+        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
+        :rtype: List[skeletonspec.SkeletonSpec]
         """
 
-        # Edit skeleton specs
+        # Resize skeleton specs
         #
-        numLinks = int(self.numLinks) + 1
-        *chainSpecs, chainTipSpec = self.resizeSkeletonSpecs(numLinks, skeletonSpecs)
+        chainSize = int(self.numLinks) + 1  # Save space for chain tip spec!
+        *chainSpecs, chainTipSpec = self.resizeSkeleton(chainSize, skeletonSpecs, hierarchical=True)
 
+        # Edit chain specs
+        #
         for (i, chainSpec) in enumerate(chainSpecs, start=1):
 
-            chainSpec.name = self.formatName(index=i)
-            chainSpec.driver = self.formatName(index=i, type='control')
+            isFirstChainSpec = (i == 1)
+            defaultMatrix = om.MMatrix(self.__default_component_matrix__) if isFirstChainSpec else transformutils.createTranslateMatrix((self.__default_component_spacing__, 0.0, 0.0))
 
+            chainSpec.name = self.formatName(index=i)
+            chainSpec.side = self.componentSide
+            chainSpec.type = self.Type.OTHER
+            chainSpec.otherType = self.componentName
+            chainSpec.defaultMatrix = defaultMatrix
+            chainSpec.driver.name = self.formatName(index=i, type='control')
+
+        # Edit chain tip spec
+        #
         chainTipSpec.name = self.formatName(name=f'{self.componentName}Tip')
-        chainTipSpec.driver = self.formatName(name=f'{self.componentName}Tip', type='target')
+        chainTipSpec.side = self.componentSide
+        chainTipSpec.type = self.Type.OTHER
+        chainTipSpec.otherType = self.componentName
+        chainTipSpec.defaultMatrix = transformutils.createTranslateMatrix((self.__default_component_spacing__, 0.0, 0.0))
+        chainTipSpec.driver.name = self.formatName(name=f'{self.componentName}Tip', type='target')
 
         # Call parent method
         #
-        super(ChainComponent, self).invalidateSkeletonSpecs(skeletonSpecs)
-
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: Tuple[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
-        #
-        chainSpecs = self.skeletonSpecs()
-
-        # Iterate through skeleton specs
-        #
-        numJoints = len(chainSpecs)
-        chainJoints = [None] * numJoints
-
-        for (i, chainSpec) in enumerate(chainSpecs):
-
-            # Create joint
-            #
-            parent = chainJoints[i - 1] if (i > 0) else None
-
-            chainJoint = self.scene.createNode('joint', name=chainSpec.name, parent=parent)
-            chainJoint.side = self.componentSide
-            chainJoint.type = self.Type.OTHER
-            chainJoint.otherType = self.componentName
-            chainJoint.displayLocalAxis = True
-            chainSpec.uuid = chainJoint.uuid()
-
-            chainJoints[i] = chainJoint
-
-            # Update joint transform
-            #
-            defaultChainMatrix = transformutils.createTranslateMatrix([i * self.__default_component_spacing__, 0.0, 0.0])
-            chainMatrix = chainSpec.getMatrix(default=defaultChainMatrix)
-            chainJoint.setWorldMatrix(chainMatrix)
-
-        return chainJoints
+        return super(ChainComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def buildRig(self):
         """
@@ -109,13 +93,14 @@ class ChainComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
+        referenceNode = self.skeletonReference()
+        *chainSpecs, chainTipSpec = self.skeletonSpecs(flatten=True)
+        chainExportJoints = [chainSpec.getNode(referenceNode=referenceNode) for chainSpec in chainSpecs]
+        chainTipExportJoint = chainTipSpec.getNode(referenceNode=referenceNode)
+
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
         jointsGroup = self.scene(self.jointsGroup)
-
-        *chainSpecs, chainTipSpec = self.skeletonSpecs()
-        chainExportJoints = [self.scene(chainSpec.uuid) for chainSpec in chainSpecs]
-        chainTipExportJoint = self.scene(chainTipSpec.uuid)
 
         componentSide = self.Side(self.componentSide)
         requiresMirroring = (componentSide == self.Side.RIGHT)
@@ -135,20 +120,20 @@ class ChainComponent(basecomponent.BaseComponent):
 
             # Evaluate position in chain
             #
-            index = i + 1
+            chainIndex = i + 1
             chainMatrix = mirrorMatrix * chainExportJoint.worldMatrix()
-            chainCtrl = None
+            chainSpace, chainCtrl = None, None
 
             if i == 0:
 
-                chainSpaceName = self.formatName(index=index, type='space')
+                chainSpaceName = self.formatName(index=chainIndex, type='space')
                 chainSpace = self.scene.createNode('transform', name=chainSpaceName, parent=controlsGroup)
                 chainSpace.setWorldMatrix(chainMatrix, skipScale=True)
                 chainSpace.freezeTransform()
 
                 chainSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
 
-                chainCtrlName = self.formatName(index=index, type='control')
+                chainCtrlName = self.formatName(index=chainIndex, type='control')
                 chainCtrl = self.scene.createNode('transform', name=chainCtrlName, parent=chainSpace)
                 chainCtrl.addPointHelper('box', size=(10.0 * rigScale), side=componentSide)
                 chainCtrl.prepareChannelBoxForAnimation()
@@ -157,7 +142,7 @@ class ChainComponent(basecomponent.BaseComponent):
 
             else:
 
-                chainCtrlName = self.formatName(index=index, type='control')
+                chainCtrlName = self.formatName(index=chainIndex, type='control')
                 chainCtrl = self.scene.createNode('transform', name=chainCtrlName, parent=chainCtrls[i - 1])
                 chainCtrl.addPointHelper('box', size=(10.0 * rigScale), side=componentSide)
                 chainCtrl.setWorldMatrix(chainMatrix, skipScale=True)
@@ -166,7 +151,7 @@ class ChainComponent(basecomponent.BaseComponent):
 
             # Publish control
             #
-            self.publishNode(chainCtrl, alias=f'{self.componentName}{str(index).zfill(2)}')
+            self.publishNode(chainCtrl, alias=f'{self.componentName}{str(chainIndex).zfill(2)}')
 
             # Store reference to control
             #

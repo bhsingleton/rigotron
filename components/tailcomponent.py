@@ -25,7 +25,7 @@ class TailComponent(basecomponent.BaseComponent):
     # region Dunderscores
     __version__ = 1.0
     __default_component_name__ = 'Tail'
-    __default_tail_matrix__ = om.MMatrix(
+    __default_component_matrix__ = om.MMatrix(
         [
             (0.0, 1.0, 0.0, 0.0),
             (0.0, 0.0, 1.0, 0.0),
@@ -33,7 +33,7 @@ class TailComponent(basecomponent.BaseComponent):
             (0.0, 0.0, 100.0, 1.0)
         ]
     )
-    __default_tail_spacing__ = 20.0
+    __default_component_spacing__ = 20.0
     # endregion
 
     # region Attributes
@@ -52,81 +52,45 @@ class TailComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Methods
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
-        :type skeletonSpecs: List[Dict[str, Any]]
-        :rtype: None
+        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
+        :rtype: List[skeletonspec.SkeletonSpec]
         """
 
-        # Edit skeleton specs
+        # Edit tail specs
         #
-        tailCount = int(self.numTailLinks) + 1  # Reserve space for tail tip joint!
-        *tailSpecs, tailTipSpec = self.resizeSkeletonSpecs(tailCount, skeletonSpecs)
+        tailSide = self.Side(self.componentSide)
+
+        tailSize = int(self.numTailLinks) + 1  # Reserve space for tip spec!
+        *tailSpecs, tailTipSpec = self.resizeSkeleton(tailSize, skeletonSpecs, hierarchical=True)
 
         for (i, tailSpec) in enumerate(tailSpecs, start=1):
 
-            tailSpec.name = self.formatName(index=i)
-            tailSpec.driver = self.formatName(index=i, type='control')
+            isFirstTailSpec = (i == 1)
+            defaultMatrix = om.MMatrix(self.__default_tail_matrix__) if isFirstTailSpec else transformutils.createTranslateMatrix((self.__default_component_spacing__, 0.0, 0.0))
 
+            tailSpec.name = self.formatName(index=i)
+            tailSpec.side = tailSide
+            tailSpec.type = self.Type.OTHER
+            tailSpec.otherType = self.componentName
+            tailSpec.defaultMatrix = defaultMatrix
+            tailSpec.driver.name = self.formatName(index=i, type='control')
+
+        # Edit tail tip spec
+        #
         tailTipSpec.name = self.formatName(name=f'{self.componentName}Tip')
-        tailTipSpec.driver = self.formatName(name=f'{self.componentName}Tip', type='target')
+        tailTipSpec.side = tailSide
+        tailTipSpec.type = self.Type.OTHER
+        tailTipSpec.otherType = self.componentName
+        tailTipSpec.defaultMatrix = transformutils.createTranslateMatrix((self.__default_component_spacing__, 0.0, 0.0))
+        tailTipSpec.driver.name = self.formatName(name=f'{self.componentName}Tip', type='target')
 
         # Call parent method
         #
-        super(TailComponent, self).invalidateSkeletonSpecs(skeletonSpecs)
-
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: Tuple[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
-        #
-        componentSide = self.Side(self.componentSide)
-        *tailSpecs, tailTipSpec = self.skeletonSpecs()
-
-        # Create tail joints
-        #
-        tailCount = len(tailSpecs)
-        tailJoints = [None] * tailCount
-
-        for (i, tailSpec) in enumerate(tailSpecs):
-
-            parent = tailJoints[i - 1] if (i > 0) else None
-
-            tailJoint = self.scene.createNode('joint', name=tailSpec.name, parent=parent)
-            tailJoint.side = componentSide
-            tailJoint.type = self.Type.OTHER
-            tailJoint.otherType = self.componentName
-            tailJoint.displayLocalAxis = True
-
-            defaultTailSpacing = (i + 1) * self.__default_tail_spacing__
-            defaultTailMatrix = transformutils.createTranslateMatrix([defaultTailSpacing, 0.0, 0.0]) * self.__default_tail_matrix__
-            tailMatrix = tailSpec.getMatrix(default=defaultTailMatrix)
-            tailJoint.setWorldMatrix(tailMatrix)
-
-            tailSpec.uuid = tailJoint.uuid()
-            tailJoints[i] = tailJoint
-
-        # Create tip joint
-        #
-        tailTipJoint = self.scene.createNode('joint', name=tailTipSpec.name, parent=tailJoints[-1])
-        tailTipJoint.side = componentSide
-        tailTipJoint.type = self.Type.OTHER
-        tailTipJoint.otherType = self.componentName
-
-        defaultTailSpacing = (tailCount + 1) * self.__default_tail_spacing__
-        defaultTailTipMatrix = transformutils.createTranslateMatrix([defaultTailSpacing, 0.0, 0.0]) * self.__default_tail_matrix__
-        tailTipMatrix = tailTipSpec.getMatrix(default=defaultTailTipMatrix)
-        tailTipJoint.setWorldMatrix(tailTipMatrix)
-
-        tailTipSpec.uuid = tailTipJoint.uuid()
-
-        return (*tailJoints, tailTipJoint)
+        return super(TailComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def buildRig(self):
         """
@@ -137,7 +101,7 @@ class TailComponent(basecomponent.BaseComponent):
 
         # Get component properties
         #
-        *tailSpecs, tailTipSpec = self.skeletonSpecs()
+        *tailSpecs, tailTipSpec = self.skeletonSpecs(flatten=True)
         tailExportJoints = [self.scene(tailSpec.uuid) for tailSpec in chain(tailSpecs, [tailTipSpec])]
         firstTailExportJoint, lastTailExportJoint = tailExportJoints[0], tailExportJoints[-1]
 

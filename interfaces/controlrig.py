@@ -1,8 +1,11 @@
+import os
+
 from maya.api import OpenMaya as om
 from mpy import mpyattribute
 from dcc.naming import namingutils
+from dcc.maya.standalone import rpc
 from ..abstract import abstractinterface, abstractcomponent
-from ..libs import Status
+from ..libs import Status, setuputils
 
 import logging
 logging.basicConfig()
@@ -12,21 +15,34 @@ log.setLevel(logging.INFO)
 
 class ControlRig(abstractinterface.AbstractInterface):
     """
-    Overload of `AbstractInterop` that interfaces with control rigs.
+    Overload of `AbstractInterface` that interfaces with control rigs.
     """
 
     # region Enums
     Status = Status
     # endregion
 
+    # region Dunderscores
+    __version__ = 1.0
+    # endregion
+
     # region Attributes
     rigName = mpyattribute.MPyAttribute('rigName', attributeType='str')
-    rigHeight = mpyattribute.MPyAttribute('rigHeight', attributeType='float')
-    rigRadius = mpyattribute.MPyAttribute('rigRadius', attributeType='float')
+    rigVersion = mpyattribute.MPyAttribute('rigVersion', attributeType='float', min=0.0)
+    rigBoundingBoxMinX = mpyattribute.MPyAttribute('rigBoundingBoxMinX', attributeType='float')
+    rigBoundingBoxMinY = mpyattribute.MPyAttribute('rigBoundingBoxMinY', attributeType='float')
+    rigBoundingBoxMinZ = mpyattribute.MPyAttribute('rigBoundingBoxMinZ', attributeType='float')
+    rigBoundingBoxMin = mpyattribute.MPyAttribute('rigBoundingBoxMin', attributeType='compound', children=('rigBoundingBoxMinX', 'rigBoundingBoxMinY', 'rigBoundingBoxMinZ'))
+    rigBoundingBoxMaxX = mpyattribute.MPyAttribute('rigBoundingBoxMaxX', attributeType='float')
+    rigBoundingBoxMaxY = mpyattribute.MPyAttribute('rigBoundingBoxMaxY', attributeType='float')
+    rigBoundingBoxMaxZ = mpyattribute.MPyAttribute('rigBoundingBoxMaxZ', attributeType='float')
+    rigBoundingBoxMax = mpyattribute.MPyAttribute('rigBoundingBoxMax', attributeType='compound', children=('rigBoundingBoxMaxX', 'rigBoundingBoxMaxY', 'rigBoundingBoxMaxZ'))
     rootComponent = mpyattribute.MPyAttribute('rootComponent', attributeType='message')
     componentsGroup = mpyattribute.MPyAttribute('componentsGroup', attributeType='message')
     propsGroup = mpyattribute.MPyAttribute('propsGroup', attributeType='message')
     meshesGroup = mpyattribute.MPyAttribute('meshesGroup', attributeType='message')
+    skeletonReference = mpyattribute.MPyAttribute('skeletonReference', attributeType='message')
+    skinReference = mpyattribute.MPyAttribute('skeletonReference', attributeType='message', array=True)
 
     @rigName.changed
     def rigName(self, rigName):
@@ -59,6 +75,7 @@ class ControlRig(abstractinterface.AbstractInterface):
 
         controlRig = super(ControlRig, cls).create('transform', parent=parent)
         controlRig.rigName = kwargs.get('rigName', '')
+        controlRig.rigVersion = kwargs.get('rigVersion', cls.__version__)
 
         # Create organizational groups and lock them
         # Locking them will prevent Maya from deleting any empty groups!
@@ -75,13 +92,24 @@ class ControlRig(abstractinterface.AbstractInterface):
         propsGroup.lock()
         meshesGroup.lock()
 
-        # Cache rig bounds for component use
+        # Create skeleton reference
+        #
+        referencePath = kwargs.get('referencePath', '')
+
+        if os.path.isfile(referencePath):
+
+            skeletonReference = cls.scene.createReference(referencePath, namespace=':')  # Please Lord...forgive me for what I am about to do...
+            skeletonReference.unload()
+
+            controlRig.skeletonReference = skeletonReference.object()
+
+        # Cache rig bounding box for component use
         # We can use these values to derive the scale factor for controller shapes!
         #
-        rigBounds = cls.getRigBounds()
+        rigBoundingBox = setuputils.getBoundingBoxByTypeName(typeName='mesh')
 
-        controlRig.rigHeight = rigBounds.depth
-        controlRig.rigRadius = max(rigBounds.width, rigBounds.height) * 0.5
+        controlRig.rigBoundingBoxMin = rigBoundingBox.min
+        controlRig.rigBoundingBoxMax = rigBoundingBox.max
 
         # Create root component
         #
@@ -89,21 +117,27 @@ class ControlRig(abstractinterface.AbstractInterface):
 
         return controlRig
 
-    @classmethod
-    def getRigBounds(cls):
+    def getRigBounds(self):
         """
-        Estimates the size of the rig based on the global bounding-box.
+        Returns the bounding box for this rig.
 
         :rtype: om.MBoundingBox
         """
 
-        boundingBox = om.MBoundingBox(om.MPoint(-0.5, -0.5, -0.5), om.MPoint(0.5, 0.5, 0.5))
+        return om.MBoundingBox(om.MPoint(self.rigBoundingBoxMin), om.MPoint(self.rigBoundingBoxMax))
 
-        for mesh in cls.scene.iterNodesByTypeName('mesh'):
+    def getRigWidthAndHeight(self):
+        """
+        Returns the width and height for this rig.
+        TODO: Add support for Y-Up rigs!
 
-            boundingBox.expand(mesh.boundingBox)
+        :rtype: Tuple[float, float]
+        """
 
-        return boundingBox
+        rigBounds = self.getRigBounds()
+        width, height = max(rigBounds.width, rigBounds.height), rigBounds.depth  # Rigs are built in Z-Up and Z correlates with depth!
+
+        return width, height
 
     def getRigScale(self, decimals=2):
         """
@@ -113,7 +147,8 @@ class ControlRig(abstractinterface.AbstractInterface):
         :rtype: float
         """
 
-        scale = round(self.rigHeight / 221.51626014709473, decimals)  # This value comes from the first rig I built!
+        width, height = self.getRigWidthAndHeight()
+        scale = round(height / 221.51626014709473, decimals)  # This value comes from the first rig I built!
 
         if scale > 0.0:
 
@@ -131,6 +166,78 @@ class ControlRig(abstractinterface.AbstractInterface):
         """
 
         return self.Status(self.findRootComponent().componentStatus)
+
+    def getSkeletonManager(self):
+        """
+        Returns an interface for the referenced skeleton.
+
+        :rtype: rpc.MRPCClient
+        """
+
+        return rpc.__client__
+
+    def getSkeletonReference(self):
+        """
+        Returns the skeleton reference node.
+
+        :rtype: mpy.builtins.referencemixin.ReferenceMixin
+        """
+
+        return self.scene(self.skeletonReference)
+
+    def loadSkeleton(self, clearEdits=False):
+        """
+        Reloads the referenced skeleton for this component.
+
+        :type clearEdits: bool
+        :rtype: None
+        """
+
+        # Check if edits require clearing
+        #
+        reference = self.getSkeletonReference()
+
+        if clearEdits:
+
+            reference.clearEdits()
+
+        # Check if reference requires loading
+        #
+        if not reference.isLoaded():
+
+            reference.load()
+
+    def unloadSkeleton(self, clearEdits=False):
+        """
+        Reloads the referenced skeleton for this component.
+
+        :type clearEdits: bool
+        :rtype: None
+        """
+
+        # Check if reference requires unloading
+        #
+        reference = self.getSkeletonReference()
+
+        if reference.isLoaded():
+
+            reference.unload()
+
+        # Check if edits require clearing
+        #
+        if clearEdits:
+
+            reference.clearEdits()
+
+    def saveSkeleton(self):
+        """
+        Pushes any skeleton spec changes to the referenced skeleton.
+
+        :rtype: None
+        """
+
+        manager = self.getSkeletonManager()
+        manager.save()
 
     def hasRootComponent(self):
         """

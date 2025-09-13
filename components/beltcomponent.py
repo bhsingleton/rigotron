@@ -28,50 +28,27 @@ class BeltComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Methods
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
-        :type skeletonSpecs: List[Dict[str, Any]]
-        :rtype: None
+        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
+        :rtype: List[skeletonspec.SkeletonSpec]
         """
 
         # Edit skeleton specs
         #
-        beltSpec, = self.resizeSkeletonSpecs(1, skeletonSpecs)
+        beltSpec, = self.resizeSkeleton(1, skeletonSpecs, hierarchical=False)
         beltSpec.name = self.formatName()
-        beltSpec.driver = self.formatName(type='control')
+        beltSpec.side = self.componentSide
+        beltSpec.type = self.Type.OTHER
+        beltSpec.otherType = self.componentName
+        beltSpec.defaultMatrix = om.MMatrix(self.__default_component_matrix__)
+        beltSpec.driver.name = self.formatName(type='control')
 
         # Call parent method
         #
-        super(BeltComponent, self).invalidateSkeletonSpecs(skeletonSpecs)
-
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: Tuple[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
-        #
-        beltSpec, = self.skeletonSpecs()
-
-        # Create joint
-        #
-        beltJoint = self.scene.createNode('joint', name=beltSpec.name)
-        beltJoint.side = self.componentSide
-        beltJoint.type = self.Type.OTHER
-        beltJoint.otherType = self.componentName
-        beltJoint.displayLocalAxis = True
-        beltSpec.uuid = beltJoint.uuid()
-
-        # Update joint transform
-        #
-        beltMatrix = beltSpec.getMatrix(default=self.__default_component_matrix__)
-        beltJoint.setWorldMatrix(beltMatrix)
-
-        return (beltJoint,)
+        return super(BeltComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def buildRig(self):
         """
@@ -82,12 +59,14 @@ class BeltComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
+        referenceNode = self.skeletonReference()
+        beltSpec, = self.skeletonSpecs()
+        beltExportJoint = beltSpec.getNode(referenceNode=referenceNode)
+        beltExportMatrix = beltExportJoint.worldMatrix()
+
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
         jointsGroup = self.scene(self.jointsGroup)
-
-        beltSpec, = self.skeletonSpecs()
-        beltExportJoint = self.scene(beltSpec.uuid)
 
         componentSide = self.Side(self.componentSide)
         colorRGB = Colour(0.663, 0.0, 1.0)
@@ -110,7 +89,7 @@ class BeltComponent(basecomponent.BaseComponent):
 
         beltSpaceName = self.formatName(type='space')
         beltSpace = self.scene.createNode('transform', name=beltSpaceName, parent=controlsGroup)
-        beltSpace.copyTransform(beltExportJoint)
+        beltSpace.setWorldMatrix(beltExportMatrix, skipScale=True)
         beltSpace.freezeTransform()
 
         beltCtrl = self.scene.createNode('transform', name=beltSpec.driver, parent=beltSpace)

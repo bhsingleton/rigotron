@@ -1,6 +1,5 @@
 import maya.cmds as mc
 import maya.api.OpenMaya as om
-
 from mpy import mpyscene, mpynode
 from dcc.maya.libs import transformutils
 
@@ -8,6 +7,24 @@ import logging
 logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
+
+
+def getBoundingBoxByTypeName(typeName='mesh'):
+    """
+    Returns the scene bounding-box for the specified node types.
+
+    :type typeName: str
+    :rtype: om.MBoundingBox
+    """
+
+    scene = mpyscene.MPyScene()
+    boundingBox = om.MBoundingBox(om.MPoint(-0.5, -0.5, -0.5), om.MPoint(0.5, 0.5, 0.5))
+
+    for mesh in scene.iterNodesByTypeName(typeName):
+
+        boundingBox.expand(mesh.boundingBox)
+
+    return boundingBox
 
 
 def createTransformBlends(fkJoint, ikJoint, blendJoint, name=None, blender=None):

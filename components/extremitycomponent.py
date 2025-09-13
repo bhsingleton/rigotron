@@ -79,12 +79,12 @@ class ExtremityComponent(basecomponent.BaseComponent):
         :rtype: om.MMatrix
         """
 
-        skeletonSpecs = self.skeletonSpecs()
+        skeletonSpecs = self.skeleton()
         hasSkeletonSpecs = len(skeletonSpecs) > 0
 
         if hasSkeletonSpecs:
 
-            return self.scene(skeletonSpecs[0].uuid).worldMatrix()
+            return skeletonSpecs[0].getNode(referenceNode=self.skeletonReference()).worldMatrix()
 
         else:
 

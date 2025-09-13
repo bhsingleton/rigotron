@@ -45,11 +45,13 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
         # Check if a reference path was supplied
         #
         filePath = kwargs.pop('filePath', '')
-        exists = os.path.isfile(filePath)
+        expandedPath = os.path.normpath(os.path.expandvars(filePath))
+
+        exists = os.path.isfile(expandedPath)
 
         if not exists:
 
-            log.warning(f'Unable to locate prop @ {filePath}')
+            log.warning(f'Unable to locate prop @ {expandedPath}')
             log.info(f'Defaulting to: {cls.__default_prop_path__}')
 
             filePath = cls.__default_prop_path__
@@ -175,8 +177,8 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
 
             # Update referenced stow space switch
             #
-            propCtrl = propComponent.getPublishedNode('Prop')
-            referencedStowSpaceSwitch.connectPlugs(propCtrl[f'worldMatrix[{propCtrl.instanceNumber()}]'], 'target[0].targetMatrix', force=True)
+            propOffsetCtrl = propComponent.getPublishedNode('Offset')
+            referencedStowSpaceSwitch.connectPlugs(propOffsetCtrl[f'worldMatrix[{propOffsetCtrl.instanceNumber()}]'], 'target[0].targetMatrix', force=True)
 
             propSide = Side(propComponent.componentSide)
             offsetEulerRotation = om.MEulerRotation(0.0, 0.0, math.pi) if (propSide == Side.RIGHT) else om.MEulerRotation.kIdentity

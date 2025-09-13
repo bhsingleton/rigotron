@@ -22,13 +22,6 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
     Overload of `MPyNodeExtension` that outlines rig component parent/child relationships.
     """
 
-    # region Constants
-    PIVOTS_KEY = 'pivots'
-    PIVOTS_DIRTY_KEY = 'isPivotsDirty'
-    SKELETON_KEY = 'skeleton'
-    SKELETON_DIRTY_KEY = 'isSkeletonDirty'
-    # endregion
-
     # region Enums
     Side = Side
     Type = Type
@@ -39,6 +32,19 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
     # region Dunderscores
     __version__ = 1.0
     __default_component_name__ = ''
+    __default_mirror_matrices__ = {
+        Side.CENTER: om.MMatrix.kIdentity,
+        Side.LEFT: om.MMatrix.kIdentity,
+        Side.RIGHT: om.MMatrix(
+            [
+                (-1.0, 0.0, 0.0, 0.0),
+                (0.0, -1.0, 0.0, 0.0),
+                (0.0, 0.0, 1.0, 0.0),
+                (0.0, 0.0, 0.0, 1.0)
+            ]
+        ),
+        Side.NONE: om.MMatrix.kIdentity
+    }
 
     def __init__(self, *args, **kwargs):
         """
@@ -65,6 +71,7 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
     componentChildren = mpyattribute.MPyAttribute('componentChildren', attributeType='message', array=True, hidden=True)
     componentStatus = mpyattribute.MPyAttribute('componentStatus', attributeType='enum', fields=Status, default=Status.META)
     controlsGroup = mpyattribute.MPyAttribute('controlsGroup', attributeType='message')
+    pivotsGroup = mpyattribute.MPyAttribute('pivotsGroup', attributeType='message')
     privateGroup = mpyattribute.MPyAttribute('privateGroup', attributeType='message')
     jointsGroup = mpyattribute.MPyAttribute('jointsGroup', attributeType='message')
     attachmentId = mpyattribute.MPyAttribute('attachmentId', attributeType='int', min=0)
@@ -92,7 +99,7 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
         self.invalidateName()
         self.markSkeletonDirty()
-        self.markPivotsDirty()
+        # self.markPivotsDirty()
 
     @componentSide.changed
     def componentSide(self, value):
@@ -105,7 +112,7 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
         self.invalidateName()
         self.markSkeletonDirty()
-        self.markPivotsDirty()
+        # self.markPivotsDirty()
 
     @componentId.changed
     def componentId(self, value):
@@ -118,7 +125,7 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
         self.invalidateName()
         self.markSkeletonDirty()
-        self.markPivotsDirty()
+        # self.markPivotsDirty()
     # endregion
 
     # region Methods
@@ -160,13 +167,6 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
         if isinstance(componentParent, AbstractComponent):
 
             componentParent.appendComponentChild(component)
-
-        # Update user properties
-        #
-        component.userProperties[cls.SKELETON_DIRTY_KEY] = True
-        component.userProperties[cls.SKELETON_KEY] = []
-        component.userProperties[cls.PIVOTS_DIRTY_KEY] = True
-        component.userProperties[cls.PIVOTS_KEY] = []
 
         return component
 

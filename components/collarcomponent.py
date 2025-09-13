@@ -28,50 +28,27 @@ class CollarComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Methods
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
-        :type skeletonSpecs: List[Dict[str, Any]]
-        :rtype: None
+        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
+        :rtype: List[skeletonspec.SkeletonSpec]
         """
 
         # Edit skeleton specs
         #
-        collarSpec, = self.resizeSkeletonSpecs(1, skeletonSpecs)
+        collarSpec, = self.resizeSkeleton(1, skeletonSpecs, hierarchical=False)
         collarSpec.name = self.formatName()
-        collarSpec.driver = self.formatName(type='control')
+        collarSpec.side = self.componentSide
+        collarSpec.type = self.Type.OTHER
+        collarSpec.otherType = self.componentName
+        collarSpec.defaultMatrix = om.MMatrix(self.__default_component_matrix__)
+        collarSpec.driver.name = self.formatName(type='control')
 
         # Call parent method
         #
-        super(CollarComponent, self).invalidateSkeletonSpecs(skeletonSpecs)
-
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: Tuple[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
-        #
-        collarSpec, = self.skeletonSpecs()
-
-        # Create joint
-        #
-        collarJoint = self.scene.createNode('joint', name=collarSpec.name)
-        collarJoint.side = self.componentSide
-        collarJoint.type = self.Type.OTHER
-        collarJoint.otherType = self.componentName
-        collarJoint.displayLocalAxis = True
-        collarSpec.uuid = collarJoint.uuid()
-
-        # Update joint transform
-        #
-        collarMatrix = collarSpec.getMatrix(default=self.__default_component_matrix__)
-        collarJoint.setWorldMatrix(collarMatrix)
-
-        return (collarJoint,)
+        return super(CollarComponent, self).invalidateSkeletonSpecs(skeletonSpecs, **kwargs)
 
     def buildRig(self):
         """
@@ -82,12 +59,14 @@ class CollarComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
+        referenceNode = self.skeletonReference()
+        collarSpec, = self.skeletonSpecs()
+        collarExportJoint = collarSpec.getNode(referenceNode=referenceNode)
+        collarExportMatrix = collarExportJoint.worldMatrix()
+
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
         jointsGroup = self.scene(self.jointsGroup)
-
-        collarSpec, = self.skeletonSpecs()
-        collarExportJoint = self.scene(collarSpec.uuid)
 
         componentSide = self.Side(self.componentSide)
         colorRGB = Colour(0.663, 0.0, 1.0)
@@ -97,7 +76,7 @@ class CollarComponent(basecomponent.BaseComponent):
         #
         collarSpaceName = self.formatName(type='space')
         collarSpace = self.scene.createNode('transform', name=collarSpaceName, parent=controlsGroup)
-        collarSpace.copyTransform(collarExportJoint)
+        collarSpace.setWorldMatrix(collarExportMatrix, skipScale=True)
         collarSpace.freezeTransform()
 
         collarCtrl = self.scene.createNode('transform', name=collarSpec.driver, parent=collarSpace)

@@ -1,3 +1,5 @@
+from collections.abc import MutableSequence
+
 from maya.api import OpenMaya as om
 from mpy import mpynode, mpyattribute
 from typing import List, Union
@@ -24,7 +26,6 @@ class SpinePivotType(IntEnum):
     """
 
     COG = 0
-    Waist = 1  # TODO: Implement waist pivot!
 
 
 class SpineComponent(basecomponent.BaseComponent):
@@ -32,10 +33,14 @@ class SpineComponent(basecomponent.BaseComponent):
     Overload of `AbstractComponent` that implements spine components.
     """
 
+    # region Enums
+    SpinePivotType = SpinePivotType
+    # endregion
+
     # region Dunderscores
     __version__ = 1.0
     __default_component_name__ = 'Spine'
-    __default_pelvis_matrix__ = om.MMatrix(
+    __default_component_matrix__ = om.MMatrix(
         [
             (0.0, 0.0, 1.0, 0.0),
             (0.0, -1.0, 0.0, 0.0),
@@ -43,29 +48,17 @@ class SpineComponent(basecomponent.BaseComponent):
             (0.0, 0.0, 100.0, 1.0)
         ]
     )
-    __default_spine_spacing__ = 20.0
-    __default_spine_matrix__ = om.MMatrix(
-        [
-            (0.0, 0.0, 1.0, 0.0),
-            (0.0, -1.0, 0.0, 0.0),
-            (1.0, 0.0, 0.0, 0.0),
-            (0.0, 0.0, 0.0, 1.0)
-        ]
-    )
+    __default_component_spacing__ = 20.0
     __default_pivot_matrices__ = {
         SpinePivotType.COG: om.MMatrix(
             [
-                (1.0, 0.0, 0.0, 0.0),
-                (0.0, 1.0, 0.0, 0.0),
                 (0.0, 0.0, 1.0, 0.0),
-                (0.0, 0.0, 100.0, 1.0)
+                (0.0, -1.0, 0.0, 0.0),
+                (1.0, 0.0, 0.0, 0.0),
+                (0.0, 0.0, 0.0, 1.0)
             ]
         )
     }
-    # endregion
-
-    # region Enums
-    SpinePivotType = SpinePivotType
     # endregion
 
     # region Attributes
@@ -96,198 +89,94 @@ class SpineComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Methods
-    def invalidatePivotSpecs(self, pivotSpecs):
+    def invalidatePivots(self, pivotSpecs, **kwargs):
         """
         Rebuilds the internal pivot specs for this component.
 
         :type pivotSpecs: List[pivotspec.PivotSpec]
-        :rtype: None
+        :rtype: List[pivotspec.PivotSpec]
         """
 
-        # Concatenate pivot names
+        # Resize pivot specs
         #
         pivotTypes = self.SpinePivotType.__members__
         numPivotTypes = len(pivotTypes)
 
-        pivotSpecs = self.resizePivotSpecs(numPivotTypes, pivotSpecs)
+        cogSpec, = self.resizePivots(numPivotTypes, pivotSpecs)
 
-        for (pivotType, pivotSpec) in zip(self.SpinePivotType, pivotSpecs):
+        # Edit COG spec
+        #
+        pelvisSpec, nullSpec, *spineSpecs = self.skeleton(flatten=True)
 
-            pivotSpec.name = self.formatName(subname=pivotType.name.title(), type='locator')
-            pivotSpec.enabled = False
-
-        pivotSpecs[self.SpinePivotType.COG].enabled = True
+        cogSpec.name = self.formatName(subname='COG', type='locator')
+        cogSpec.defaultMatrix = self.__default_pivot_matrices__[self.SpinePivotType.COG]
+        cogSpec.driver.name = nullSpec.name if nullSpec.enabled else pelvisSpec.name
+        cogSpec.driver.namespace = self.skeletonNamespace()
+        cogSpec.driver.type = cogSpec.driver.Type.OFFSET_PARENT_MATRIX
 
         # Call parent method
         #
-        super(SpineComponent, self).invalidatePivotSpecs(pivotSpecs)
+        return super(SpineComponent, self).invalidatePivots(pivotSpecs, **kwargs)
 
-    def buildPivots(self):
-        """
-        Builds the pivots for this component.
-
-        :rtype: Union[Tuple[mpynode.MPyNode], None]
-        """
-
-        # Inspect pivot specs
-        #
-        pivotSpecs = self.pivotSpecs()
-
-        numPivotSpecs = len(pivotSpecs)
-        expectedPivotSpecs = len(self.SpinePivotType)
-
-        if numPivotSpecs != expectedPivotSpecs:
-
-            self.markPivotsDirty()
-            pivotSpecs = self.pivotSpecs()
-
-        # Iterate through pivot specs
-        #
-        for (pivotType, pivotSpec) in enumerate(pivotSpecs):
-
-            # Check if pivot is enabled
-            #
-            if not pivotSpec.enabled:
-
-                continue
-
-            # Create pivot and update transform
-            #
-            pivotType = self.SpinePivotType(pivotType)
-
-            pivot = self.scene.createNode('transform', name=pivotSpec.name)
-            pivot.addPointHelper('cross', 'axisTripod', text=[pivotType.name], size=10.0)
-            pivotSpec.uuid = pivot.uuid()
-
-            defaultMatrix = self.__default_pivot_matrices__[pivotType]
-            matrix = pivotSpec.getMatrix(default=defaultMatrix)
-            pivot.setWorldMatrix(matrix)
-
-        # Constraint COG pivot
-        #
-        pelvisSpec, nullSpec, *spineSpecs = self.skeletonSpecs()
-
-        if self.spineEnabled:
-
-            spineSpec = spineSpecs[0]
-            spineExportJoint = self.scene(spineSpec.uuid)
-
-            cogSpec = pivotSpecs[self.SpinePivotType.COG]
-            cogPivot = self.scene(cogSpec.uuid)
-            cogPivot.addConstraint('pointConstraint', [spineExportJoint], maintainOffset=True)
-
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
         :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
-        :rtype: None
+        :rtype: List[skeletonspec.SkeletonSpec]
         """
 
-        # Edit skeleton specs
+        # Resize skeleton specs
         #
         numSpineLinks = int(self.numSpineLinks)
-        skeletonCount = 2 + numSpineLinks
-        pelvisSpec, nullSpec, *spineSpecs = self.resizeSkeletonSpecs(skeletonCount, skeletonSpecs)
+        skeletonSize = 2 + numSpineLinks
 
+        pelvisSpec, nullSpec, *spineSpecs = self.resizeSkeleton(skeletonSize, skeletonSpecs, hierarchical=True)
+
+        # Edit pelvis spec
+        #
         pelvisSpec.name = self.formatName(name='Pelvis')
-        pelvisSpec.driver = self.formatName(name='Pelvis', type='control')
+        pelvisSpec.side = self.componentSide
+        pelvisSpec.type = self.Type.HIP
+        pelvisSpec.defaultMatrix = om.MMatrix(self.__default_component_matrix__)
+        pelvisSpec.driver.name = self.formatName(name='Pelvis', type='control')
 
-        nullSpec.enabled = self.spineEnabled
-        nullSpec.name = self.formatName(name='Null', subname='Spine')
-        nullSpec.driver = self.formatName(name='UpperBody', subname='Align', type='control')
-
+        # Edit null spec
+        #
         spineEnabled = bool(self.spineEnabled)
 
+        nullSpec.enabled = spineEnabled
+        nullSpec.name = self.formatName(name='Null', subname='Spine')
+        nullSpec.side = self.componentSide
+        nullSpec.type = self.Type.SPINE
+        nullSpec.defaultMatrix = transformutils.createTranslateMatrix((self.__default_component_spacing__, 0.0, 0.0))
+        nullSpec.driver.name = self.formatName(name='UpperBody', subname='Align', type='control')
+
+        # Edit spine specs
+        #
         for (i, spineSpec) in enumerate(spineSpecs, start=1):
+
+            isFirstSpineSpec = (i == 1)
+            isLastSpineSpec = (i == numSpineLinks)
+            spineSign = 0.0 if isFirstSpineSpec else 1.0
 
             spineSpec.enabled = spineEnabled
             spineSpec.name = self.formatName(name='Spine', index=i)
-
-            isLastSpineSpec = i == numSpineLinks
+            spineSpec.side = self.componentSide
+            spineSpec.type = self.Type.SPINE
+            spineSpec.defaultMatrix = transformutils.createTranslateMatrix((self.__default_component_spacing__ * spineSign, 0.0, 0.0))
 
             if isLastSpineSpec:
 
-                spineSpec.driver = self.formatName(name='Chest', type='control')
+                spineSpec.driver.name = self.formatName(name='Chest', type='control')
 
             else:
 
-                spineSpec.driver = self.formatName(name='Spine', index=i, type='control')
+                spineSpec.driver.name = self.formatName(name='Spine', index=i, type='control')
 
         # Call parent method
         #
-        super(SpineComponent, self).invalidateSkeletonSpecs(skeletonSpecs)
-
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: Tuple[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
-        #
-        componentSide = self.Side(self.componentSide)
-        pelvisSpec, nullSpec, *spineSpecs = self.skeletonSpecs()
-
-        # Create pelvis joint
-        #
-        pelvisJoint = self.scene.createNode('joint', name=pelvisSpec.name)
-        pelvisJoint.side = componentSide
-        pelvisJoint.type = self.Type.HIP
-        pelvisJoint.displayLocalAxis = True
-
-        pelvisMatrix = pelvisSpec.getMatrix(default=self.__default_pelvis_matrix__)
-        pelvisJoint.setWorldMatrix(pelvisMatrix)
-
-        pelvisSpec.uuid = pelvisJoint.uuid()
-
-        # Check if spine was enabled
-        #
-        spineEnabled = bool(self.spineEnabled)
-
-        if spineEnabled:
-
-            # Create null-spine joint
-            #
-            nullJoint = self.scene.createNode('joint', name=nullSpec.name, parent=pelvisJoint)
-            nullJoint.side = componentSide
-            nullJoint.drawStyle = self.Style.BOX
-            nullJoint.type = self.Type.SPINE
-            nullJoint.displayLocalAxis = True
-
-            defaultNullMatrix = self.__default_pelvis_matrix__ * transformutils.createTranslateMatrix([0.0, 0.0, self.__default_spine_spacing__])
-            nullMatrix = nullSpec.getMatrix(default=defaultNullMatrix)
-            nullJoint.setWorldMatrix(nullMatrix)
-
-            nullSpec.uuid = nullJoint.uuid()
-
-            # Create spine joints
-            #
-            spineCount = len(spineSpecs)
-            spineJoints = [None] * spineCount
-
-            for (i, spineSpec) in enumerate(spineSpecs):
-
-                parent = nullJoint if (i == 0) else spineJoints[i - 1]
-
-                spineJoint = self.scene.createNode('joint', name=spineSpec.name, parent=parent)
-                spineJoint.side = componentSide
-                spineJoint.type = self.Type.SPINE
-                spineJoint.displayLocalAxis = True
-
-                defaultSpineMatrix = self.__default_pelvis_matrix__ * transformutils.createTranslateMatrix([0.0, 0.0, ((i + 1) * self.__default_spine_spacing__)])
-                spineMatrix = spineSpec.getMatrix(default=defaultSpineMatrix)
-                spineJoint.setWorldMatrix(spineMatrix)
-
-                spineSpec.uuid = spineJoint.uuid()
-                spineJoints[i] = spineJoint
-
-            return (pelvisJoint, nullJoint, *spineJoints)
-
-        else:
-
-            return (pelvisJoint,)
+        return super(SpineComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def buildFullRig(self):
         """
@@ -298,16 +187,20 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
+        referenceNode = self.skeletonReference()
+        pelvisSpec, nullSpec, *spineSpecs = self.skeleton(flatten=True, skipDisabled=False)
+        pelvisExportJoint = pelvisSpec.getNode(referenceNode=referenceNode)
+        spineNullJoint = nullSpec.getNode(referenceNode=referenceNode)
+        spineExportJoints = [spineSpec.getNode(referenceNode=referenceNode) for spineSpec in spineSpecs if spineSpec.enabled]
+        firstSpineExportJoint, lastSpineExportJoint = spineExportJoints[0], spineExportJoints[-1]
+
+        cogSpec, = self.pivots()
+        cogPivot = cogSpec.getNode()
+        cogMatrix = cogPivot.worldMatrix()
+
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
         jointsGroup = self.scene(self.jointsGroup)
-
-        pelvisSpec, nullSpec, *spineSpecs = self.skeletonSpecs()
-        pelvisExportJoint = self.scene(pelvisSpec.uuid)
-        spineNullJoint = self.scene(nullSpec.uuid)
-        spineExportJoints = [self.scene(spineSpec.uuid) for spineSpec in spineSpecs if spineSpec.enabled]
-
-        cogSpec, waistSpec = self.pivotSpecs()
 
         componentSide = self.Side(self.componentSide)
         colorRGB = Colour(*shapeutils.COLOUR_SIDE_RGB[componentSide])
@@ -321,31 +214,31 @@ class SpineComponent(basecomponent.BaseComponent):
         # Find world-space control
         #
         rootComponent = self.findRootComponent()
-        worldSpaceCtrl = rootComponent.getPublishedNode('Root') if rootComponent.usedAsProp else rootComponent.getPublishedNode('Motion')
+        motionCtrl = rootComponent.getPublishedNode('Motion')
 
         # Check if spine tip exists
         #
-        neckComponents = [component for component in self.findComponentDescendants('HeadComponent') if component.neckEnabled]
-        neckExists = len(neckComponents) == 1
-        neckComponent = neckComponents[0] if neckExists else None
+        headComponents = [component for component in self.findComponentDescendants('HeadComponent') if component.neckEnabled]
+        headExists = len(headComponents) == 1
+        neckEnabled = headComponents[0].neckEnabled if headExists else False
 
         spineTipPoint = None
 
-        if neckExists:
+        if neckEnabled:
 
-            spineTipPoint = self.scene(neckComponent.skeletonSpecs()[0].uuid).translation(space=om.MSpace.kWorld)
+            headComponent = headComponents[0]
+            neckSpec, = headComponent.skeleton()
+            neckExportJoint = neckSpec.getNode(referenceNode=referenceNode)
+
+            spineTipPoint = neckExportJoint.translation(space=om.MSpace.kWorld)
 
         # Create COG controller
         #
-        spineEnabled = len(spineExportJoints) > 0
-        defaultCogMatrix = transformutils.createTranslateMatrix(spineExportJoints[0].worldMatrix()) if spineEnabled else transformutils.createTranslateMatrix(pelvisExportJoint.worldMatrix())
-        cogMatrix = cogSpec.getMatrix(default=defaultCogMatrix)
-
         cogSpaceName = self.formatName(name='COG', type='space')
         cogSpace = self.scene.createNode('transform', name=cogSpaceName, parent=controlsGroup)
-        cogSpace.setWorldMatrix(cogMatrix)
+        cogSpace.setWorldMatrix(cogMatrix, skipScale=True)
         cogSpace.freezeTransform()
-        cogSpace.addConstraint('transformConstraint', [worldSpaceCtrl], maintainOffset=True)
+        cogSpace.addConstraint('transformConstraint', [motionCtrl], maintainOffset=True)
 
         cogCtrlName = self.formatName(name='COG', type='control')
         cogCtrl = self.scene.createNode('transform', name=cogCtrlName, parent=cogSpace)
@@ -376,13 +269,15 @@ class SpineComponent(basecomponent.BaseComponent):
         numLegComponents = len(legComponents)
         hasLegComponents = numLegComponents >= 2
 
-        waistMatrix = self.__default_spine_matrix__ * transformutils.createTranslateMatrix(pelvisExportJoint.worldMatrix())
+        waistMatrix = transformutils.createRotationMatrix(self.__default_component_matrix__) * transformutils.createTranslateMatrix(pelvisExportJoint.worldMatrix())
 
         if hasLegComponents:
 
+            legJoints = [legComponent.skeleton()[0].getNode(referenceNode=referenceNode) for legComponent in legComponents]
             weight = 1.0 / numLegComponents
-            waistCenter = sum([self.scene(legComponent.skeletonSpecs()[0].uuid).translation(space=om.MSpace.kWorld) * weight for legComponent in legComponents], start=om.MVector.kZeroVector)
-            waistMatrix = self.__default_spine_matrix__ * transformutils.createTranslateMatrix([0.0, waistCenter.y, waistCenter.z])
+
+            waistCenter = sum([legJoint.translation(space=om.MSpace.kWorld) * weight for legJoint in legJoints], start=om.MVector.kZeroVector)
+            waistMatrix = transformutils.createRotationMatrix(self.__default_component_matrix__) * transformutils.createTranslateMatrix([0.0, waistCenter.y, waistCenter.z])
 
         preEulerRotation = transformutils.decomposeTransformMatrix(waistMatrix)[1]
 
@@ -423,7 +318,7 @@ class SpineComponent(basecomponent.BaseComponent):
         hipsCtrl.prepareChannelBoxForAnimation()
         self.publishNode(hipsCtrl, alias='Hips')
 
-        hipsSpaceSwitch = hipsSpace.addSpaceSwitch([waistCtrl, worldSpaceCtrl], weighted=True, maintainOffset=True)
+        hipsSpaceSwitch = hipsSpace.addSpaceSwitch([waistCtrl, motionCtrl], weighted=True, maintainOffset=True)
         hipsSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (True, True, True)}, {'targetWeight': (0.0, 0.0, 0.0)}])
         hipsSpaceSwitch.connectPlugs(hipsCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
         hipsSpaceSwitch.connectPlugs(hipsCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
@@ -447,11 +342,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Create spine FK controls
         #
-        firstSpineSpec, lastSpineSpec = spineSpecs[0], spineSpecs[-1]
-        firstSpineExportJoint = self.scene(firstSpineSpec.uuid)
-        lastSpineExportJoint = self.scene(lastSpineSpec.uuid)
-
-        spineCount = len(spineSpecs)
+        spineCount = len(spineExportJoints)
         lastSpineIndex = spineCount - 1
 
         spineFKCtrls = [None] * spineCount  # type: List[SpineFKPair]
@@ -480,7 +371,7 @@ class SpineComponent(basecomponent.BaseComponent):
                 self.publishNode(spineFKRotCtrl, alias=f'Spine{index}_FK_Rot')
 
                 localSpaceCtrl = spineFKCtrls[i - 1].rot if (i > 0) else waistCtrl
-                targets = (localSpaceCtrl, worldSpaceCtrl)
+                targets = (localSpaceCtrl, motionCtrl)
 
                 spineFKRotSpaceSwitch = spineFKRotSpace.addSpaceSwitch(targets, weighted=True)
                 spineFKRotSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (True, True, True)}, {'targetWeight': (0.0, 0.0, 0.0)}])
@@ -526,7 +417,7 @@ class SpineComponent(basecomponent.BaseComponent):
                 chestFKRotCtrl.prepareChannelBoxForAnimation()
                 self.publishNode(chestFKRotCtrl, alias='Chest_FK_Rot')
 
-                targets = (spineFKCtrls[i - 1].rot, worldSpaceCtrl)
+                targets = (spineFKCtrls[i - 1].rot, motionCtrl)
 
                 chestFKRotSpaceSwitch = chestFKRotSpace.addSpaceSwitch(targets, weighted=True)
                 chestFKRotSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 1.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
@@ -553,7 +444,7 @@ class SpineComponent(basecomponent.BaseComponent):
         #
         spineFKTipTarget = None
 
-        if neckExists:
+        if neckEnabled:
 
             spineTipMatrix = transformutils.createTranslateMatrix(spineTipPoint)
 
@@ -575,7 +466,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
         if hasClavicles:
 
-            clavicleJoints = [self.scene(clavicleComponent.skeletonSpecs()[0].uuid) for clavicleComponent in clavicleComponents]
+            clavicleJoints = [clavicleComponent.skeleton()[0].getNode(referenceNode=referenceNode) for clavicleComponent in clavicleComponents]
             clavicleWeight = 1.0 / len(clavicleJoints)
             clavicleCenter = sum([clavicleJoint.translation(space=om.MSpace.kWorld) * clavicleWeight for clavicleJoint in clavicleJoints], start=om.MVector.kZeroVector)
 
@@ -639,8 +530,10 @@ class SpineComponent(basecomponent.BaseComponent):
         curve.lockAttr('translate', 'rotate', 'scale')
 
         controlPoints = [spineExportJoint.translation(space=om.MSpace.kWorld) for spineExportJoint in spineExportJoints]
-        controlPoints.append(spineTipPoint)
-        numControlPoints = len(controlPoints)
+
+        if spineTipPoint is not None:
+
+            controlPoints.append(spineTipPoint)
 
         curveShape = curve.addCurve(controlPoints, degree=1)
         curveShape.dispCV = True
@@ -663,7 +556,7 @@ class SpineComponent(basecomponent.BaseComponent):
         #
         controlNodes = [spineFKTransCtrl if (spineFKTransCtrl is not None) else spineFKRotCtrl for (spineFKRotCtrl, spineFKTransCtrl) in spineFKCtrls]
 
-        if neckExists:
+        if neckEnabled:
 
             controlNodes.append(spineFKTipTarget)
 
@@ -675,9 +568,10 @@ class SpineComponent(basecomponent.BaseComponent):
         weightRemap.setAttr('value', [{'value_FloatValue': 0.0, 'value_Interp': 2}, {'value_FloatValue': 1.0, 'value_Interp': 2}])
 
         intermediateCurve = skinCluster.intermediateObject()
+        numControlPoints = int(intermediateCurve.numCVs)
         chestPoint = intermediateCurve.cvPosition(numControlPoints - 2)
-        maxParam = intermediateCurve.getParamAtPoint(chestPoint)
-        curveLength = intermediateCurve.findLengthFromParam(maxParam)
+        maxParameter = intermediateCurve.getParamAtPoint(chestPoint)
+        curveLength = intermediateCurve.findLengthFromParam(maxParameter)
 
         parameters = [None] * numControlPoints
 
@@ -854,7 +748,7 @@ class SpineComponent(basecomponent.BaseComponent):
         #
         spineCtrls = [None] * spineCount
 
-        for (i, (spineIKJoint, spineExportJoint)) in enumerate(zip(spineIKJoints[:-1], spineExportJoints)):
+        for (i, (spineIKJoint, spineExportJoint)) in enumerate(zip(spineIKJoints, spineExportJoints)):  # It's okay if these mismatch since there is no tip export joint!
 
             # Evaluate position in loop
             #
@@ -913,7 +807,7 @@ class SpineComponent(basecomponent.BaseComponent):
         upperBodyCtrl.prepareChannelBoxForAnimation()
         self.publishNode(upperBodyCtrl, alias='UpperBody_Align')
 
-        upperBodySpaceSwitch = upperBodySpace.addSpaceSwitch([firstSpineCtrl, hipsCtrl, worldSpaceCtrl], weighted=True)
+        upperBodySpaceSwitch = upperBodySpace.addSpaceSwitch([firstSpineCtrl, hipsCtrl, motionCtrl], weighted=True)
         upperBodySpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (False, False, False)}, {'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
         upperBodySpaceSwitch.connectPlugs(upperBodyCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
         upperBodySpaceSwitch.connectPlugs(upperBodyCtrl['localOrGlobal'], 'target[2].targetRotateWeight')
@@ -962,13 +856,18 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
+        referenceNode = self.skeletonReference()
+        pelvisSpec, nullSpec, *spineSpecs = self.skeleton(flatten=True, skipDisabled=False)
+        pelvisExportJoint = pelvisSpec.getNode(referenceNode=referenceNode)
+        pelvisMatrix = pelvisExportJoint.worldMatrix()
+
+        cogSpec, = self.pivotSpecs()
+        cogPivot = cogSpec.getNode()
+        cogMatrix = cogPivot.worldMatrix()
+
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
         jointsGroup = self.scene(self.jointsGroup)
-
-        pelvisSpec, nullSpec, *spineSpecs = self.skeletonSpecs()
-        pelvisExportJoint = self.scene(pelvisSpec.uuid)
-        pelvisMatrix = pelvisExportJoint.worldMatrix()
 
         componentSide = self.Side(self.componentSide)
         colorRGB = Colour(*shapeutils.COLOUR_SIDE_RGB[componentSide])
@@ -988,11 +887,9 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Create COG controller
         #
-        cogMatrix = transformutils.createTranslateMatrix(pelvisMatrix)
-
         cogSpaceName = self.formatName(name='COG', type='space')
         cogSpace = self.scene.createNode('transform', name=cogSpaceName, parent=controlsGroup)
-        cogSpace.setWorldMatrix(cogMatrix)
+        cogSpace.setWorldMatrix(cogMatrix, skipScale=True)
         cogSpace.freezeTransform()
         cogSpace.addConstraint('transformConstraint', [motionCtrl], maintainOffset=True)
 
@@ -1024,13 +921,14 @@ class SpineComponent(basecomponent.BaseComponent):
         numLegComponents = len(legComponents)
         hasLegComponents = numLegComponents >= 2
 
-        waistMatrix = self.__default_spine_matrix__ * transformutils.createTranslateMatrix(pelvisExportJoint.worldMatrix())
+        waistMatrix = transformutils.createRotationMatrix(self.__default_component_matrix__) * transformutils.createTranslateMatrix(pelvisExportJoint.worldMatrix())
 
         if hasLegComponents:
 
+            legJoints = [legComponent.skeleton()[0].getNode(referenceNode=referenceNode) for legComponent in legComponents]
             weight = 1.0 / numLegComponents
-            waistCenter = sum([self.scene(legComponent.skeletonSpecs()[0].uuid).translation(space=om.MSpace.kWorld) * weight for legComponent in legComponents], start=om.MVector.kZeroVector)
-            waistMatrix = self.__default_spine_matrix__ * transformutils.createTranslateMatrix([0.0, waistCenter.y, waistCenter.z])
+            waistCenter = sum([legJoint.translation(space=om.MSpace.kWorld) * weight for legJoint in legJoints], start=om.MVector.kZeroVector)
+            waistMatrix = transformutils.createRotationMatrix(self.__default_component_matrix__) * transformutils.createTranslateMatrix([0.0, waistCenter.y, waistCenter.z])
 
         preEulerRotation = transformutils.decomposeTransformMatrix(waistMatrix)[1]
 

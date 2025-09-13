@@ -22,11 +22,17 @@ def metaToSkeleton(component):
         childComponent.buildSkeleton()
         childComponent.skeletonCompleted()
 
+    controlRig = component.findControlRig()
+    controlRig.saveSkeleton()
+    controlRig.loadSkeleton(clearEdits=True)
+
+    for childComponent in component.walkComponents():
+
         childComponent.prepareToBuildPivots()
         childComponent.buildPivots()
         childComponent.pivotsCompleted()
 
-        childComponent.componentStatus = Status.SKELETON
+        childComponent.componentStatus = Status.SKELETON  # Setting this too early prevents pivot specs from invalidating!
 
 
 def skeletonToRig(component):
@@ -39,7 +45,7 @@ def skeletonToRig(component):
 
     for childComponent in component.walkComponents():
 
-        childComponent.cachePivots(delete=True)
+        childComponent.cachePivots(delete=False)
 
         childComponent.prepareToBuildRig()
         childComponent.buildRig()
@@ -64,10 +70,6 @@ def rigToSkeleton(component):
 
         childComponent.deleteRig()
 
-        childComponent.prepareToBuildPivots()
-        childComponent.buildPivots()
-        childComponent.pivotsCompleted()
-
         childComponent.componentStatus = Status.SKELETON
 
 
@@ -82,9 +84,13 @@ def skeletonToMeta(component):
     for childComponent in reversed(list(component.walkComponents())):
 
         childComponent.cachePivots(delete=True)
-        childComponent.cacheSkeleton(delete=True)
+        childComponent.cacheSkeleton()
 
         childComponent.componentStatus = Status.META
+
+    controlRig = component.findControlRig()
+    controlRig.unloadSkeleton()
+    controlRig.saveSkeleton()
 
 
 @undo.Undo(state=False)

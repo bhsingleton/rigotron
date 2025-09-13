@@ -3,7 +3,7 @@ from mpy import mpyattribute
 from abc import abstractmethod
 from dcc.python import stringutils
 from dcc.maya.libs import transformutils
-from . import basecomponent
+from . import basecomponent, extremitycomponent
 
 import logging
 logging.basicConfig()
@@ -89,8 +89,8 @@ class LimbComponent(basecomponent.BaseComponent):
 
         # Check if handle space switch is up-to-date
         #
-        extremitySpec = extremityComponent.skeletonSpecs()[0]
-        extremityCtrl = self.scene(extremitySpec.driver)
+        extremitySpec, = extremityComponent.skeleton()
+        extremityCtrl = extremitySpec.getNode(referenceNode=self.skeletonReference())
 
         handleCtrl = self.scene(otherHandles[-1])
         handleNegate = self.scene(handleCtrl.userProperties['negate'])
@@ -137,13 +137,15 @@ class LimbComponent(basecomponent.BaseComponent):
 
         # Calculate offset matrix
         #
-        limbSpec = self.skeletonSpecs()[-2]
-        limbJoint = self.scene(limbSpec.uuid)
+        referenceNode = self.skeletonReference()
+
+        limbSpecs = self.skeleton(flatten=True, skipDisabled=False)
+        limbJoint = limbSpecs[-1].parent.getNode(referenceNode=referenceNode)
         limbMatrix = limbJoint.worldMatrix()
 
-        extremitySpec = extremityComponent.skeletonSpecs()[0]
-        extremityJoint = self.scene(extremitySpec.uuid)
-        extremityCtrl = self.scene(extremitySpec.driver)
+        extremitySpec, = extremityComponent.skeleton()
+        extremityJoint = extremitySpec.getNode(referenceNode=referenceNode)
+        extremityCtrl = extremitySpec.driver.getDriver()
         extremityMatrix = extremityJoint.worldMatrix()
 
         snappedExtremityMatrix = transformutils.alignMatrixToNearestAxes(limbMatrix, extremityMatrix)
@@ -179,8 +181,8 @@ class LimbComponent(basecomponent.BaseComponent):
         sourceNode = self.scene(scaleRemapper['outputMax'].node())
         hasDecomposeMatrix = sourceNode.hasFn(om.MFn.kDecomposeMatrix)
 
-        extremitySpec = extremityComponent.skeletonSpecs()[0]
-        extremityCtrl = self.scene(extremitySpec.driver)
+        extremitySpec, = extremityComponent.skeleton()
+        extremityCtrl = extremitySpec.driver.getDriver()
         limbIKCtrl = self.scene(self.userProperties['ikControls'][-1])
 
         if hasDecomposeMatrix:
@@ -281,20 +283,32 @@ class LimbComponent(basecomponent.BaseComponent):
 
     def extremityMatrix(self):
         """
-        Returns theextremity matrix for this component.
+        Returns the extremity matrix for this component.
 
         :rtype: om.MMatrix
         """
 
+        # Check if extremity component exists
+        # If so, request the effector matrix from it!
+        #
         component = self.findExtremityComponent()
 
-        if component is not None:
+        if isinstance(component, extremitycomponent.ExtremityComponent):
 
             return component.effectorMatrix()
 
+        # Get default effector matrix
+        #
+        skeletonSpecs = self.skeleton()
+        numSkeletonSpecs = len(skeletonSpecs)
+
+        if numSkeletonSpecs > 0:
+
+            return skeletonSpecs[-1].getNode(referenceNode=self.skeletonReference()).worldMatrix()
+
         else:
 
-            return self.scene(self.skeletonSpecs()[-1].uuid).worldMatrix()
+            return om.MMatrix.kIdentity
 
     def effectorMatrix(self):
         """
@@ -303,13 +317,25 @@ class LimbComponent(basecomponent.BaseComponent):
         :rtype: om.MMatrix
         """
 
+        # Check if extremity component exists
+        # If so, request the preferred effector matrix from it!
+        #
         component = self.findExtremityComponent()
 
-        if component is not None:
+        if isinstance(component, extremitycomponent.ExtremityComponent):
 
             return component.preferredEffectorMatrix()
 
+        # Get default effector matrix
+        #
+        skeletonSpecs = self.skeleton()
+        numSkeletonSpecs = len(skeletonSpecs)
+
+        if numSkeletonSpecs > 0:
+
+            return skeletonSpecs[-1].getNode(referenceNode=self.skeletonReference()).worldMatrix()
+
         else:
 
-            return self.scene(self.skeletonSpecs()[-1].uuid).worldMatrix()
+            return om.MMatrix.kIdentity
     # endregion

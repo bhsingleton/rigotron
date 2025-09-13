@@ -48,52 +48,33 @@ class ClavicleComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Methods
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
-        :type skeletonSpecs: List[Dict[str, Any]]
-        :rtype: None
+        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
+        :rtype: List[skeletonspec.SkeletonSpec]
         """
-
-        # Resize skeleton specs
-        #
-        clavicleSpec, = self.resizeSkeletonSpecs(1, skeletonSpecs)
 
         # Edit clavicle spec
         #
+        clavicleSide = self.Side(self.componentSide)
+
+        clavicleSpec, = self.resizeSkeleton(1, skeletonSpecs)
         clavicleSpec.name = self.formatName()
-        clavicleSpec.driver = self.formatName(type='control')
+        clavicleSpec.side = clavicleSide
+        clavicleSpec.type = self.Type.COLLAR
+        clavicleSpec.defaultMatrix = om.MMatrix(self.__default_component_matrices__[clavicleSide])
+        clavicleSpec.driver.name = self.formatName(type='control')
 
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: List[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
+        # Call parent method
         #
-        side = self.Side(self.componentSide)
-        clavicleSpec, = self.skeletonSpecs()
-
-        # Create foot joint
-        #
-        clavicleJoint = self.scene.createNode('joint', name=clavicleSpec.name)
-        clavicleJoint.side = side
-        clavicleJoint.type = self.Type.COLLAR
-        clavicleJoint.displayLocalAxis = True
-        clavicleSpec.uuid = clavicleJoint.uuid()
-
-        clavicleMatrix = clavicleSpec.getMatrix(default=self.__default_component_matrices__[side])
-        clavicleJoint.setWorldMatrix(clavicleMatrix)
-
-        return (clavicleJoint,)
+        return super(ClavicleComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def getAttachmentTargets(self):
         """
         Returns the attachment targets for this component.
-        If we're attaching to a spine component then we wanna use a different target!
+        If we're attaching to a spine component then we want to use an alternative target!
 
         :rtype: Tuple[mpynode.MPyNode, mpynode.MPyNode]
         """
@@ -109,21 +90,27 @@ class ClavicleComponent(basecomponent.BaseComponent):
 
         # Evaluate attachment position
         #
-        skeletonSpecs = self.getAttachmentOptions()
-        numSkeletonSpecs = len(skeletonSpecs)
+        attachmentSpecs = self.getAttachmentOptions()
+        numAttachmentSpecs = len(attachmentSpecs)
 
         attachmentIndex = int(self.attachmentId)
-        lastIndex = numSkeletonSpecs - 1
+        lastIndex = numAttachmentSpecs - 1
 
         if attachmentIndex == lastIndex:
 
-            skeletonSpec = skeletonSpecs[attachmentIndex]
-            return self.scene(skeletonSpec.uuid), self.scene(componentParent.userProperties['spineTipIKTarget'])
+            attachmentSpec = attachmentSpecs[attachmentIndex]
+            exportJoint = attachmentSpec.getNode(referenceNode=self.skeletonReference())
+            exportDriver = self.scene(componentParent.userProperties['spineTipIKTarget'])
 
-        elif 0 <= attachmentIndex < numSkeletonSpecs:
+            return exportJoint, exportDriver
 
-            skeletonSpec = skeletonSpecs[attachmentIndex]
-            return self.scene(skeletonSpec.uuid), self.scene(skeletonSpec.driver)
+        elif 0 <= attachmentIndex < numAttachmentSpecs:
+
+            attachmentSpec = attachmentSpecs[attachmentIndex]
+            exportJoint = attachmentSpec.getNode(referenceNode=self.skeletonReference())
+            exportDriver = attachmentSpec.driver.getDriver()
+
+            return exportJoint, exportDriver
 
         else:
 
@@ -138,14 +125,18 @@ class ClavicleComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        clavicleSpec, = self.skeletonSpecs()
+        clavicleSpec, = self.skeleton()
         clavicleExportJoint = self.scene(clavicleSpec.name)
-        clavicleMatrix = clavicleExportJoint.worldMatrix()
+        clavicleExportMatrix = clavicleExportJoint.worldMatrix()
 
         componentSide = self.Side(self.componentSide)
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
         jointsGroup = self.scene(self.jointsGroup)
+
+        mirrorMatrix = self.__default_mirror_matrices__[componentSide]
+        requiresMirroring = componentSide == Side.RIGHT
+        mirrorSign = -1.0 if requiresMirroring else 1.0
 
         rigScale = self.findControlRig().getRigScale()
 
@@ -153,13 +144,11 @@ class ClavicleComponent(basecomponent.BaseComponent):
 
         # Create clavicle control
         #
-        mirrorMatrix = self.__default_mirror_matrices__[componentSide]
-        requiresMirroring = componentSide == Side.RIGHT
-        mirrorSign = -1.0 if requiresMirroring else 1.0
+        clavicleMatrix = mirrorMatrix * clavicleExportMatrix
 
         clavicleSpaceName = self.formatName(type='space')
         clavicleSpace = self.scene.createNode('transform', name=clavicleSpaceName, parent=controlsGroup)
-        clavicleSpace.setWorldMatrix(mirrorMatrix * clavicleMatrix)
+        clavicleSpace.setWorldMatrix(clavicleMatrix, skipScal=True)
         clavicleSpace.freezeTransform()
         clavicleSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
 

@@ -21,51 +21,26 @@ class StowComponent(basecomponent.BaseComponent):
     # endregion
 
     # region Methods
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
-        :type skeletonSpecs: List[Dict[str, Any]]
-        :rtype: None
+        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
+        :rtype: List[skeletonspec.SkeletonSpec]
         """
 
         # Edit skeleton specs
         #
-        stowSpec, = self.resizeSkeletonSpecs(1, skeletonSpecs)
+        stowSpec, = self.resizeSkeleton(1, skeletonSpecs, hierarchical=False)
         stowSpec.name = self.formatName()
-        stowSpec.driver = self.formatName(type='control')
+        stowSpec.side = self.componentSide
+        stowSpec.type = self.Type.OTHER
+        stowSpec.otherType = self.componentName
+        stowSpec.driver.name = self.formatName(type='control')
 
         # Call parent method
         #
-        super(StowComponent, self).invalidateSkeletonSpecs(skeletonSpecs)
-
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: List[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
-        #
-        componentSide = self.Side(self.componentSide)
-        stowSpec, = self.skeletonSpecs()
-
-        # Create upper joint
-        #
-        jointType = self.Type.PROP_A if (componentSide == self.Side.LEFT) else self.Type.PROP_B if (componentSide == self.Side.RIGHT) else self.Type.PROP_C
-
-        stowJoint = self.scene.createNode('joint', name=stowSpec.name)
-        stowJoint.side = componentSide
-        stowJoint.type = jointType
-        stowJoint.drawStyle = self.Style.JOINT
-        stowJoint.displayLocalAxis = True
-        stowSpec.uuid = stowJoint.uuid()
-
-        stowMatrix = stowSpec.getMatrix(default=om.MMatrix.kIdentity)
-        stowJoint.setWorldMatrix(stowMatrix)
-
-        return (stowMatrix,)
+        return super(StowComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def buildRig(self):
         """
@@ -76,8 +51,10 @@ class StowComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
+        referenceNode = self.skeletonReference()
         stowSpec, = self.skeletonSpecs()
-        stowExportJoint = self.scene(stowSpec.uuid)
+        stowExportJoint = stowSpec.getNode(referenceNode=referenceNode)
+        stowExportMatrix = stowExportJoint.worldMatrix()
 
         componentSide = self.Side(self.componentSide)
         requiresMirroring = componentSide == self.Side.RIGHT
@@ -94,11 +71,11 @@ class StowComponent(basecomponent.BaseComponent):
 
         # Create stow control
         #
-        stowCtrlMatrix = mirrorMatrix * stowExportJoint.worldMatrix()
+        stowMatrix = mirrorMatrix * stowExportMatrix
 
         stowSpaceName = self.formatName(type='space')
         stowSpace = self.scene.createNode('transform', name=stowSpaceName, parent=controlsGroup)
-        stowSpace.setWorldMatrix(stowCtrlMatrix)
+        stowSpace.setWorldMatrix(stowMatrix, skipScale=True)
         stowSpace.freezeTransform()
 
         stowCtrlName = self.formatName(type='control')

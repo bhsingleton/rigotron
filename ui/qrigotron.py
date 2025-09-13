@@ -1,9 +1,13 @@
+import os
+import shutil
+
 from maya import cmds as mc
 from maya.api import OpenMaya as om
 from mpy import mpyscene, mpynode
 from dcc.ui import qsingletonwindow, qdivider, qsignalblocker
 from dcc.python import stringutils
 from dcc.maya.libs import transformutils, shapeutils
+from dcc.maya.standalone import rpc
 from dcc.maya.models import qplugitemmodel, qplugstyleditemdelegate, qplugitemfiltermodel
 from dcc.maya.decorators import undo
 from Qt import QtCore, QtWidgets, QtGui, QtCompat
@@ -93,6 +97,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         # Declare private variables
         #
         self._scene = mpyscene.MPyScene.getInstance(asWeakReference=True)
+        self._standaloneProcess, self._standaloneClient = rpc.initializeRemoteStandalone()
         self._rigManager = interfacefactory.InterfaceFactory.getInstance(asWeakReference=True)
         self._componentManager = componentfactory.ComponentFactory.getInstance(asWeakReference=True)
         self._controlRig = self.nullWeakReference
@@ -670,6 +675,37 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
     # endregion
 
     # region Methods
+    def opening(self):
+        """
+        Performs all the necessary actions during startup.
+
+        :rtype: None
+        """
+
+        # Call parent method
+        #
+        super(QRigotron, self).opening()
+
+        # Initialize remote standalone server
+        #
+        self._standaloneProcess, self._standaloneClient = rpc.initializeRemoteStandalone()
+
+    def closing(self):
+        """
+        Performs all the necessary actions during shutdown.
+
+        :rtype: None
+        """
+
+        # Call parent method
+        #
+        super(QRigotron, self).closing()
+
+        # Uninitialize remote standalone server
+        #
+        self._standaloneClient.quit()
+        self._standaloneProcess, self._standaloneClient = None, None
+
     def addCallbacks(self):
         """
         Adds any callbacks required by this window.
@@ -792,12 +828,23 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
     def createControlRig(self, name):
         """
         Creates a new control-rig with the specified name.
+        TODO: Find a better way to concatenate the name of the referenced skeleton file!
 
         :type name: str
         :rtype: controlrig.ControlRig
         """
 
-        controlRig = self.rigManager.createControlRig(name)
+        # Create referenced skeleton
+        #
+        defaultReferencePath = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'scenes', 'untitled.ma'))
+        referenceName = self.scene.filename.replace('RIG', 'SKL').replace('AnimRig', 'ExportRig')
+        referencePath = os.path.join(self.scene.directory, referenceName)
+
+        shutil.copyfile(defaultReferencePath, referencePath)
+
+        # Return new control rig
+        #
+        controlRig = self.rigManager.createControlRig(name, referencePath=referencePath)
         self.invalidateControlRig(defer=True)
 
         return controlRig
@@ -919,6 +966,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.invalidateProperties()
         self.invalidateAttachments()
         self.invalidateStatus()
+        self.invalidateRPC()
 
     def invalidateProperties(self):
         """
@@ -984,6 +1032,18 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
 
             buttons = self.statusButtonGroup.buttons()
             buttons[self._currentStatus].setChecked(True)
+
+    def invalidateRPC(self):
+        """
+        Updates the open scene file from the RPC client.
+
+        :rtype: None
+        """
+
+        referenceNode = self.controlRig.getSkeletonReference()
+        referencePath = referenceNode.filePath()
+
+        self._standaloneClient.open(referencePath)
 
     @undo.Undo(name='Align Nodes')
     def alignNodes(self, *nodes):
@@ -1141,6 +1201,12 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
 
         :rtype: None
         """
+
+        # Check if file has been saved
+        #
+        if self.scene.isNew():
+
+            return QtWidgets.QMessageBox.warning(self, 'Create New Rig', 'Please save the scene before continuing!')
 
         # Check if control rig exists
         #
@@ -1324,6 +1390,12 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
 
         :rtype: None
         """
+
+        # Check if file has been saved
+        #
+        if self.scene.isNew():
+
+            return QtWidgets.QMessageBox.warning(self, 'Create New Rig', 'Please save the scene before continuing!')
 
         # Check if control rig exists
         #

@@ -2,6 +2,7 @@ import math
 
 from maya import cmds as mc
 from maya.api import OpenMaya as om
+from maya.app.renderSetup.views.propertyEditor.main import kWarningPropagateLightValueChange
 from mpy import mpyattribute
 from dcc.maya.libs import transformutils, shapeutils
 from dcc.dataclasses.colour import Colour
@@ -22,9 +23,8 @@ class LimbType(IntEnum):
     """
 
     UPPER = 0
-    HINGE = 1
-    LOWER = 2
-    TIP = 3
+    LOWER = 1
+    TIP = 2
 
 
 class TwoBoneLimbComponent(limbcomponent.LimbComponent):
@@ -60,169 +60,79 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
     # endregion
 
     # region Methods
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
-        :type skeletonSpecs: List[Dict[str, Any]]
+        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
         :rtype: None
         """
 
         # Resize skeleton specs
         #
-        numMembers = len(self.LimbType)
-        upperLimbSpec, hingeSpec, lowerLimbSpec, limbTipSpec = self.resizeSkeletonSpecs(numMembers, skeletonSpecs)
+        twistCount = int(self.numTwistLinks)
+        upperCount, lowerCount = twistCount + 1, twistCount + 2
 
-        # Iterate through limb specs
+        upperLimbSpec, = self.resizeSkeleton(1, skeletonSpecs, hierarchical=False)
+        *upperTwistSpecs, lowerLimbSpec  = self.resizeSkeleton(upperCount, upperLimbSpec, hierarchical=False)
+        *lowerTwistSpecs, hingeSpec, limbTipSpec = self.resizeSkeleton(lowerCount, lowerLimbSpec, hierarchical=False)
+
+        # Edit limb specs
         #
-        limbNames = (self.__default_limb_names__[0], self.__default_limb_names__[1])
-        limbSpecs = (upperLimbSpec, lowerLimbSpec)
+        upperName, lowerName, tipName = self.__default_limb_names__
+        upperType, lowerType, tipType = self.__default_limb_types__
+        side = self.Side(self.componentSide)
 
-        twistEnabled = bool(self.twistEnabled)
-        twistCount = self.numTwistLinks if twistEnabled else 0
+        upperLimbSpec.name = self.formatName(name=upperName)
+        upperLimbSpec.side = side
+        upperLimbSpec.type = upperType
+        upperLimbSpec.drawStyle = self.Style.BOX
+        upperLimbSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.UPPER]
+        upperLimbSpec.driver.name = self.formatName(name=upperName, type='joint')
 
-        for (i, (limbName, limbSpec)) in enumerate(zip(limbNames, limbSpecs)):
+        lowerLimbSpec.name = self.formatName(name=lowerName)
+        lowerLimbSpec.side = side
+        lowerLimbSpec.type = lowerType
+        lowerLimbSpec.drawStyle = self.Style.BOX
+        lowerLimbSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.LOWER]
+        lowerLimbSpec.driver.name = self.formatName(name=lowerName, type='joint')
 
-            # Edit limb name
-            #
-            limbSpec.name = self.formatName(name=limbName)
-            limbSpec.driver = self.formatName(name=limbName, type='joint')
-
-            # Edit twist specs
-            #
-            twistSpecs = self.resizeSkeletonSpecs(twistCount, limbSpec.children)
-
-            for (j, twistSpec) in enumerate(twistSpecs, start=1):
-
-                twistSpec.name = self.formatName(name=limbName, subname='Twist', index=j)
-                twistSpec.driver = self.formatName(name=limbName, subname='Twist', index=j, type='control')
-                twistSpec.enabled = twistEnabled
-
-        limbTipName = self.__default_limb_names__[-1]
-        limbTipSpec.name = self.formatName(name=limbTipName)
-        limbTipSpec.driver = self.formatName(name=limbTipName, type='joint')
         limbTipSpec.enabled = not self.hasExtremityComponent()
+        limbTipSpec.name = self.formatName(name=tipName)
+        limbTipSpec.side = side
+        limbTipSpec.type = tipType
+        limbTipSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.TIP]
+        limbTipSpec.driver.name = self.formatName(name=tipName, type='joint')
+
+        # Edit twist specs
+        #
+        twistEnabled = bool(self.twistEnabled)
+
+        for (twistName, twistType, twistSpecs) in ((upperName, upperType, upperTwistSpecs), (lowerName, lowerType, lowerTwistSpecs)):
+
+            for (i, twistSpec) in enumerate(twistSpecs, start=1):
+
+                twistSpec.enabled = twistEnabled
+                twistSpec.name = self.formatName(name=twistName, subname='Twist', index=i)
+                twistSpec.side = side
+                twistSpec.type = twistType
+                twistSpec.driver.name = self.formatName(name=twistName, subname='Twist', index=i, type='control')
 
         # Edit hinge spec
         #
-        hingeSpec.name = self.formatName(name=self.__default_hinge_name__)
-        hingeSpec.driver = self.formatName(name=self.__default_hinge_name__, type='control')
-        hingeSpec.enabled = bool(self.hingeEnabled)
+        hingeName = str(self.__default_hinge_name__)
+        hingeEnabled = bool(self.hingeEnabled)
+
+        hingeSpec.enabled = hingeEnabled
+        hingeSpec.name = self.formatName(name=hingeName)
+        hingeSpec.side = side
+        hingeSpec.type = self.Type.OTHER
+        hingeSpec.otherType = hingeName
+        hingeSpec.driver.name = self.formatName(name=hingeName, type='control')
 
         # Call parent method
         #
-        super(TwoBoneLimbComponent, self).invalidateSkeletonSpecs(skeletonSpecs)
-
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: List[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
-        #
-        componentSide = self.Side(self.componentSide)
-
-        upperLimbSpec, hingeSpec, lowerLimbSpec, limbTipSpec = self.skeletonSpecs()
-        upperLimbType, lowerLimbType, limbTipType = self.__default_limb_types__
-
-        # Create upper joint
-        #
-        upperLimbJoint = self.scene.createNode('joint', name=upperLimbSpec.name)
-        upperLimbJoint.side = componentSide
-        upperLimbJoint.type = upperLimbType
-        upperLimbJoint.drawStyle = self.Style.BOX
-        upperLimbJoint.displayLocalAxis = True
-        upperLimbSpec.uuid = upperLimbJoint.uuid()
-
-        defaultUpperLimbMatrix = self.__default_limb_matrices__[componentSide][LimbType.UPPER]
-        upperLimbMatrix = upperLimbSpec.getMatrix(default=defaultUpperLimbMatrix)
-        upperLimbJoint.setWorldMatrix(upperLimbMatrix)
-
-        # Create upper twist joints
-        #
-        upperTwistSpecs = upperLimbSpec.children
-
-        upperTwistCount = len(upperTwistSpecs)
-        upperTwistJoints = [None] * upperTwistCount
-
-        for (i, twistSpec) in enumerate(upperTwistSpecs):
-            
-            twistJoint = self.scene.createNode('joint', name=twistSpec.name, parent=upperLimbJoint)
-            twistJoint.side = componentSide
-            twistJoint.type = self.Type.NONE
-            twistJoint.drawStyle = self.Style.JOINT
-            twistJoint.displayLocalAxis = True
-            twistSpec.uuid = twistJoint.uuid()
-
-            upperTwistJoints[i] = twistJoint
-
-        # Create lower joint
-        #
-        lowerLimbJoint = self.scene.createNode('joint', name=lowerLimbSpec.name, parent=upperLimbJoint)
-        lowerLimbJoint.side = componentSide
-        lowerLimbJoint.type = lowerLimbType
-        lowerLimbJoint.drawStyle = self.Style.BOX
-        lowerLimbJoint.displayLocalAxis = True
-        lowerLimbSpec.uuid = lowerLimbJoint.uuid()
-
-        defaultLowerLimbMatrix = self.__default_limb_matrices__[componentSide][LimbType.LOWER]
-        lowerLimbMatrix = lowerLimbSpec.getMatrix(default=defaultLowerLimbMatrix)
-        lowerLimbJoint.setWorldMatrix(lowerLimbMatrix)
-
-        # Create lower twist joints
-        #
-        lowerTwistSpecs = lowerLimbSpec.children
-
-        lowerTwistCount = len(lowerTwistSpecs)
-        lowerTwistJoints = [None] * lowerTwistCount
-
-        for (i, twistSpec) in enumerate(lowerTwistSpecs):
-
-            twistJoint = self.scene.createNode('joint', name=twistSpec.name, parent=lowerLimbJoint)
-            twistJoint.side = componentSide
-            twistJoint.type = self.Type.NONE
-            twistJoint.drawStyle = self.Style.JOINT
-            twistJoint.displayLocalAxis = True
-            twistSpec.uuid = twistJoint.uuid()
-
-            lowerTwistJoints[i] = twistJoint
-
-        # Create hinge joint
-        #
-        hingeJoint = None
-
-        if hingeSpec.enabled:
-
-            hingeJoint = self.scene.createNode('joint', name=hingeSpec.name, parent=lowerLimbJoint)
-            hingeJoint.side = componentSide
-            hingeJoint.type = self.Type.NONE
-            hingeJoint.drawStyle = self.Style.JOINT
-            hingeJoint.displayLocalAxis = True
-            hingeSpec.uuid = hingeJoint.uuid()
-
-            defaultHingeMatrix = self.__default_limb_matrices__[componentSide][LimbType.HINGE]
-            hingeMatrix = hingeSpec.getMatrix(default=defaultHingeMatrix)
-            hingeJoint.setWorldMatrix(hingeMatrix)
-
-        # Create tip joint
-        #
-        limbTipJoint = None
-
-        if limbTipSpec.enabled:
-
-            limbTipJoint = self.scene.createNode('joint', name=limbTipSpec.name, parent=lowerLimbJoint)
-            limbTipJoint.side = componentSide
-            limbTipJoint.type = limbTipType
-            limbTipJoint.displayLocalAxis = True
-            limbTipSpec.uuid = limbTipJoint.uuid()
-
-            defaultLimbTipMatrix = self.__default_limb_matrices__[componentSide][LimbType.TIP]
-            limbTipMatrix = limbTipSpec.getMatrix(default=defaultLimbTipMatrix)
-            limbTipJoint.setWorldMatrix(limbTipMatrix)
-
-        return (upperLimbJoint, hingeJoint, lowerLimbJoint, limbTipJoint)
+        return super(TwoBoneLimbComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def buildRig(self):
         """
@@ -237,10 +147,14 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         hingeName = self.__default_hinge_name__
         upperLimbName, lowerLimbName, limbTipName = self.__default_limb_names__
 
-        upperLimbSpec, hingeSpec, lowerLimbSpec, limbTipSpec = self.skeletonSpecs()
-        upperLimbExportJoint = self.scene(upperLimbSpec.uuid)
-        lowerLimbExportJoint = self.scene(lowerLimbSpec.uuid)
-        limbTipExportJoint = self.scene(limbTipSpec.uuid)
+        referenceNode = self.skeletonReference()
+        upperLimbSpec, = self.skeleton()
+        *upperTwistSpecs, lowerLimbSpec  = upperLimbSpec.children
+        *lowerTwistSpecs, hingeSpec, limbTipSpec = lowerLimbSpec.children
+
+        upperLimbExportJoint = upperLimbSpec.getNode(referenceNode=referenceNode)
+        lowerLimbExportJoint = lowerLimbSpec.getNode(referenceNode=referenceNode)
+        limbTipExportJoint = limbTipSpec.getNode(referenceNode=referenceNode)
 
         upperLimbMatrix = upperLimbExportJoint.worldMatrix()
         lowerLimbMatrix = lowerLimbExportJoint.worldMatrix()
@@ -249,15 +163,14 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         defaultLimbTipMatrix = transformutils.createRotationMatrix(lowerLimbMatrix) * transformutils.createTranslateMatrix(extremityMatrix)
         limbTipMatrix = limbTipExportJoint.worldMatrix() if (limbTipExportJoint is not None) else defaultLimbTipMatrix
+        limbOrigin = transformutils.breakMatrix(upperLimbMatrix)[3]
+        hingePoint = transformutils.breakMatrix(lowerLimbMatrix)[3]
+        limbGoal = transformutils.breakMatrix(extremityMatrix)[3]
 
         componentSide = self.Side(self.componentSide)
         requiresMirroring = componentSide == self.Side.RIGHT
         mirrorSign = -1.0 if requiresMirroring else 1.0
         mirrorMatrix = self.__default_mirror_matrices__[componentSide]
-
-        limbOrigin = transformutils.breakMatrix(upperLimbMatrix)[3]
-        hingePoint = transformutils.breakMatrix(lowerLimbMatrix)[3]
-        limbGoal = transformutils.breakMatrix(extremityMatrix)[3]
 
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
@@ -660,11 +573,11 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         extremityIKMatrix = mirrorMatrix * extremityMatrix
 
-        if hasExtremity:
+        if hasExtremity:  # TODO: Investigate if this is even necessary anymore?
 
             extremityComponent = extremityComponents[0]
-            extremitySpecs = extremityComponent.skeletonSpecs()
-            extremityIKMatrix = mirrorMatrix * self.scene(extremitySpecs[0].uuid).worldMatrix()
+            extremitySpecs = extremityComponent.skeleton()
+            extremityIKMatrix = mirrorMatrix * extremitySpecs[0].getNode(referenceNode=referenceNode).worldMatrix()
 
         # Create IK extremity control
         #
@@ -998,10 +911,10 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         if hingeEnabled:
 
-            hingeExportJoint = self.scene(hingeSpec.uuid)
-            hingeExportJoint.copyTransform(hingeCtrl)
+            hingeExportJoint = hingeSpec.getNode(referenceNode=referenceNode)
+            hingeExportJoint.copyTransform(hingeCtrl, skipScale=True)
 
-            hingeSpec.cacheMatrix(delete=False)
+            hingeSpec.cacheNode(delete=False)
 
         # Create PV handle curve
         #
@@ -1254,6 +1167,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             #
             segmentNames = (upperLimbName, lowerLimbName)
             segmentSpecs = (upperLimbSpec, lowerLimbSpec)
+            segmentTwistSpecs = (upperTwistSpecs, lowerTwistSpecs)
             segmentBones = ((upperJoint, lowerJoint), (lowerJoint, extremityJoint))
             segmentCtrls = ((upperLimbCtrl, upperLimbOutCtrl, hingeInCtrl, hingeCtrl), (hingeCtrl, hingeOutCtrl, lowerLimbInCtrl, extremityJoint))
             segmentScalers = ((upperLimbCtrl, hingeCtrl), (hingeCtrl, extremityIKCtrl))
@@ -1261,7 +1175,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             twistSolvers = [None] * 2
             scaleRemappers = [None] * 2
 
-            for (i, (segmentName, segmentSpec, (startJoint, endJoint), (startCtrl, startOutCtrl, endInCtrl, endCtrl), (startScaler, endScaler))) in enumerate(zip(segmentNames, segmentSpecs, segmentBones, segmentCtrls, segmentScalers)):
+            for (i, (segmentName, segmentSpec, segmentTwistSpecs, (startJoint, endJoint), (startCtrl, startOutCtrl, endInCtrl, endCtrl), (startScaler, endScaler))) in enumerate(zip(segmentNames, segmentSpecs, segmentTwistSpecs, segmentBones, segmentCtrls, segmentScalers)):
 
                 # Create curve segment
                 #
@@ -1308,10 +1222,9 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
                 # Create twist controls
                 #
-                twistSpecs = segmentSpec.children
-                numTwistSpecs = len(twistSpecs)
+                numTwistSpecs = len(segmentTwistSpecs)
 
-                for (j, twistSpec) in enumerate(twistSpecs):
+                for (j, twistSpec) in enumerate(segmentTwistSpecs):
 
                     # Create twist controller
                     #
@@ -1350,11 +1263,10 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
                     # Finally, re-align export joint to control
                     # This will ensure there are no unwanted offsets when binding the skeleton!
                     #
-                    twistExportJoint = self.scene(twistSpec.uuid)
+                    twistExportJoint = twistSpec.getNode(referenceNode=referenceNode)
                     twistExportJoint.copyTransform(twistCtrl, skipScale=True)
 
                     twistSpec.matrix = twistExportJoint.matrix(asTransformationMatrix=True)
-                    twistSpec.worldMatrix = twistExportJoint.worldMatrix()
 
             # Cache twist components
             #

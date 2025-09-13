@@ -28,7 +28,6 @@ class HandPivotType(IntEnum):
     """
 
     KNUCKLE = 0
-    TIP = 1
 
 
 class FingerType(IntEnum):
@@ -86,35 +85,19 @@ class HandComponent(extremitycomponent.ExtremityComponent):
             HandPivotType.KNUCKLE: om.MMatrix(
                 [
                     (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (0.0, 1.0, 0.0, 0.0),
-                    (120.0, 0.0, 160.0, 1.0)
-                ]
-            ),
-            HandPivotType.TIP: om.MMatrix(
-                [
-                    (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
-                    (0.0, 1.0, 0.0, 0.0),
-                    (135.0, 0.0, 160.0, 1.0)
+                    (0.0, 0.0, 1.0, 0.0),
+                    (20.0, 0.0, 0.0, 1.0)
                 ]
             )
         },
         Side.RIGHT: {
             HandPivotType.KNUCKLE: om.MMatrix(
                 [
-                    (-1.0, 0.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
-                    (0.0, -1.0, 0.0, 0.0),
-                    (-120.0, 0.0, 160.0, 1.0)
-                ]
-            ),
-            HandPivotType.TIP: om.MMatrix(
-                [
-                    (-1.0, 0.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
-                    (0.0, -1.0, 0.0, 0.0),
-                    (-135.0, 0.0, 160.0, 1.0)
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (20.0, 0.0, 0.0, 1.0)
                 ]
             )
         }
@@ -125,60 +108,60 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         Side.LEFT: {
             FingerType.THUMB: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
                     (0.0, 0.0, -1.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
                     (1.0, 0.0, 0.0, 0.0),
-                    (110.0, -10.0, 160.0, 1.0)
+                    (10.0, 0.0, -10.0, 1.0)
                 ]
             ),
             FingerType.INDEX: om.MMatrix(
                 [
                     (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (0.0, 1.0, 0.0, 0.0),
-                    (120.0, -5.0, 160.0, 1.0)
+                    (0.0, 0.0, 1.0, 0.0),
+                    (20.0, 0.0, -5.0, 1.0)
                 ]
             ),
             FingerType.MIDDLE: om.MMatrix(
                 [
                     (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (0.0, 1.0, 0.0, 0.0),
-                    (120.0, 0.0, 160.0, 1.0)
+                    (0.0, 0.0, 1.0, 0.0),
+                    (20.0, 0.0, 0.0, 1.0)
                 ]
             ),
             FingerType.RING: om.MMatrix(
                 [
                     (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (0.0, 1.0, 0.0, 0.0),
-                    (120.0, 5.0, 160.0, 1.0)
+                    (0.0, 0.0, 1.0, 0.0),
+                    (20.0, 0.0, 5.0, 1.0)
                 ]
             ),
             FingerType.PINKY: om.MMatrix(
                 [
                     (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
                     (0.0, 1.0, 0.0, 0.0),
-                    (120.0, 10.0, 160.0, 1.0)
+                    (0.0, 0.0, 1.0, 0.0),
+                    (20.0, 0.0, 10.0, 1.0)
                 ]
             )
         },
         Side.RIGHT: {
             FingerType.THUMB: om.MMatrix(
                 [
-                    (0.0, -1.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
-                    (1.0, 0.0, 0.0, 0.0),
-                    (-110.0, -10.0, 160.0, 1.0)
+                    (0.0, 0.0, 1.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (-1.0, 0.0, 0.0, 0.0),
+                    (10.0, 10.0, 0.0, 1.0)
                 ]
             ),
             FingerType.INDEX: om.MMatrix(
                 [
-                    (-1.0, 0.0, 0.0, 0.0),
-                    (0.0, 0.0, -1.0, 0.0),
-                    (0.0, -1.0, 0.0, 0.0),
-                    (-120.0, -5.0, 160.0, 1.0)
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (20.0, 0.0, 5.0, 1.0)
                 ]
             ),
             FingerType.MIDDLE: om.MMatrix(
@@ -186,7 +169,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
                     (-1.0, 0.0, 0.0, 0.0),
                     (0.0, 0.0, -1.0, 0.0),
                     (0.0, -1.0, 0.0, 0.0),
-                    (-120.0, 0.0, 160.0, 1.0)
+                    (20.0, 0.0, 0.0, 1.0)
                 ]
             ),
             FingerType.RING: om.MMatrix(
@@ -194,7 +177,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
                     (-1.0, 0.0, 0.0, 0.0),
                     (0.0, 0.0, -1.0, 0.0),
                     (0.0, -1.0, 0.0, 0.0),
-                    (-120.0, 5.0, 160.0, 1.0)
+                    (20.0, 0.0, 5.0, 1.0)
                 ]
             ),
             FingerType.PINKY: om.MMatrix(
@@ -202,7 +185,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
                     (-1.0, 0.0, 0.0, 0.0),
                     (0.0, 0.0, -1.0, 0.0),
                     (0.0, -1.0, 0.0, 0.0),
-                    (-120.0, 10.0, 160.0, 1.0)
+                    (20.0, 0.0, 10.0, 1.0)
                 ]
             )
         }
@@ -318,212 +301,118 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
             return {FingerType.THUMB: thumbEnabled, FingerType.INDEX: True, FingerType.MIDDLE: True, FingerType.RING: True, FingerType.PINKY: True}
 
-    def invalidatePivotSpecs(self, pivotSpecs):
+    def invalidatePivots(self, pivotSpecs, **kwargs):
         """
         Rebuilds the internal pivot specs for this component.
 
         :type pivotSpecs: List[pivotspec.PivotSpec]
-        :rtype: None
+        :rtype: List[pivotspec.PivotSpec]
         """
 
-        # Concatenate pivot names
+        # Resize pivot specs
         #
-        pivotTypes = self.HandPivotType.__members__
-        numPivotTypes = len(pivotTypes)
+        pivotSize = len(self.HandPivotType)
+        knuckleSpec, = self.resizePivots(pivotSize, pivotSpecs)
 
-        pivotSpecs = self.resizePivotSpecs(numPivotTypes, pivotSpecs)
-        pivotEnabled = bool(self.rollEnabled)
+        # Edit knuckle spec
+        #
+        handSide = self.Side(self.componentSide)
 
-        for (name, pivotSpec) in zip(pivotTypes.keys(), pivotSpecs):
-
-            pivotSpec.name = self.formatName(subname=name.title(), type='locator')
-            pivotSpec.enabled = pivotEnabled
+        knuckleSpec.enabled = bool(self.rollEnabled)
+        knuckleSpec.name = self.formatName(subname='Knuckle', type='locator')
+        knuckleSpec.defaultMatrix = self.__default_pivot_matrices__[handSide][self.HandPivotType.KNUCKLE]
+        knuckleSpec.driver.name = self.formatName()
+        knuckleSpec.driver.type = knuckleSpec.driver.Type.OFFSET_PARENT_MATRIX
 
         # Call parent method
         #
-        super(HandComponent, self).invalidatePivotSpecs(pivotSpecs)
+        return super(HandComponent, self).invalidatePivots(pivotSpecs)
 
-    def buildPivots(self):
-        """
-        Builds the pivots for this component.
-
-        :rtype: Union[Tuple[mpynode.MPyNode], None]
-        """
-
-        # Iterate through pivot specs
-        #
-        pivotSpecs = self.pivotSpecs()
-        side = self.Side(self.componentSide)
-
-        for (i, pivotSpec) in enumerate(pivotSpecs):
-
-            # Check if pivot is enabled
-            #
-            if not pivotSpec.enabled:
-
-                continue
-
-            # Create pivot and update transform
-            #
-            pivot = self.scene.createNode('transform', name=pivotSpec.name)
-            pivot.addPointHelper('cross', size=20.0)
-            pivotSpec.uuid = pivot.uuid()
-
-            defaultMatrix = self.__default_pivot_matrices__[side][i]
-            matrix = pivotSpec.getMatrix(default=defaultMatrix)
-            pivot.setWorldMatrix(matrix)
-
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
-        :type skeletonSpecs: List[Dict[str, Any]]
-        :rtype: None
+        :type skeletonSpecs: List[skeletonspec.SkeletonSpec]
+        :rtype: List[skeletonspec.SkeletonSpec]
         """
 
-        # Resize skeleton specs
+        # Edit hand spec
         #
-        handSpec, = self.resizeSkeletonSpecs(1, skeletonSpecs)
+        handSide = self.Side(self.componentSide)
 
-        # Edit skeleton specs
-        #
+        handSpec, = self.resizeSkeleton(1, skeletonSpecs, hierarchical=False)
         handSpec.name = self.formatName()
-        handSpec.driver = self.formatName(subname='Wrist', kinemat='Blend', type='joint')
+        handSpec.side = handSide
+        handSpec.type = self.Type.HAND
+        handSpec.defaultMatrix = self.__default_hand_matrices__[handSide][HandType.HAND]
+        handSpec.driver.name = self.formatName(subname='Wrist', kinemat='Blend', type='joint')
 
-        # Check if finger spec groups exist
-        #
-        fingerGroups = handSpec.groups
-        numFingerGroups = len(fingerGroups)
-
-        fingerMembers = self.FingerType.__members__
-        numFingerMembers = len(fingerMembers)
-
-        if numFingerGroups != numFingerMembers:
-
-            fingerGroups.update([(i, []) for i in range(numFingerMembers)])
-
-        # Iterate through finger spec groups
+        # Iterate through finger specs
         #
         fingerFlags = self.fingerFlags()
+        numThumbLinks, numFingerLinks = int(self.numThumbLinks), int(self.numFingerLinks)
+        jointTypes = (self.Type.THUMB, self.Type.INDEX_FINGER, self.Type.MIDDLE_FINGER, self.Type.RING_FINGER, self.Type.PINKY_FINGER)
         metacarpalsEnabled = bool(self.metacarpalsEnabled)
 
-        for (fingerType, fingerGroup) in fingerGroups.items():
+        fingerSize = len(self.FingerType.__members__)
+        metacarpalSpecs = self.resizeSkeleton(fingerSize, handSpec.children, hierarchical=False)
+
+        for (fingerType, metacarpalSpec) in enumerate(metacarpalSpecs):
+
+            # Decompose finger
+            #
+            fingerType = self.FingerType(fingerType)
+            fingerEnabled = fingerFlags.get(fingerType, False)
+            fingerName = fingerType.name.title()
+            jointType = jointTypes[fingerType]
+
+            # Edit metacarpal spec
+            #
+            fullMetacarpalName = f'{fingerName}Metacarpal'
+
+            metacarpalSpec.enabled = fingerEnabled
+            metacarpalSpec.passthrough = not metacarpalsEnabled
+            metacarpalSpec.name = self.formatName(subname=fullMetacarpalName)
+            metacarpalSpec.side = handSide
+            metacarpalSpec.type = jointType
+            metacarpalSpec.defaultMatrix = self.__default_finger_matrices__[handSide][fingerType]
+            metacarpalSpec.driver.name = self.formatName(subname=fullMetacarpalName, kinemat='Blend', type='joint')
 
             # Iterate through digit specs
             #
-            fingerType = self.FingerType(fingerType)
-            fingerName = fingerType.name.title()
-            fingerEnabled = fingerFlags.get(fingerType, False)
-
             isThumb = (fingerType == self.FingerType.THUMB)
-            numFingerLinks = int(self.numThumbLinks) if isThumb else int(self.numFingerLinks)
-            metacarpalSpec, *fingerSpecs, fingerTipSpec = self.resizeSkeletonSpecs(numFingerLinks + 2, fingerGroup)
-
-            fullMetacarpalName = f'{fingerName}Metacarpal'
-            metacarpalSpec.name = self.formatName(subname=fullMetacarpalName)
-            metacarpalSpec.driver = self.formatName(subname=fullMetacarpalName, kinemat='Blend', type='joint')
-            metacarpalSpec.enabled = metacarpalsEnabled and fingerEnabled
-
             fullFingerName = fingerName if isThumb else f'{fingerName}Finger'
+            fingerSize = (numThumbLinks if isThumb else numFingerLinks) + 1  # Save space for fingertip spec!
 
-            for (j, fingerSpec) in enumerate(fingerSpecs, start=1):
+            *fingerSpecs, fingerTipSpec = self.resizeSkeleton(fingerSize, metacarpalSpec, hierarchical=True)
 
-                fingerSpec.name = self.formatName(subname=fullFingerName, index=j)
-                fingerSpec.driver = self.formatName(subname=fullFingerName, index=j, type='control')
+            for (i, fingerSpec) in enumerate(fingerSpecs, start=1):
+
+                isFirstFinger = (i == 1)
+                spacing = self.__default_metacarpal_spacing__ if (i == 1) else self.__default_finger_spacing__
+                defaultMatrix = self.__default_finger_matrices__[handSide][fingerType] if (isFirstFinger and not metacarpalsEnabled) else transformutils.createTranslateMatrix((spacing, 0.0, 0.0))
+
                 fingerSpec.enabled = fingerEnabled
+                fingerSpec.name = self.formatName(subname=fullFingerName, index=i)
+                fingerSpec.side = handSide
+                fingerSpec.type = jointType
+                fingerSpec.defaultMatrix = defaultMatrix
+                fingerSpec.driver.name = self.formatName(subname=fullFingerName, index=i, type='control')
 
+            # Edit tip spec
+            #
             fullFingerTipName = f'{fullFingerName}Tip'
-            fingerTipSpec.name = self.formatName(subname=fullFingerTipName)
-            fingerTipSpec.driver = self.formatName(subname=fullFingerTipName, type='target')
+
             fingerTipSpec.enabled = fingerEnabled
+            fingerTipSpec.name = self.formatName(subname=fullFingerTipName)
+            fingerTipSpec.side = handSide
+            fingerTipSpec.type = jointType
+            fingerTipSpec.defaultMatrix = transformutils.createTranslateMatrix((self.__default_finger_spacing__, 0.0, 0.0))
+            fingerTipSpec.driver.name = self.formatName(subname=fullFingerTipName, type='target')
 
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: List[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
+        # Call parent method
         #
-        side = self.Side(self.componentSide)
-        handSpec, = self.skeletonSpecs()
-
-        # Create hand joint
-        #
-        handJoint = self.scene.createNode('joint', name=handSpec.name)
-        handJoint.side = side
-        handJoint.type = self.Type.HAND
-        handSpec.uuid = handJoint.uuid()
-
-        handMatrix = handSpec.getMatrix(default=self.__default_hand_matrices__[side][HandType.HAND])
-        handJoint.setWorldMatrix(handMatrix)
-
-        # Create finger joints
-        #
-        fingerGroups = handSpec.groups
-        jointTypes = (self.Type.THUMB, self.Type.INDEX_FINGER, self.Type.MIDDLE_FINGER, self.Type.RING_FINGER, self.Type.PINKY_FINGER)
-
-        allFingerJoints = []
-
-        for (fingerType, fingerGroup) in fingerGroups.items():
-
-            # Check if finger is enabled
-            #
-            metacarpalSpec, *fingerSpecs = fingerGroup
-            isEnabled = bool(fingerSpecs[0].enabled)
-
-            if not isEnabled:
-
-                continue
-
-            # Create metacarpal joint
-            #
-            fingerType = self.FingerType(fingerType)
-            jointType = jointTypes[fingerType]
-            topLevelParent = handJoint
-            defaultMetacarpalMatrix = self.__default_finger_matrices__[side][fingerType]
-
-            if metacarpalSpec.enabled:
-
-                metacarpalJoint = self.scene.createNode('joint', name=metacarpalSpec.name, parent=handJoint)
-                metacarpalJoint.side = side
-                metacarpalJoint.type = jointType
-                metacarpalJoint.displayLocalAxis = True
-                metacarpalSpec.uuid = metacarpalJoint.uuid()
-
-                metacarpalMatrix = metacarpalSpec.getMatrix(default=defaultMetacarpalMatrix)
-                metacarpalJoint.setWorldMatrix(metacarpalMatrix)
-
-                topLevelParent = metacarpalJoint
-
-            # Create finger joints
-            #
-            numFingerJoints = len(fingerSpecs)
-            fingerJoints = [None] * numFingerJoints
-
-            for (j, fingerSpec) in enumerate(fingerSpecs):
-
-                # Create finger-link
-                #
-                parent = fingerJoints[j - 1] if (j > 0) else topLevelParent
-
-                fingerJoint = self.scene.createNode('joint', name=fingerSpec.name, parent=parent)
-                fingerJoint.side = side
-                fingerJoint.type = jointType
-                fingerJoint.displayLocalAxis = True
-                fingerSpec.uuid = fingerJoint.uuid()
-
-                defaultFingerOffset = self.__default_metacarpal_spacing__ + (self.__default_finger_spacing__ * j)
-                defaultFingerMatrix = transformutils.createTranslateMatrix([defaultFingerOffset, 0.0, 0.0]) * defaultMetacarpalMatrix
-                fingerMatrix = fingerSpec.getMatrix(default=defaultFingerMatrix)
-                fingerJoint.setWorldMatrix(fingerMatrix)
-
-                fingerJoints[j] = fingerJoint
-
-            allFingerJoints.append(fingerJoints)
-
-        return (handJoint, *allFingerJoints)
+        return super(HandComponent, self).invalidateSkeleton(skeletonSpecs)
 
     def buildFullRig(self):
         """
@@ -534,14 +423,16 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
         # Decompose component
         #
-        handSpec, = self.skeletonSpecs()
-        handExportJoint = handSpec.getNode()
+        referenceNode = self.skeletonReference()
+        handSpec, = self.skeleton()
+        handExportJoint = handSpec.getNode(referenceNode=referenceNode)
+        handExportMatrix = handExportJoint.worldMatrix()
 
-        knuckleSpec, fingerTipSpec = self.pivotSpecs()
-        knucklePoint = transformutils.decomposeTransformMatrix(knuckleSpec.matrix)[0]
-        fingerTipPoint = transformutils.decomposeTransformMatrix(fingerTipSpec.matrix)[0]
-        handMatrix = handExportJoint.worldMatrix()
-        knuckleMatrix = transformutils.createRotationMatrix(handMatrix) * transformutils.createTranslateMatrix(knucklePoint)
+        knuckleSpec, = self.pivots()
+        knucklePivot = knuckleSpec.getNode()
+        knucklePivotMatrix = knucklePivot.worldMatrix()
+        knucklePivotPoint = transformutils.decomposeTransformMatrix(knucklePivotMatrix)[0]
+        knuckleMatrix = transformutils.createRotationMatrix(handExportMatrix) * transformutils.createTranslateMatrix(knucklePivotPoint)
 
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
@@ -586,11 +477,11 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
         # Create hand control
         #
-        handCtrlMatrix = mirrorMatrix * handMatrix
+        handMatrix = mirrorMatrix * handExportMatrix
 
         handSpaceName = self.formatName(type='space')
         handSpace = self.scene.createNode('transform', name=handSpaceName, parent=controlsGroup)
-        handSpace.setWorldMatrix(handCtrlMatrix)
+        handSpace.setWorldMatrix(handMatrix, skipScale=True)
         handSpace.freezeTransform()
 
         handCtrlName = self.formatName(type='control')
@@ -617,7 +508,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         handIKSpaceSwitchName = self.formatName(subname='IK', type='spaceSwitch')
         handIKSpaceSwitch = self.scene.createNode('spaceSwitch', name=handIKSpaceSwitchName)
         handIKSpaceSwitch.weighted = True
-        handIKSpaceSwitch.setAttr('restMatrix', handCtrlMatrix)
+        handIKSpaceSwitch.setAttr('restMatrix', handMatrix)
         handIKSpaceSwitch.addTargets([limbIKOffsetCtrl, limbTipIKJoint], maintainOffset=True)
         handIKSpaceSwitch.setAttr('target[0]', {'targetReverse': (True, True, True)})
         handIKSpaceSwitch.connectPlugs(handCtrl['localForearmLock'], 'target[0].targetWeight')
@@ -687,7 +578,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         #
         jointTypes = ('Wrist', 'Knuckle')
         kinematicTypes = ('FK', 'IK', 'Blend')
-        handMatrices = (handMatrix, knuckleMatrix)
+        handMatrices = (handExportMatrix, knuckleMatrix)
 
         handFKJoints = [None] * 2
         handIKJoints = [None] * 2
@@ -738,32 +629,31 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
         metacarpalCtrls = []
 
-        for (fingerId, fingerGroup) in handSpec.groups.items():
+        for (fingerType, metacarpalSpec) in enumerate(handSpec.children):
 
             # Check if finger is enabled
             #
-            metacarpalSpec, *fingerSpecs, fingerTipSpec = fingerGroup
-            isEnabled = fingerSpecs[0].enabled
-
-            if not isEnabled:
+            if not metacarpalSpec.enabled:
 
                 continue
 
             # Decompose finger group
             #
-            fingerType = self.FingerType(fingerId)
+            fingerType = self.FingerType(fingerType)
             fingerName = fingerType.name.title()
             fullFingerName = fingerName if (fingerType is self.FingerType.THUMB) else f'{fingerName}Finger'
 
-            fingerBaseExportJoint = self.scene(fingerSpecs[0].uuid)
+            *fingerSpecs, fingerTipSpec = self.flattenSpecs(metacarpalSpec)
+
+            fingerBaseExportJoint = fingerSpecs[0].getNode(referenceNode=referenceNode)
             fingerBaseMatrix = fingerBaseExportJoint.worldMatrix()
 
-            fingerTipExportJoint = self.scene(fingerTipSpec.uuid)
+            fingerTipExportJoint = fingerTipSpec.getNode(referenceNode=referenceNode)
             fingerTipMatrix = fingerTipExportJoint.worldMatrix()
 
             # Check if metacarpals are enabled
             #
-            metacarpalEnabled = bool(metacarpalSpec.enabled)
+            metacarpalEnabled = not bool(metacarpalSpec.passthrough)
             metacarpalCtrl = None
 
             metacarpalBlendJoint, fingerBlendJoint, fingerTipBlendJoint = None, None, None
@@ -773,7 +663,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
                 # Decompose metacarpal spec
                 #
                 fullMetacarpalName = f'{fingerName}Metacarpal'
-                metacarpalExportJoint = self.scene(metacarpalSpec.uuid)
+                metacarpalExportJoint = metacarpalSpec.getNode(referenceNode=referenceNode)
                 metacarpalMatrix = metacarpalExportJoint.worldMatrix()
 
                 # Create kinematic metacarpal joints
@@ -1035,15 +925,15 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
             # Iterate through finger group
             #
-            numFingers = len(fingerSpecs)
-            fingerCtrls = [None] * numFingers
+            numFingerLinks = len(fingerSpecs)
+            fingerCtrls = [None] * numFingerLinks
 
             for (i, fingerSpec) in enumerate(fingerSpecs):
 
                 # Create finger control
                 #
                 fingerIndex = i + 1
-                fingerExportJoint = self.scene(fingerSpec.uuid)
+                fingerExportJoint = fingerSpec.getNode(referenceNode=referenceNode)
                 fingerMatrix = fingerExportJoint.worldMatrix()
                 fingerParent = fingerCtrls[i - 1] if (i > 0) else masterFingerCtrl
                 fingerAlias = f'{fullFingerName}{str(fingerIndex).zfill(2)}'

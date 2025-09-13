@@ -1,6 +1,7 @@
+import json
+
 from maya.api import OpenMaya as om
 from mpy import mpyattribute
-from enum import IntEnum
 from dcc.python import stringutils
 from dcc.dataclasses.colour import Colour
 from dcc.maya.libs import transformutils, shapeutils
@@ -40,66 +41,53 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
         ]
     )
     __default_pivot_points__ = [
-        om.MVector(0.0, -10.0, -10.0),
-        om.MVector(0.0, 10.0, -10.0),
-        om.MVector(0.0, 10.0, 10.0),
-        om.MVector(0.0, -10.0, 10.0)
+        (0.0, -10.0, -10.0),
+        (0.0, 10.0, -10.0),
+        (0.0, 10.0, 10.0),
+        (0.0, -10.0, 10.0)
     ]
     # endregion
 
     # region Methods
-    def invalidatePivotSpecs(self, pivotSpecs):
+    def invalidatePivots(self, pivotSpecs, **kwargs):
         """
         Rebuilds the internal pivot specs for this component.
 
         :type pivotSpecs: List[pivotspec.PivotSpec]
-        :rtype: None
+        :rtype: List[pivotspec.PivotSpec]
         """
 
         # Concatenate pivot name
         #
         pivotSpec, = self.resizePivotSpecs(1, pivotSpecs)
         pivotSpec.name = self.formatName(subname='Pivot', type='nurbsCurve')
+        pivotSpec.defaultMatrix = om.MMatrix(self.__default_pivot_matrix__)
+
+        # Check if default shape exists
+        # If not, go ahead and populate default shape!
+        #
+        if stringutils.isNullOrEmpty(pivotSpec.shapes):
+
+            controlPoints = list(self.__default_pivot_points__)
+            controlPoints.extend(controlPoints[:1])  # Periodic curves require overlapping points equal to the degree!
+
+            count, degree, form = len(controlPoints), 1, om.MFnNurbsCurve.kPeriodic
+            knots, degree = shapeutils.createKnotVector(count, degree, form=form)
+
+            shape = {
+                'typeName': 'nurbsCurve',
+                'degree': degree,
+                'form': form,
+                'controlPoints': controlPoints,
+                'knots': knots,
+                'lineWidth': -1.0
+            }
+
+            pivotSpec.shapes = json.dumps([shape])
 
         # Call parent method
         #
-        super(DynamicPivotComponent, self).invalidatePivotSpecs(pivotSpecs)
-
-    def buildPivots(self):
-        """
-        Builds the pivots for this component.
-
-        :rtype: Union[Tuple[mpynode.MPyNode], None]
-        """
-
-        # Create pivot
-        #
-        pivotSpec, = self.pivotSpecs()
-
-        pivot = self.scene.createNode('transform', name=pivotSpec.name)
-        pivot.displayLocalAxis = True
-        pivot.displayHandle = True
-        pivotSpec.uuid = pivot.uuid()
-
-        matrix = pivotSpec.getMatrix(default=self.__default_pivot_matrix__)
-        pivot.setWorldMatrix(matrix)
-
-        # Check if shape data exists
-        #
-        hasShape = not stringutils.isNullOrEmpty(pivotSpec.shapes)
-
-        if hasShape:
-
-            pivot.loadShapes(pivotSpec.shapes)
-
-        else:
-
-            controlPoints = list(map(om.MVector, self.__default_pivot_points__))
-            controlPoints.extend(controlPoints[:self.__default_pivot_degree__])  # Periodic curves require overlapping points equal to the degree!
-
-            pivot.addCurve(controlPoints, degree=self.__default_pivot_degree__, form=om.MFnNurbsCurve.kPeriodic)
-
-        return (pivotSpec,)
+        return super(DynamicPivotComponent, self).invalidatePivots(pivotSpecs, **kwargs)
 
     def buildRig(self):
         """
@@ -110,12 +98,13 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
 
         # Decompose component
         #
+        referenceNode = self.skeletonReference()
+        leafSpec, = self.skeletonSpecs(referenceNode=referenceNode)
+        leafExportJoint = leafSpec
+
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
         jointsGroup = self.scene(self.jointsGroup)
-
-        leafSpec, = self.skeletonSpecs()
-        leafExportJoint = self.scene(leafSpec.uuid)
 
         componentSide = self.Side(self.componentSide)
         requiresMirroring = (componentSide == self.Side.RIGHT)
@@ -177,7 +166,7 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
         localHalfDepth = localDepth * 0.5
 
         leafPivotCtrlName = self.formatName(subname='Pivoter', type='control')
-        leafPivotCtrl = self.scene.createNode('transform', name=leafPivoterCtrlName, parent=leafPivoterCtrl)
+        leafPivotCtrl = self.scene.createNode('transform', name=leafPivotCtrlName, parent=leafPivoterCtrl)
         leafPivotCtrl.addCurve(
             [
                 (0.0, 0.0, 0.0),
