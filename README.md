@@ -1,3 +1,3 @@
 # rigotron
-A component based auto rigger for Maya.
-This auto rigger is dependent on the mpynode and mason packages.
+A component based auto rigger for Maya.  
+Disclaimer: At this time the tool is undergoing a major refactor and is currently unstable for any sort of use!
