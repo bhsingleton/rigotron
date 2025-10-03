@@ -285,7 +285,6 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
     # region Attributes
     bigToeEnabled = mpyattribute.MPyAttribute('bigToeEnabled', attributeType='bool', default=True)
-    bigToeReversed = mpyattribute.MPyAttribute('bigToeReversed', attributeType='bool', default=False)
     numBigToeLinks = mpyattribute.MPyAttribute('bigToeLinks', attributeType='int', min=1, max=3, default=2)
     numToes = mpyattribute.MPyAttribute('numToes', attributeType='int', min=1, max=4, default=4)
     numToeLinks = mpyattribute.MPyAttribute('numToeLinks', attributeType='int', min=1, max=3, default=3)
@@ -375,12 +374,12 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
         # Edit pivot spec
         #
-        referenceNode = self.skeletonReference()
+        skeletonNamespace = self.skeletonNamespace()
 
         pivotSpec, = self.resizePivots(1, pivotSpecs)
         pivotSpec.name = self.formatName(subname='Pivot', type='nurbsCurve')
         pivotSpec.driver.name = self.formatName()
-        pivotSpec.driver.namespace = referenceNode.namespace()
+        pivotSpec.driver.namespace = skeletonNamespace
         pivotSpec.driver.type = pivotSpec.driver.Type.CONSTRAINT
         pivotSpec.driver.skipTranslate = (False, False, True)
 
@@ -489,6 +488,30 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         #
         return super(FootComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
+    def repairSkeleton(self, force=False):
+        """
+        Repairs the internal skeleton specs for this component.
+
+        :type force: bool
+        :rtype: None
+        """
+
+        # Rename legacy joints
+        #
+        toesName = self.formatName(subname='Toes')
+        ballName = self.formatName(subname='Ball')
+
+        if self.scene.doesNodeExist(toesName):
+
+            toesExportJoint = self.scene(toesName)
+
+            log.warning(f'Renaming "{toesName}" > "{ballName}"')
+            toesExportJoint.setName(ballName)
+
+        # Call parent method
+        #
+        return super(FootComponent, self).repairSkeleton(force=force)
+
     def buildRig(self):
         """
         Builds the control rig for this component.
@@ -591,7 +614,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         pivotCurveData = mshapeparser.loads(pivotSpec.shapes)[0]
         fnPivotCurve = om.MFnNurbsCurve(pivotCurveData)
 
-        pivotMatrix = pivotSpec.matrix.asMatrix()
+        pivotMatrix = om.MMatrix(pivotSpec.worldMatrix)
         pivotCurvePoints = [om.MPoint(point) * pivotMatrix for point in fnPivotCurve.cvPositions()]
 
         # Add intermediate shape to foot control

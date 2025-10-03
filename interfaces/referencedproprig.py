@@ -162,7 +162,7 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
         referencedRig.setParent(self)
 
         referencedRootComponent = self.scene(referencedRig.rootComponent)
-        referencedRootSpec, = referencedRootComponent.skeletonSpecs()
+        referencedRootSpec, = referencedRootComponent.skeleton()
         referencedRootJoint = self.scene.getNodeByUuid(referencedRootSpec.uuid, referenceNode=referenceNode)
         referencedRootJoint.setParent(self)
 
@@ -205,7 +205,7 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
                 #
                 controlRig = self.findControlRig()
                 rootComponent = controlRig.findRootComponent()
-                rootSpec, = rootComponent.skeletonSpecs()
+                rootSpec, = rootComponent.skeleton()
 
                 rootJoint = self.scene(rootSpec.uuid)
 

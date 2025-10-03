@@ -12,5 +12,16 @@ class WeaponComponent(propcomponent.PropComponent):
     """
 
     # region Dunderscores
-    __default_component_name__ = 'Weapon'  # That's it, that's all we do!
+    __default_component_name__ = 'Weapon'  # That's it, that's all we do folks!
+    # endregion
+
+    # region Methods
+    def isWeapon(self):
+        """
+        Evaluates if this prop is used as a weapon.
+
+        :rtype: bool
+        """
+
+        return True
     # endregion

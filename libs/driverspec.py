@@ -430,5 +430,5 @@ class DriverSpec(melsonobject.MELSONObject):
 
         # Reassign driven matrix
         #
-        driven.setMatrix(self.driven.matrix)
+        driven.setMatrix(self.driven.matrix, skipScale=False)
     # endregion

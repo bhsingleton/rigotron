@@ -13,7 +13,7 @@ class PivotSpec(abstractspec.AbstractSpec):
     """
 
     # region Dunderscores
-    __slots__ = ('_shapes',)
+    __slots__ = ('_parentMatrix', '_shapes',)
     __default_name__ = 'pivot'
 
     def __init__(self, *args, **kwargs):
@@ -29,10 +29,42 @@ class PivotSpec(abstractspec.AbstractSpec):
 
         # Declare private variables
         #
+        self._parentMatrix = om.MMatrix.kIdentity
         self._shapes = None
     # endregion
 
     # region Properties
+    @property
+    def parentMatrix(self):
+        """
+        Getter method that returns the parent matrix.
+
+        :rtype: om.MMatrix
+        """
+
+        return self._parentMatrix
+
+    @parentMatrix.setter
+    def parentMatrix(self, parentMatrix):
+        """
+        Setter method that updates the parent matrix.
+
+        :type parentMatrix: om.MMatrix
+        :rtype: None
+        """
+
+        self._parentMatrix = parentMatrix
+
+    @property
+    def worldMatrix(self):
+        """
+        Getter method that returns the world matrix.
+
+        :rtype: om.MMatrix
+        """
+
+        return self.matrix.asMatrix() * self.parentMatrix
+
     @property
     def shapes(self):
         """
@@ -56,29 +88,35 @@ class PivotSpec(abstractspec.AbstractSpec):
     # endregion
 
     # region Methods
-    def cacheNode(self, delete=False, referenceNode=None):
+    def cacheNode(self, **kwargs):
         """
         Caches the associated node's transformation matrix.
 
-        :type delete: bool
         :type referenceNode: Union[mpynode.MPyNode, None]
-        :rtype: None
+        :type delete: bool
+        :rtype: bool
         """
 
         # Check if spec is enabled
         #
         if not self.enabled:
 
-            return
+            return False
 
         # Check if node exists
         #
+        referenceNode = kwargs.get('referenceNode', None)
         node = self.getNode(referenceNode=referenceNode)
 
         if node is None:
 
             log.warning(f'Unable to locate "{self.name}" node to cache!')
-            return
+            return False
+
+        # Cache parent matrix
+        # This will also include the offset parent matrix!
+        #
+        self.parentMatrix = node.parentMatrix()
 
         # Cache any customizable shapes
         #
@@ -91,5 +129,5 @@ class PivotSpec(abstractspec.AbstractSpec):
 
         # Call parent method
         #
-        return super(PivotSpec, self).cacheNode(delete=delete, referenceNode=referenceNode)
+        return super(PivotSpec, self).cacheNode(**kwargs)
     # endregion

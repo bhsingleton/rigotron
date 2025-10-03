@@ -60,7 +60,7 @@ class BeltComponent(basecomponent.BaseComponent):
         # Decompose component
         #
         referenceNode = self.skeletonReference()
-        beltSpec, = self.skeletonSpecs()
+        beltSpec, = self.skeleton()
         beltExportJoint = beltSpec.getNode(referenceNode=referenceNode)
         beltExportMatrix = beltExportJoint.worldMatrix()
 
@@ -92,7 +92,8 @@ class BeltComponent(basecomponent.BaseComponent):
         beltSpace.setWorldMatrix(beltExportMatrix, skipScale=True)
         beltSpace.freezeTransform()
 
-        beltCtrl = self.scene.createNode('transform', name=beltSpec.driver, parent=beltSpace)
+        beltCtrlName = self.formatName(type='control')
+        beltCtrl = self.scene.createNode('transform', name=beltCtrlName, parent=beltSpace)
         beltCtrl.addPointHelper('cylinder', size=(25.0 * rigScale), localScale=(0.25, 1.0, 1.5), colorRGB=colorRGB)
         beltCtrl.prepareChannelBoxForAnimation()
         beltCtrl.tagAsController()

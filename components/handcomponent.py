@@ -328,6 +328,31 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         #
         return super(HandComponent, self).invalidatePivots(pivotSpecs)
 
+    def repairPivots(self, force=False):
+        """
+        Repairs the internal pivot specs for this component.
+
+        :rtype: None
+        """
+
+        # Evaluate parent matrix
+        #
+        knucleSpec, = self.pivots(flatten=True, force=True)
+        requiresUpdating = knucleSpec.parentMatrix.isEquivalent(om.MMatrix.kIdentity, tolerance=1e-3)
+
+        if requiresUpdating or force:
+
+            driver = knucleSpec.driver.getDriver()
+            matrix = knucleSpec.matrix.asMatrix()
+            parentMatrix = driver.worldMatrix()
+
+            knucleSpec.matrix = matrix * parentMatrix.inverse()
+            knucleSpec.parentMatrix = parentMatrix
+
+        # Call parent method
+        #
+        return super(HandComponent, self).repairPivots(force=force)
+
     def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
@@ -429,8 +454,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         handExportMatrix = handExportJoint.worldMatrix()
 
         knuckleSpec, = self.pivots()
-        knucklePivot = knuckleSpec.getNode()
-        knucklePivotMatrix = knucklePivot.worldMatrix()
+        knucklePivotMatrix = om.MMatrix(knuckleSpec.worldMatrix)
         knucklePivotPoint = transformutils.decomposeTransformMatrix(knucklePivotMatrix)[0]
         knuckleMatrix = transformutils.createRotationMatrix(handExportMatrix) * transformutils.createTranslateMatrix(knucklePivotPoint)
 
@@ -633,7 +657,9 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
             # Check if finger is enabled
             #
-            if not metacarpalSpec.enabled:
+            fingerEnabled = bool(metacarpalSpec.enabled)
+
+            if not fingerEnabled:
 
                 continue
 
@@ -643,7 +669,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
             fingerName = fingerType.name.title()
             fullFingerName = fingerName if (fingerType is self.FingerType.THUMB) else f'{fingerName}Finger'
 
-            *fingerSpecs, fingerTipSpec = self.flattenSpecs(metacarpalSpec)
+            *fingerSpecs, fingerTipSpec = self.flattenSpecs(metacarpalSpec.children)
 
             fingerBaseExportJoint = fingerSpecs[0].getNode(referenceNode=referenceNode)
             fingerBaseMatrix = fingerBaseExportJoint.worldMatrix()

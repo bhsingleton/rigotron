@@ -3,9 +3,8 @@ import os
 from maya.api import OpenMaya as om
 from mpy import mpyattribute
 from dcc.naming import namingutils
-from dcc.maya.standalone import rpc
 from ..abstract import abstractinterface, abstractcomponent
-from ..libs import Status, setuputils
+from ..libs import Status, skeletonmanager, setuputils
 
 import logging
 logging.basicConfig()
@@ -42,7 +41,7 @@ class ControlRig(abstractinterface.AbstractInterface):
     propsGroup = mpyattribute.MPyAttribute('propsGroup', attributeType='message')
     meshesGroup = mpyattribute.MPyAttribute('meshesGroup', attributeType='message')
     skeletonReference = mpyattribute.MPyAttribute('skeletonReference', attributeType='message')
-    skinReference = mpyattribute.MPyAttribute('skeletonReference', attributeType='message', array=True)
+    skinReference = mpyattribute.MPyAttribute('skinReference', attributeType='message', array=True)
 
     @rigName.changed
     def rigName(self, rigName):
@@ -103,19 +102,50 @@ class ControlRig(abstractinterface.AbstractInterface):
 
             controlRig.skeletonReference = skeletonReference.object()
 
-        # Cache rig bounding box for component use
-        # We can use these values to derive the scale factor for controller shapes!
-        #
-        rigBoundingBox = setuputils.getBoundingBoxByTypeName(typeName='mesh')
-
-        controlRig.rigBoundingBoxMin = rigBoundingBox.min
-        controlRig.rigBoundingBoxMax = rigBoundingBox.max
-
         # Create root component
         #
         controlRig.createRootComponent()
 
         return controlRig
+
+    def update(self, force=False):
+        """
+        Updates the control rig's component's internal specs.
+
+        :type force: bool
+        :rtype: bool
+        """
+
+        # Evaluate rig version
+        #
+        isUpToDate = self.rigVersion >= 1.0
+
+        if isUpToDate and not force:
+
+            return True
+
+        # Evaluate rig state
+        #
+        rootComponent = self.findRootComponent()
+        isRig = (rootComponent.componentStatus == self.Status.RIG)
+
+        if not isRig:
+
+            log.warning('Components can only be updated from the rig state!')
+            return False
+
+        # Iterate through components and repair skeleton specs
+        #
+        for component in self.walkComponents():
+
+            component.repairSkeleton(force=force)
+            component.repairPivots(force=force)
+
+        # Update rig version
+        #
+        self.rigVersion = 1.0
+
+        return True
 
     def getRigBounds(self):
         """
@@ -124,7 +154,21 @@ class ControlRig(abstractinterface.AbstractInterface):
         :rtype: om.MBoundingBox
         """
 
-        return om.MBoundingBox(om.MPoint(self.rigBoundingBoxMin), om.MPoint(self.rigBoundingBoxMax))
+        rigBoundingBoxMin = om.MPoint(self.rigBoundingBoxMin)
+        rigBoundingBoxMax = om.MPoint(self.rigBoundingBoxMax)
+        difference = (rigBoundingBoxMax - rigBoundingBoxMin)  # type: om.MVector
+
+        if difference.isEquivalent(om.MVector.kZeroVector):
+
+            rigBoundingBox = setuputils.getBoundingBoxByTypeName(typeName='mesh')
+            self.rigBoundingBoxMin = rigBoundingBox.min
+            self.rigBoundingBoxMax = rigBoundingBox.max
+
+            return self.getRigBounds()
+
+        else:
+
+            return om.MBoundingBox(rigBoundingBoxMin, rigBoundingBoxMax)
 
     def getRigWidthAndHeight(self):
         """
@@ -171,19 +215,34 @@ class ControlRig(abstractinterface.AbstractInterface):
         """
         Returns an interface for the referenced skeleton.
 
-        :rtype: rpc.MRPCClient
+        :rtype: skeletonmanager.SkeletonManager
         """
 
-        return rpc.__client__
+        return skeletonmanager.SkeletonManager(self, referenceNode=self.getSkeletonReference())
+
+    def hasReferencedSkeleton(self):
+        """
+        Evaluates if this control rig has a referenced skeleton.
+
+        :rtype: bool
+        """
+
+        return not self.skeletonReference.isNull()
 
     def getSkeletonReference(self):
         """
         Returns the skeleton reference node.
 
-        :rtype: mpy.builtins.referencemixin.ReferenceMixin
+        :rtype: Union[mpy.builtins.referencemixin.ReferenceMixin, None]
         """
 
-        return self.scene(self.skeletonReference)
+        if self.hasReferencedSkeleton():
+
+            return self.scene(self.skeletonReference)
+
+        else:
+
+            return None
 
     def loadSkeleton(self, clearEdits=False):
         """
@@ -193,19 +252,8 @@ class ControlRig(abstractinterface.AbstractInterface):
         :rtype: None
         """
 
-        # Check if edits require clearing
-        #
-        reference = self.getSkeletonReference()
-
-        if clearEdits:
-
-            reference.clearEdits()
-
-        # Check if reference requires loading
-        #
-        if not reference.isLoaded():
-
-            reference.load()
+        manager = self.getSkeletonManager()
+        manager.load(clearEdits=clearEdits)
 
     def unloadSkeleton(self, clearEdits=False):
         """
@@ -215,19 +263,8 @@ class ControlRig(abstractinterface.AbstractInterface):
         :rtype: None
         """
 
-        # Check if reference requires unloading
-        #
-        reference = self.getSkeletonReference()
-
-        if reference.isLoaded():
-
-            reference.unload()
-
-        # Check if edits require clearing
-        #
-        if clearEdits:
-
-            reference.clearEdits()
+        manager = self.getSkeletonManager()
+        manager.unload(clearEdits=clearEdits)
 
     def saveSkeleton(self):
         """

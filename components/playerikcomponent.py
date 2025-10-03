@@ -53,18 +53,20 @@ class PlayerIKComponent(basecomponent.BaseComponent):
         """
 
         # Check if root component exists
-        # Without it we can't traverse the component tree for the required components!
+        # Without it, we can't traverse the component tree for the required components!
         #
         rootComponent = self.findRootComponent()
 
         if rootComponent is None:
 
-            return
+            return skeletonSpecs
 
         # Resize skeleton specs
         #
-        specCount = len(self.PlayerIKType)
-        footSpec, handSpec, propSpec, weaponSpec = self.resizeSkeleton(specCount, skeletonSpecs, hierarchical=False)
+        namespace = self.skeletonNamespace()
+        size = len(self.PlayerIKType)
+
+        footSpec, handSpec, propSpec, weaponSpec = self.resizeSkeleton(size, skeletonSpecs, hierarchical=False)
 
         # Check if feet IK trackers are required
         #
@@ -81,14 +83,18 @@ class PlayerIKComponent(basecomponent.BaseComponent):
 
         for (spec, component) in zip(footSpecs, footComponents):
 
-            footName = component.componentName
-            footId = component.componentId
-            footSide = self.Side(component.componentSide)
-            footDriver = component.skeletonSpecs()[0].name
+            componentName = component.componentName
+            componentId = component.componentId
+            componentSpec = component.skeleton()[0]
+            componentSide = self.Side(component.componentSide)
 
-            spec.name = self.formatName(side=footSide, name=footName, id=footId, kinemat='IK')
-            spec.driver = footDriver
             spec.enabled = feetEnabled
+            spec.name = self.formatName(side=componentSide, name=componentName, id=componentId, kinemat='IK')
+            spec.side = componentSide
+            spec.type = self.Type.OTHER
+            spec.otherType = f'{componentName}_IK'
+            spec.driver.name = componentSpec.name
+            spec.driver.namespace = namespace
 
         # Check if hand IK trackers are required
         #
@@ -105,14 +111,18 @@ class PlayerIKComponent(basecomponent.BaseComponent):
 
         for (spec, component) in zip(handSpecs, handComponents):
 
-            handName = component.componentName
-            handId = component.componentId
-            handSide = self.Side(component.componentSide)
-            handDriver = component.skeletonSpecs()[0].name
+            componentName = component.componentName
+            componentId = component.componentId
+            componentSpec = component.skeleton()[0]
+            componentSide = self.Side(component.componentSide)
 
-            spec.name = self.formatName(side=handSide, name=handName, id=handId, kinemat='IK')
-            spec.driver = handDriver
             spec.enabled = handsEnabled
+            spec.name = self.formatName(side=componentSide, name=componentName, id=componentId, kinemat='IK')
+            spec.side = componentSide
+            spec.type = self.Type.OTHER
+            spec.otherType = f'{componentName}_IK'
+            spec.driver.name = componentSpec.name
+            spec.driver.namespace = namespace
 
         # Check if prop IK trackers are required
         #
@@ -122,21 +132,25 @@ class PlayerIKComponent(basecomponent.BaseComponent):
         propSpec.enabled = propsEnabled
         propSpec.passthrough = True
 
-        propComponents = rootComponent.findComponentDescendants('RootComponent')
+        propComponents = rootComponent.findComponentDescendants('PropComponent')
         numPropComponents = len(propComponents)
 
         propSpecs = self.resizeSkeleton(numPropComponents, propSpec.children, hierarchical=False)
 
         for (spec, component) in zip(propSpecs, propComponents):
 
-            propName = component.componentName
-            propId = component.componentId
-            propSide = self.Side(component.componentSide)
-            propDriver = component.skeletonSpecs()[0].name
+            componentName = component.componentName
+            componentId = component.componentId
+            componentSpec = component.skeleton()[0]
+            componentSide = self.Side(component.componentSide)
 
-            spec.name = self.formatName(side=propSide, name=propName, id=propId, kinemat='IK')
-            spec.driver = propDriver
             spec.enabled = propsEnabled
+            spec.name = self.formatName(side=componentSide, name=componentName, id=componentId, kinemat='IK')
+            spec.side = componentSide
+            spec.type = self.Type.OTHER
+            spec.otherType = f'{componentName}_IK'
+            spec.driver.name = componentSpec.name
+            spec.driver.namespace = namespace
 
         # Check if weapon IK trackers are required
         #
@@ -144,7 +158,7 @@ class PlayerIKComponent(basecomponent.BaseComponent):
 
         weaponSpec.name = self.formatName(name='Weapon', subname='Root', kinemat='IK')
         weaponSpec.enabled = weaponsEnabled
-        propSpec.passthrough = True
+        weaponSpec.passthrough = True
 
         weaponComponents = rootComponent.findComponentDescendants('WeaponComponent')
         numWeaponComponents = len(weaponComponents)
@@ -153,196 +167,40 @@ class PlayerIKComponent(basecomponent.BaseComponent):
 
         for (spec, component) in zip(weaponSpecs, weaponComponents):
 
-            weaponName = component.componentName
-            weaponId = component.componentId
-            weaponSide = self.Side(component.componentSide)
-            weaponDriver = component.skeletonSpecs()[0].name
+            componentName = component.componentName
+            componentId = component.componentId
+            componentSpec = component.skeleton()[0]
+            componentSide = self.Side(component.componentSide)
 
-            spec.name = self.formatName(side=weaponSide, name=weaponName, id=weaponId, kinemat='IK')
-            spec.driver = weaponDriver
             spec.enabled = weaponsEnabled
+            spec.name = self.formatName(side=componentSide, name=componentName, id=componentId, kinemat='IK')
+            spec.side = componentSide
+            spec.type = self.Type.OTHER
+            spec.otherType = f'{componentName}_IK'
+            spec.driver.name = componentSpec.name
+            spec.driver.namespace = namespace
 
-            subspecs = self.resizeSkeleton(numHandComponents, spec.children, hierarchical=False)
+            subSpecs = self.resizeSkeleton(numHandComponents, spec.children, hierarchical=False)
 
-            for (subspec, subcomponent) in zip(subspecs, handComponents):
+            for (subSpec, subComponent) in zip(subSpecs, handComponents):
 
-                handName = subcomponent.componentName
-                handId = subcomponent.componentId
-                handSide = self.Side(subcomponent.componentSide)
-                handDriver = subcomponent.skeletonSpecs()[0].name
+                subComponentName = subComponent.componentName
+                subComponentId = subComponent.componentId
+                subComponentSpec = subComponent.skeleton()[0]
+                subComponentSide = self.Side(subComponent.componentSide)
 
-                subname = f'{handSide.name.title()}{handName}{handId}'
-                subspec.name = self.formatName(side=weaponSide, name=weaponName, id=weaponId, subname=subname, kinemat='IK')
-                subspec.driver = handDriver
-                subspec.enabled = weaponsEnabled
+                subName = f'{subComponentSide.name.title()}{subComponentName}{subComponentId}'
+                subSpec.enabled = weaponsEnabled
+                subSpec.name = self.formatName(side=componentSide, name=componentName, id=componentId, subname=subName, kinemat='IK')
+                subSpec.side = subComponentSide
+                subSpec.type = self.Type.OTHER
+                subSpec.otherType = f'{componentName}_{subName}_IK'
+                subSpec.driver.name = subComponentSpec.name
+                subSpec.driver.namespace = namespace
 
         # Call parent method
         #
         return super(PlayerIKComponent, self).invalidateSkeleton(skeletonSpecs)
-
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: Tuple[mpynode.MPyNode]
-        """
-
-        # Decompose skeleton specs
-        #
-        footSpec, handSpec, propSpec, weaponSpec = self.skeletonSpecs()
-
-        # Check if feet are enabled
-        #
-        hasFootSpecs = len(footSpec.children) > 0
-        feetEnabled = footSpec.children[0].enabled if hasFootSpecs else False
-
-        joints = []
-
-        if feetEnabled:
-
-            for (i, spec) in enumerate(footSpec.children):
-
-                joint = self.scene.createNode('joint', name=spec.name)
-                joint.displayLocalAxis = True
-                spec.uuid = joint.uuid()
-
-                joints.append(joint)
-
-        # Check if hands are enabled
-        #
-        hasHandSpecs = len(handSpec.children) > 0
-        handsEnabled = handSpec.children[0].enabled if hasHandSpecs else False
-
-        if handsEnabled:
-
-            for (i, spec) in enumerate(handSpec.children):
-
-                joint = self.scene.createNode('joint', name=spec.name)
-                joint.displayLocalAxis = True
-                spec.uuid = joint.uuid()
-
-                joints.append(joint)
-
-        # Check if props are enabled
-        #
-        hasPropSpecs = len(propSpec.children) > 0
-        propsEnabled = propSpec.children[0].enabled if hasPropSpecs else False
-
-        if propsEnabled:
-
-            for (i, spec) in enumerate(propSpec.children):
-
-                joint = self.scene.createNode('joint', name=spec.name)
-                joint.displayLocalAxis = True
-                spec.uuid = joint.uuid()
-
-                joints.append(joint)
-
-        # Check if weapons are enabled
-        #
-        hasWeaponSpecs = len(weaponSpec.children) > 0
-        weaponsEnabled = weaponSpec.children[0].enabled if hasWeaponSpecs else False
-
-        if weaponsEnabled:
-
-            for (i, spec) in enumerate(weaponSpec.children):
-
-                joint = self.scene.createNode('joint', name=spec.name)
-                joint.displayLocalAxis = True
-                spec.uuid = joint.uuid()
-
-                joints.append(joint)
-
-                for (j, subspec) in enumerate(spec.children):
-
-                    subjoint = self.scene.createNode('joint', name=subspec.name, parent=joint)
-                    subjoint.displayLocalAxis = True
-                    subspec.uuid = subjoint.uuid()
-
-                    joints.append(subjoint)
-
-        return joints
-
-    def parentSkeleton(self):
-        """
-        Parents the skeleton for this component.
-
-        :rtype: None
-        """
-
-        # Check if attachment target exists
-        #
-        parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
-
-        if parentExportJoint is None:
-
-            return
-
-        # Re-parent export skeleton
-        #
-        skeletonSpecs = self.skeletonSpecs()
-
-        for skeletonSpec in skeletonSpecs:
-
-            # Check if top-level spec is enabled
-            #
-            hasChildren = len(skeletonSpec.children)
-            isEnabled = skeletonSpec.children[0].enabled if hasChildren else False
-
-            if not isEnabled:
-
-                continue
-
-            # Iterate through child specs
-            #
-            for childSpec in skeletonSpec.children:
-
-                exportJoint = childSpec.getNode()
-
-                if exportJoint is not None:
-
-                    exportJoint.setParent(parentExportJoint, absolute=True)
-
-                else:
-
-                    log.warning(f'Unable to parent "{childSpec.name}" joint!')
-                    continue
-
-    def unparentSkeleton(self):
-        """
-        Un-parents the skeleton for this component.
-
-        :rtype: None
-        """
-
-        # Un-parent export skeleton
-        #
-        skeletonSpecs = self.skeletonSpecs()
-
-        for skeletonSpec in skeletonSpecs:
-
-            # Check if top-level spec is enabled
-            #
-            hasChildren = len(skeletonSpec.children)
-            isEnabled = skeletonSpec.children[0].enabled if hasChildren else False
-
-            if not isEnabled:
-
-                continue
-
-            # Iterate through child specs
-            #
-            for childSpec in skeletonSpec.children:
-
-                exportJoint = childSpec.getNode()
-
-                if exportJoint is not None:
-
-                    exportJoint.setParent(None, absolute=True)
-
-                else:
-
-                    log.warning(f'Unable to un-parent "{childSpec.name}" joint!')
 
     def buildRig(self):
         """
@@ -353,16 +211,15 @@ class PlayerIKComponent(basecomponent.BaseComponent):
 
         # Iterate through skeleton specs
         #
-        skeletonSpecs = self.skeletonSpecs(flatten=True, skipDisabled=True)
+        referenceNode = self.skeletonReference()
+        skeletonSpecs = self.skeleton(flatten=True, skipDisabled=True)
 
         for skeletonSpec in skeletonSpecs:
 
-            driver = self.scene(skeletonSpec.driver)
+            driver = skeletonSpec.driver.getDriver()
 
-            joint = self.scene(skeletonSpec.name)
-            joint.type = driver.type
-            joint.otherType = f'{driver.otherType}_IK'
+            joint = skeletonSpec.getNode(referenceNode=referenceNode)
             joint.copyTransform(driver, skipScale=True)
 
-            skeletonSpec.cacheMatrix(delete=False)
+            skeletonSpec.cacheNode(delete=False)
     # endregion

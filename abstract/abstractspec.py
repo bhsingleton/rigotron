@@ -200,6 +200,10 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
 
             self._matrix = om.MTransformationMatrix(matrix)
 
+        elif matrix is None:
+
+            self._matrix = om.MTransformationMatrix.kIdentity
+
         else:
 
             raise TypeError(f'matrix.setter() expects an transformation matrix ({type(matrix).__name__} given)!')
@@ -212,7 +216,7 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
         :rtype: None
         """
 
-        self._matrix = None
+        self._matrix = None  # This forces the default matrix to be used in its place!
 
     @property
     def defaultMatrix(self):
@@ -241,9 +245,13 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
 
             self._defaultMatrix = om.MTransformationMatrix(defaultMatrix)
 
+        elif defaultMatrix is None:
+
+            self._defaultMatrix = om.MTransformationMatrix.kIdentity
+
         else:
 
-            raise TypeError(f'matrix.setter() expects an transformation matrix ({type(defaultMatrix).__name__} given)!')
+            raise TypeError(f'defaultMatrix.setter() expects an transformation matrix ({type(defaultMatrix).__name__} given)!')
 
     @defaultMatrix.deleter
     def defaultMatrix(self):
@@ -431,29 +439,30 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
             log.warning(f'Unable to delete "{self.name}" referenced node!')
             return False
 
-    def cacheNode(self, referenceNode=None, delete=False):
+    def cacheNode(self, **kwargs):
         """
         Caches the associated node's transformation matrix.
 
         :type referenceNode: Union[mpynode.MPyNode, None]
         :type delete: bool
-        :rtype: None
+        :rtype: bool
         """
 
         # Check if spec is enabled
         #
         if not self.enabled:
 
-            return
+            return False
 
         # Check if node exists
         #
+        referenceNode = kwargs.get('referenceNode', None)
         node = self.getNode(referenceNode=referenceNode)
 
         if node is None:
 
             log.warning(f'Unable to locate "{self.name}" node to cache!')
-            return
+            return False
 
         # Cache world matrix
         #
@@ -461,7 +470,11 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
 
         # Check if node requires deleting
         #
+        delete = kwargs.get('delete', False)
+
         if delete:
 
             self.deleteNode(referenceNode=referenceNode)
+
+        return True
     # endregion

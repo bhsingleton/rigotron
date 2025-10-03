@@ -58,9 +58,8 @@ class SkeletonSpec(abstractspec.AbstractSpec):
         # Check if parent exists
         #
         parent = super(SkeletonSpec, self).parent
-        hasParent = isinstance(parent, abstractspec.AbstractSpec)
-
-        if not hasParent:
+        
+        if parent is None:
 
             return parent
 

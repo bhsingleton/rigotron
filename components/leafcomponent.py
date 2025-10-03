@@ -56,7 +56,7 @@ class LeafComponent(basecomponent.BaseComponent):
         # Decompose component
         #
         referenceNode = self.skeletonReference()
-        leafSpec, = self.skeletonSpecs()
+        leafSpec, = self.skeleton()
         leafExportJoint = leafSpec.getNode(referenceNode=referenceNode)
         leafExportMatrix = leafExportJoint.worldMatrix()
 
@@ -76,7 +76,8 @@ class LeafComponent(basecomponent.BaseComponent):
         leafSpace.setWorldMatrix(leafExportMatrix, skipScale=True)
         leafSpace.freezeTransform()
 
-        leafCtrl = self.scene.createNode('transform', name=leafSpec.driver, parent=leafSpace)
+        leafCtrlName = self.formatName(type='control')
+        leafCtrl = self.scene.createNode('transform', name=leafCtrlName, parent=leafSpace)
         leafCtrl.addPointHelper('disc', size=(10.0 * rigScale), side=componentSide)
         leafCtrl.prepareChannelBoxForAnimation()
         leafCtrl.tagAsController()

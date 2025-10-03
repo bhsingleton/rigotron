@@ -9,6 +9,7 @@ from dcc.naming import namingutils
 from dcc.maya.libs import plugutils
 from mpy import mpynodeextension, mpyattribute
 from mpy.abstract import mabcmeta
+from ..interfaces import controlrig
 from ..libs import Side, Type, Style, Status, componentfactory, interfacefactory
 
 import logging
@@ -57,8 +58,9 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
         #
         super(AbstractComponent, self).__init__(*args, **kwargs)
 
-        # Declare class variables
+        # Define private variables
         #
+        self._controlRig = self.nullWeakReference
         self._componentManager = componentfactory.ComponentFactory.getInstance(asWeakReference=True)
         self._interfaceManager = interfacefactory.InterfaceFactory.getInstance(asWeakReference=True)
     # endregion
@@ -71,7 +73,6 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
     componentChildren = mpyattribute.MPyAttribute('componentChildren', attributeType='message', array=True, hidden=True)
     componentStatus = mpyattribute.MPyAttribute('componentStatus', attributeType='enum', fields=Status, default=Status.META)
     controlsGroup = mpyattribute.MPyAttribute('controlsGroup', attributeType='message')
-    pivotsGroup = mpyattribute.MPyAttribute('pivotsGroup', attributeType='message')
     privateGroup = mpyattribute.MPyAttribute('privateGroup', attributeType='message')
     jointsGroup = mpyattribute.MPyAttribute('jointsGroup', attributeType='message')
     attachmentId = mpyattribute.MPyAttribute('attachmentId', attributeType='int', min=0)
@@ -593,7 +594,15 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
         :rtype: rigotron.interfaces.controlrig.ControlRig
         """
 
-        # Get root component
+        # Check if control rig has already been found
+        #
+        controlRig = self._controlRig()
+
+        if controlRig is not None:
+
+            return controlRig
+
+        # Check if root component exists
         #
         root = self.findRootComponent()
 
@@ -601,26 +610,33 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
             return None
 
-        # Iterate through message destinations
+        # Check if root component is connected to a control rig
         #
         plug = root.findPlug('message')
 
         for otherPlug in plug.destinations():
 
-            # Check if connected plug is a pyNode
+            # Check if connected plug is derived from a control rig
             #
             node = self.scene(otherPlug.node())
-            partialName = otherPlug.partialName(useLongNames=True)
+            plugName = otherPlug.partialName(useLongNames=True)
 
-            if isinstance(node, mpynodeextension.MPyNodeExtension) and partialName == 'rootComponent':
+            if isinstance(node, controlrig.ControlRig) and plugName == 'rootComponent':
 
-                return node
+                controlRig = node
+                break
 
             else:
 
                 continue
 
-        return None
+        # Cache control rig for subsequent lookups
+        #
+        if isinstance(controlRig, controlrig.ControlRig):
+
+            self._controlRig = controlRig.weakReference()
+
+        return controlRig
 
     def isUpToDate(self):
         """

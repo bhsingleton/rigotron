@@ -118,6 +118,31 @@ class SpineComponent(basecomponent.BaseComponent):
         #
         return super(SpineComponent, self).invalidatePivots(pivotSpecs, **kwargs)
 
+    def repairPivots(self, force=False):
+        """
+        Repairs the internal pivot specs for this component.
+
+        :rtype: None
+        """
+
+        # Evaluate parent matrix
+        #
+        cogSpec, = self.pivots(flatten=True, force=True)
+        requiresUpdating = cogSpec.parentMatrix.isEquivalent(om.MMatrix.kIdentity, tolerance=1e-3)
+
+        if requiresUpdating or force:
+
+            driver = cogSpec.driver.getDriver()
+            matrix = cogSpec.matrix.asMatrix()
+            parentMatrix = driver.worldMatrix()
+
+            cogSpec.matrix = matrix * parentMatrix.inverse()
+            cogSpec.parentMatrix = parentMatrix
+
+        # Call parent method
+        #
+        return super(SpineComponent, self).repairPivots(force=force)
+
     def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
@@ -195,8 +220,7 @@ class SpineComponent(basecomponent.BaseComponent):
         firstSpineExportJoint, lastSpineExportJoint = spineExportJoints[0], spineExportJoints[-1]
 
         cogSpec, = self.pivots()
-        cogPivot = cogSpec.getNode()
-        cogMatrix = cogPivot.worldMatrix()
+        cogMatrix = om.MMatrix(cogSpec.worldMatrix)
 
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)

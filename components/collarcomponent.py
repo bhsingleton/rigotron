@@ -48,7 +48,7 @@ class CollarComponent(basecomponent.BaseComponent):
 
         # Call parent method
         #
-        return super(CollarComponent, self).invalidateSkeletonSpecs(skeletonSpecs, **kwargs)
+        return super(CollarComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def buildRig(self):
         """
@@ -60,7 +60,7 @@ class CollarComponent(basecomponent.BaseComponent):
         # Decompose component
         #
         referenceNode = self.skeletonReference()
-        collarSpec, = self.skeletonSpecs()
+        collarSpec, = self.skeleton()
         collarExportJoint = collarSpec.getNode(referenceNode=referenceNode)
         collarExportMatrix = collarExportJoint.worldMatrix()
 
@@ -79,13 +79,18 @@ class CollarComponent(basecomponent.BaseComponent):
         collarSpace.setWorldMatrix(collarExportMatrix, skipScale=True)
         collarSpace.freezeTransform()
 
-        collarCtrl = self.scene.createNode('transform', name=collarSpec.driver, parent=collarSpace)
+        collarGroupName = self.formatName(type='transform')
+        collarGroup = self.scene.createNode('transform', name=collarGroupName, parent=collarSpace)
+
+        collarCtrlName = self.formatName(type='control')
+        collarCtrl = self.scene.createNode('transform', name=collarCtrlName, parent=collarGroup)
         collarCtrl.addStar(20.0 * rigScale, outerRadius=1.0, innerRadius=1.0, numPoints=6, localScale=(1.0, 1.0, 1.5), colorRGB=colorRGB)
         collarCtrl.prepareChannelBoxForAnimation()
         collarCtrl.tagAsController()
         self.publishNode(collarCtrl, alias=self.componentName)
 
         collarCtrl.userProperties['space'] = collarSpace.uuid()
+        collarCtrl.userProperties['group'] = collarGroup.uuid()
 
     def finalizeRig(self):
         """
@@ -94,41 +99,72 @@ class CollarComponent(basecomponent.BaseComponent):
         :rtype: None
         """
 
-        # Find spine component
+        # Check if spine and head components exist
         #
         spineComponents = self.findComponentAncestors('SpineComponent')
-        numSpineComponents = len(spineComponents)
+        spineExists = len(spineComponents) == 1
 
-        if numSpineComponents == 0:
-
-            raise NotImplementedError('buildRig() spineless collar components have not been implemented!')
-
-        # Find head component
-        #
-        spineComponent = spineComponents[0]
-        headComponents = spineComponent.findComponentDescendants('HeadComponent')
-
-        numHeadComponents = len(headComponents)
-
-        if numHeadComponents == 0:
-
-            raise NotImplementedError('buildRig() headless collar components have not been implemented!')
-
-        # Constrain collar control
-        #
-        headComponent = headComponents[0]
-        neckCtrl = headComponent.getPublishedNode('Neck')
-        headCtrl = headComponent.getPublishedNode('Head')
-        chestCtrl = spineComponent.getPublishedNode('Chest')
+        headComponents = spineComponents[0].findComponentDescendants('HeadComponent') if spineExists else []
+        headExists = len(headComponents) == 1
 
         collarCtrl = self.getPublishedNode(self.componentName)
         collarSpace = self.scene(collarCtrl.userProperties['space'])
-        collarSpace.addConstraint('transformConstraint', [neckCtrl], skipRotate=True, maintainOffset=True)
+        collarGroup = self.scene(collarCtrl.userProperties['group'])
 
-        orientConstraint = collarSpace.addConstraint('orientConstraint', [chestCtrl, neckCtrl, headCtrl], skipTranslate=True, skipScale=True)
-        chestTarget, neckTarget, headTarget = orientConstraint.targets()
-        chestTarget.setWeight(0.23)
-        neckTarget.setWeight(0.64)
-        headTarget.setWeight(0.13)
-        orientConstraint.maintainOffset()
+        if spineExists and headExists:
+
+            # Decompose components
+            #
+            spineComponent, headComponent = spineComponents[0], headComponents[0]
+            neckCtrl = headComponent.getPublishedNode('Neck01') if (headComponent.numNeckLinks > 1) else headComponent.getPublishedNode('Neck')
+            headCtrl = headComponent.getPublishedNode('Head')
+            chestCtrl = spineComponent.getPublishedNode('Chest')
+
+            # Constrain collar control
+            #
+            collarSpace.addConstraint('transformConstraint', [neckCtrl], skipRotate=True, maintainOffset=True)
+
+            orientConstraint = collarSpace.addConstraint('orientConstraint', [chestCtrl, neckCtrl, headCtrl], skipTranslate=True, skipScale=True)
+            chestTarget, neckTarget, headTarget = orientConstraint.targets()
+            chestTarget.setWeight(0.23)
+            neckTarget.setWeight(0.64)
+            headTarget.setWeight(0.13)
+            orientConstraint.maintainOffset()
+
+            # Add twist attribute to collar control
+            #
+            collarCtrl.addDivider('Settings')
+            collarCtrl.addAttr(longName='inheritsTwist', attributeType='angle', min=0.0, max=1.0, keyable=True)
+
+            # Setup twist solver
+            #
+            twistSolverName = self.formatName(subname='Twist', type='twistSolver')
+            twistSolver = self.scene.createNode('twistSolver', name=twistSolverName)
+            twistSolver.forwardAxis = 0  # X
+            twistSolver.upAxis = 2  # Z
+            twistSolver.inverse = True
+            twistSolver.connectPlugs(chestCtrl[f'worldMatrix[{chestCtrl.instanceNumber()}]'], 'startMatrix')
+            twistSolver.connectPlugs(collarSpace[f'worldMatrix[{collarSpace.instanceNumber()}]'], 'endMatrix')
+
+            twistReverseName = self.formatName(subname='TwistReverse', type='floatMath')
+            twistReverse = self.scene.createNode('floatMath', name=twistReverseName)
+            twistReverse.operation = 1  # Subtract
+            twistReverse.setAttr('inAngleA', 1.0)
+            twistReverse.connectPlugs(collarCtrl['inheritsTwist'], 'inAngleB')
+
+            twistEnvelopeName = self.formatName(subname='TwistEnvelope', type='floatMath')
+            twistEnvelope = self.scene.createNode('floatMath', name=twistEnvelopeName)
+            twistEnvelope.operation = 2  # Multiply
+            twistEnvelope.connectPlugs(twistSolver['roll'], 'inAngleA')
+            twistEnvelope.connectPlugs(twistReverse['outAngle'], 'inAngleB')
+            twistEnvelope.connectPlugs('outAngle', collarGroup['rotateX'])
+
+            self.organizeNodes(twistSolver, twistReverse, twistEnvelope)
+
+        else:
+
+            # Constrain collar control
+            #
+            parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
+            collarSpace.addConstraint('transformConstraint', [parentExportCtrl], maintainOffset=True)
     # endregion

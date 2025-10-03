@@ -2,18 +2,14 @@ import math
 import os
 
 from maya.api import OpenMaya as om
-
-from airship_syndicate.ui.interop import referenceFile
 from mpy import mpynode, mpyattribute
 from dcc.maya.libs import dagutils
-from dcc.maya.standalone import rpc
 from dcc.python import stringutils
 from abc import abstractmethod
 from collections import deque
 from collections.abc import MutableSequence
-from ..abstract import abstractcomponent
+from ..abstract import abstractcomponent, abstractspec
 from ..libs import skeletonspec, pivotspec
-from ..abstract import abstractspec
 
 import logging
 logging.basicConfig()
@@ -161,9 +157,9 @@ class BaseComponent(abstractcomponent.AbstractComponent):
     @classmethod
     def unpackSpecs(cls, *args):
         """
-        Unpacks the supplied specs based on the predicated sizes.
+        Organizes the supplied specs into groups based on the predicated sizes.
 
-        :type args: List[Union[int, List[abstractspec.AbstractSpec]]]
+        :type args: Union[int, List[abstractspec.AbstractSpec]]
         :rtype: List[List[abstractspec.AbstractSpec]]
         """
 
@@ -370,6 +366,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
     def getAttachmentTargets(self):
         """
         Returns the attachment targets for this component.
+        The tuple consists of the export joint and the driver control!
 
         :rtype: Union[Tuple[mpynode.MPyNode, mpynode.MPyNode], Tuple[None, None]]
         """
@@ -393,16 +390,24 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         """
         Returns an interface for the referenced skeleton.
 
-        :rtype: rpc.MRPCClient
+        :rtype: rigotron.libs.skeletonmanager.SkeletonManager
         """
 
-        return rpc.__client__  # It's the responsibility of the dev to manage the remote standalone server!
+        controlRig = self.findControlRig()
+
+        if controlRig is not None:
+
+            return controlRig.getSkeletonManager()
+
+        else:
+
+            return TypeError('skeletonManager() expects a valid control rig!')
 
     def skeletonReference(self):
         """
         Returns the skeleton reference node.
 
-        :rtype: mpy.builtins.referencemixin.ReferenceMixin
+        :rtype: Union[mpy.builtins.referencemixin.ReferenceMixin, None]
         """
 
         return self.findControlRig().getSkeletonReference()
@@ -414,7 +419,15 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         :rtype: str
         """
 
-        return self.skeletonReference().associatedNamespace()
+        referenceNode = self.skeletonReference()
+
+        if referenceNode is not None:
+
+            return referenceNode.associatedNamespace()
+
+        else:
+
+            return ''
 
     def isSkeletonDirty(self):
         """
@@ -449,6 +462,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         :type flatten: bool
         :type topLevelOnly: bool
+        :type force: bool
         :rtype: List[skeletonspec.SkeletonSpec]
         """
 
@@ -456,9 +470,11 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         #
         isDirty = self.isSkeletonDirty()
         isMeta = (self.componentStatus == self.Status.META)
+        force = kwargs.get('force', False)
+
         skeletonSpecs = self.userProperties.get(self.SKELETON_KEY, [])
 
-        if isDirty and isMeta:
+        if (isDirty and isMeta) or force:
 
             log.info(f'Invalidating "{self}" skeleton specs...')
             skeletonSpecs = self.invalidateSkeleton(skeletonSpecs)
@@ -470,8 +486,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         if topLevelOnly:
 
-            flattenedSpecs = [list(self.flattenSpecs(skeletonSpec, **kwargs)) for skeletonSpec in skeletonSpecs]
-            skeletonSpecs = [specs[0] for specs in flattenedSpecs if len(specs) >= 1]
+            skeletonSpecs = [skeletonSpec for skeletonSpec in self.flattenSpecs(skeletonSpecs, **kwargs) if skeletonSpec.parent is None]
 
         elif flatten:
 
@@ -515,141 +530,86 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         return skeletonSpecs
 
-    def reloadSkeleton(self):
+    def repairSkeleton(self, force=False):
         """
-        Reloads the referenced skeleton for this component.
+        Repairs the internal skeleton specs for this component.
 
-        :rtype: None
-        """
-
-        controlRig = self.findControlRig()
-        controlRig.reloadSkeleton()
-
-    def syncJoint(self, skeletonSpec, **kwargs):
-        """
-        Synchronizes the supplied skeleton spec with the associated joint from the referenced skeleton.
-
-        :type skeletonSpec: skeletonspec.SkeletonSpec
-        :key manager: rpc.MRPCClient
-        :rtype: skeletonspec.SkeletonSpec
-        """
-
-        # Evaluate skeleton spec state
-        #
-        manager = kwargs.get('manager', self.skeletonManager())
-
-        if skeletonSpec.enabled:
-
-            # Check if associated export joint exists
-            # If not, go ahead and bind a new export joint to the skeleton spec!
-            #
-            uuid = skeletonSpec.uuid.asString()
-            exists = manager.doesNodeExist(uuid) if not stringutils.isNullOrEmpty(uuid) else False
-
-            name = ''
-
-            if exists:
-
-                # Check if export joint requires renaming
-                #
-                fullPathName = manager.ls(uuid, long=True)[0]
-                currentName = dagutils.stripAll(fullPathName)
-                name = str(skeletonSpec.name)
-
-                if currentName != name and not stringutils.isNullOrEmpty(name):
-
-                    name = manager.renameNode(currentName, name)
-
-                # Check if export joint requires reparenting
-                #
-                currentParents = manager.listRelatives(name, parent=True)
-                currentParent = currentParents[0] if not stringutils.isNullOrEmpty(currentParents) else ''
-                parent = getattr(skeletonSpec.parent, 'name', '')
-
-                if currentParent != parent and not stringutils.isNullOrEmpty(parent):
-
-                    manager.parentNode(name, parent, absolute=True)
-
-            else:
-
-                # Compose create arguments
-                #
-                kwargs = {'asNameAndUUID': True}
-
-                if not stringutils.isNullOrEmpty(skeletonSpec.name):
-
-                    kwargs['name'] = skeletonSpec.name
-
-                parentSpec = skeletonSpec.parent
-                parent = getattr(parentSpec, 'name', '')
-
-                if not stringutils.isNullOrEmpty(parent):
-
-                    kwargs['parent'] = parent
-
-                # Create new export joint and bind to skeleton spec
-                #
-                log.info(f'Creating "{skeletonSpec.name}" skeleton spec!')
-                name, uuid = manager.createNode('joint', **kwargs)
-                skeletonSpec.name = name
-                skeletonSpec.uuid = uuid
-
-            # Update attributes
-            #
-            manager.setAttr(f'{name}.side', skeletonSpec.side.value)
-            manager.setAttr(f'{name}.type', skeletonSpec.type.value)
-            manager.setAttr(f'{name}.otherType', skeletonSpec.otherType, type='string')
-            manager.setAttr(f'{name}.drawStyle', skeletonSpec.drawStyle.value)
-            manager.setAttr(f'{name}.displayLocalAxis', kwargs.get('displayLocalAxis', True))
-
-            # Update transform matrix
-            #
-            translation = skeletonSpec.matrix.translation(om.MSpace.kTransform)
-            rotateOrder = manager.getAttr(f'{name}.rotateOrder')
-            eulerRotation = skeletonSpec.matrix.rotation(asQuaternion=False)
-            eulerRotation.reorderIt(rotateOrder)
-
-            manager.setAttr(f'{name}.translate', *tuple(translation), type='double3')
-            manager.setAttr(f'{name}.rotate', *tuple(map(math.degrees, eulerRotation)), type='double3')
-
-        else:
-
-            # Check if associated export joint still exists
-            # If yes, go ahead and delete the export joint associated with the skeleton spec!
-            #
-            uuid = skeletonSpec.uuid.asString()
-            exists = manager.doesNodeExist(uuid) if not stringutils.isNullOrEmpty(uuid) else False
-
-            if exists:
-
-                fullPathName = manager.ls(uuid, long=True)[0]
-                children = manager.listRelatives(fullPathName, children=True, path=True)
-
-                if not stringutils.isNullOrEmpty(children):
-
-                    manager.parentNode(*children, world=True, absolute=True)
-
-                log.info(f'Deleting "{fullPathName}" export joint!')
-                manager.deleteNode(fullPathName)
-                del skeletonSpec.uuid
-
-        return skeletonSpec
-
-    def cacheSkeleton(self):
-        """
-        Goes through and ensures the referenced skeleton matches the internal skeleton specs.
-
+        :type force: bool
         :rtype: None
         """
 
         # Iterate through skeleton specs
         #
-        skeletonSpecs = self.skeleton(flatten=True, skipDisabled=True)
-        referenceNode = self.skeletonReference()
+        skeletonSpecs = self.skeleton(flatten=True, force=True)
 
         for skeletonSpec in skeletonSpecs:
 
-            skeletonSpec.cacheNode(referenceNode=referenceNode)
+            # Check if UUID has already been repaired
+            #
+            isValid = skeletonSpec.uuid.valid()
+
+            if isValid and not force:
+
+                log.debug(f'Skipping "{skeletonSpec.name}" skeleton spec...')
+                continue
+
+            # Locate associated joint by name and update UUID
+            #
+            joint = self.scene.getNodeByName(skeletonSpec.name)
+
+            if joint is None:
+
+                log.warning(f'Unable to repair "{skeletonSpec.name}" skeleton spec!')
+                continue
+
+            skeletonSpec.uuid = joint.uuid()
+
+            # Update transformation matrix
+            #
+            hasParent = skeletonSpec.parent is not None
+
+            if hasParent:
+
+                skeletonSpec.matrix = joint.matrix(asTransformationMatrix=True)
+
+            else:
+
+                skeletonSpec.matrix = joint.worldMatrix()
+
+            log.debug(f'{skeletonSpec.name}.matrix = {skeletonSpec.matrix.asMatrix()}')
+
+        # Push changes to property buffer
+        #
+        self.userProperties.pushBuffer()
+
+    def cacheSkeleton(self, delete=False, push=False, save=False):
+        """
+        Caches any transformation matrices within the internal skeleton specs.
+        Enabling `push` will push the cached transformation matrices to the referenced skeleton.
+        Enabling `save` will force the referenced skeleton to commit these changes.
+
+        :type delete: bool
+        :type push: bool
+        :type save: bool
+        :rtype: None
+        """
+
+        # Iterate through skeleton specs
+        #
+        manager = self.skeletonManager()
+        skeletonSpecs = self.skeleton(flatten=True, skipDisabled=True)
+
+        for skeletonSpec in skeletonSpecs:
+
+            manager.cacheJoint(skeletonSpec, delete=delete, push=push)
+
+        self.userProperties.pushBuffer()
+
+        # Check if changes require saving
+        #
+        if save:
+
+            manager.save()
 
     def parentSkeleton(self):
         """
@@ -682,19 +642,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         for skeletonSpec in skeletonSpecs:
 
-            # Check if associated export joint exists
-            #
-            skeletonExists = manager.doesNodeExist(skeletonSpec.uuid.asString())
-            attachmentExists = manager.doesNodeExist(attachmentSpec.uuid.asString())
-
-            if not (skeletonExists and attachmentExists):
-
-                log.warning(f'Unable to parent "{skeletonSpec.name}" export joint to "{attachmentSpec.name}" target!')
-                return
-
-            # Unparent export joint
-            #
-            manager.parentNode(skeletonSpec.name, attachmentSpec.name, absolute=True)
+            manager.parentJoint(skeletonSpec.uuid, attachmentSpec.uuid, absolute=True)
 
     def unparentSkeleton(self):
         """
@@ -715,23 +663,11 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         # Iterate through top-level skeletons specs
         #
         manager = self.skeletonManager()
+        worldUUID = om.MUuid()
 
         for skeletonSpec in skeletonSpecs:
 
-            # Check if associated export joint exists
-            #
-            uuid = skeletonSpec.uuid.asString()
-            exists = manager.doesNodeExist(uuid)
-
-            if not exists:
-
-                log.warning(f'Unable to unparent "{skeletonSpec.name}" export joint!')
-                return
-
-            # Parent export joint
-            #
-            fullPathName = manager.ls(uuid, long=True)[0]
-            manager.parentNode(fullPathName, world=True, absolute=True)
+            manager.parentJoint(skeletonSpec.uuid, worldUUID, absolute=True)
 
     def bindSkeleton(self):
         """
@@ -746,11 +682,12 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         # Constrain export skeleton
         #
-        referenceNode = self.skeletonReference()
+        manager = self.skeletonManager()
+        skeletonSpecs = self.skeleton(flatten=True)
 
-        for skeletonSpec in self.skeleton(flatten=True):
+        for skeletonSpec in skeletonSpecs:
 
-            skeletonSpec.driver.bind(referenceNode=referenceNode)
+            manager.bindJoint(skeletonSpec)
 
     def unbindSkeleton(self):
         """
@@ -759,68 +696,29 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         :rtype: None
         """
 
-        # Unconstrain export skeleton
-        #
-        referenceNode = self.skeletonReference()
-
-        for skeletonSpec in self.skeleton(flatten=True):
-
-            skeletonSpec.driver.unbind(referenceNode=referenceNode)
-
         # Un-parent export skeleton
         #
         self.unparentSkeleton()
+
+        # Unconstrain export skeleton
+        #
+        manager = self.skeletonManager()
+        skeletonSpecs = self.skeleton(flatten=True)
+
+        for skeletonSpec in skeletonSpecs:
+
+            manager.unbindJoint(skeletonSpec, reset=True)
 
     def flushSkeleton(self, save=False):
         """
         Deletes any joints that are waiting in the bin.
 
-        :type save: boolean
+        :type save: bool
         :rtype: None
         """
 
-        # Empty skeleton bin
-        #
         manager = self.skeletonManager()
-
-        while len(self._bin) > 0:
-
-            # Check if skeleton spec is valid
-            #
-            skeletonSpec = self._bin.pop()
-            isValid = skeletonSpec.uuid.valid()
-
-            if not isValid:
-
-                continue
-
-            # Check if export joint still exists
-            #
-            uuid = skeletonSpec.uuid.asString()
-            exists = manager.doesNodeExist(uuid)
-
-            if not exists:
-
-                continue
-
-            # Unparent children from export joint and delete it
-            #
-            fullPathName = manager.ls(uuid, long=True)[0]
-            children = manager.listRelatives(fullPathName, children=True, path=True)
-
-            if not stringutils.isNullOrEmpty(children):
-
-                manager.parentNode(*children, world=True, absolute=True)
-
-            log.info(f'Flushing "{fullPathName}" skeleton spec!')
-            manager.deleteNode(fullPathName)
-            del skeletonSpec.uuid
-
-        # Check if changes require saving
-        #
-        if save:
-
-            manager.save()
+        manager.flushJoints(self._bin, save=save)
 
     def prepareToBuildSkeleton(self):
         """
@@ -829,28 +727,8 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         :rtype: None
         """
 
-        # Get skeleton reference path
-        #
-        controlRig = self.findControlRig()
-        referenceNode =controlRig.getSkeletonReference()
-
-        referencePath = os.path.abspath(referenceNode.filePath())
-
-        # Check if referenced skeleton is already open
-        #
         manager = self.skeletonManager()
-        currentPath = os.path.abspath(manager.file(query=True, sceneName=True))
-
-        isOpen = referencePath == currentPath
-
-        if not isOpen:
-
-            log.info(f'Opening referenced skeleton: {referencePath}')
-            manager.open(referencePath)
-
-        else:
-
-            log.debug(f'Referenced skeleton is already open...')
+        manager.prepare()
 
     def buildSkeleton(self):
         """
@@ -859,14 +737,12 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         :rtype: Tuple[mpynode.MPyNode]
         """
 
-        # Iterate through skeleton specs and sync export joints
-        #
         manager = self.skeletonManager()
         skeletonSpecs = self.skeleton(flatten=True, skipDisabled=False, skipPassthrough=True)
 
         for skeletonSpec in skeletonSpecs:
 
-            self.syncJoint(skeletonSpec, manager=manager)
+            manager.syncJoint(skeletonSpec)
 
     def skeletonCompleted(self):
         """
@@ -929,9 +805,11 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         #
         isDirty = self.arePivotsDirty()
         isMeta = (self.componentStatus == self.Status.META)
+        force = kwargs.get('force', False)
+
         pivotSpecs = self.userProperties.get(self.PIVOTS_KEY, [])
 
-        if isDirty and isMeta:
+        if (isDirty and isMeta) or force:
 
             pivotSpecs = self.invalidatePivots(pivotSpecs, **kwargs)
 
@@ -967,6 +845,15 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         return pivotSpecs
 
+    def repairPivots(self, force=False):
+        """
+        Repairs the internal pivot specs for this component.
+
+        :rtype: None
+        """
+
+        self.userProperties.pushBuffer()
+
     def prepareToBuildPivots(self):
         """
         Notifies the component that pivots are about to be built.
@@ -974,15 +861,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         :rtype: None
         """
 
-        # Create organizational group
-        #
-        if self.pivotsGroup.isNull():
-
-            pivotsGroupName = self.formatName(subname='Pivots', type='transform')
-            pivotsGroup = self.scene.createNode('transform', name=pivotsGroupName, parent=self)
-            self.pivotsGroup = pivotsGroup.object()
-
-            pivotsGroup.lock()
+        pass
 
     def buildPivots(self):
         """
@@ -994,7 +873,6 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         # Iterate through pivot specs
         #
         pivotSpecs = self.pivots(flatten=True, skipDisable=True)
-        pivotsGroup = self.scene(self.pivotsGroup)
         referenceNode = self.skeletonReference()
 
         numPivots = len(pivotSpecs)
@@ -1011,7 +889,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
             # Create new pivot
             #
-            parent = pivotSpec.parent.getNode() if isinstance(pivotSpec.parent, pivotspec.PivotSpec) else pivotsGroup
+            parent = pivotSpec.parent.getNode() if isinstance(pivotSpec.parent, pivotspec.PivotSpec) else None
 
             pivot = self.scene.createNode('transform', name=pivotSpec.name, parent=parent)
             pivot.displayLocalAxis = True
@@ -1047,6 +925,8 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         :rtype: None
         """
 
+        # Push changes to user property buffer
+        #
         self.userProperties.pushBuffer()
 
     def cachePivots(self, delete=False):
@@ -1135,12 +1015,20 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
             log.debug('Skipping DAG node: %s' % om.MFnDependencyNode(dependNode).name())
 
-    def organizeNodes(self):
+    def organizeNodes(self, *nodes):
         """
         Commits any pending dependency nodes to this container.
 
+        :type nodes: Union[om.MObjectHandle, List[om.MObjectHandle]]
         :rtype: None
         """
+
+        # Check if any additional nodes were supplied
+        #
+        if not stringutils.isNullOrEmpty(nodes):
+
+            filteredNodes = [node.handle() if isinstance(node, mpynode.MPyNode) else dagutils.getMObjectHandle(node) for node in nodes if isinstance(node, (om.MObject, om.MObjectHandle, om.MDagPath, mpynode.MPyNode))]
+            self._pending.extend(filteredNodes)
 
         # Add pending members to this container
         #
@@ -1203,11 +1091,6 @@ class BaseComponent(abstractcomponent.AbstractComponent):
             privateGroup.visibility = False
             self.privateGroup = privateGroup.object()
 
-        if not self.pivotsGroup.isNull():
-
-            pivotsGroup = self.scene(self.privateGroup)
-            pivotsGroup.visibility = False
-
     @abstractmethod
     def buildRig(self):
         """
@@ -1227,8 +1110,6 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         self.removeNodeAddedCallback()
         self.organizeNodes()
-        self.bindSkeleton()
-        self.cacheSkeleton()
 
     def finalizeRig(self):
         """

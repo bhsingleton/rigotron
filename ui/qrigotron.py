@@ -14,6 +14,7 @@ from Qt import QtCore, QtWidgets, QtGui, QtCompat
 from functools import partial
 from itertools import chain
 from . import resources
+from .dialogs import qinputdialog
 from .models import qcomponentitemmodel, qpropertyitemmodel
 from ..libs import Status, Side, componentfactory, interfacefactory, stateutils, layerutils
 
@@ -825,22 +826,27 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
                     continue
 
     @undo.Undo(state=False)
-    def createControlRig(self, name):
+    def createControlRig(self, name, referenced=False):
         """
         Creates a new control-rig with the specified name.
-        TODO: Find a better way to concatenate the name of the referenced skeleton file!
+        TODO: Find a better way for users to specify the reference path!
 
         :type name: str
+        :type referenced: bool
         :rtype: controlrig.ControlRig
         """
 
         # Create referenced skeleton
         #
-        defaultReferencePath = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'scenes', 'untitled.ma'))
-        referenceName = self.scene.filename.replace('RIG', 'SKL').replace('AnimRig', 'ExportRig')
-        referencePath = os.path.join(self.scene.directory, referenceName)
+        referencePath = ''
 
-        shutil.copyfile(defaultReferencePath, referencePath)
+        if referenced:
+
+            defaultReferencePath = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'scenes', 'untitled.ma'))
+            referenceName = self.scene.filename.replace('RIG', 'SKL').replace('AnimRig', 'ExportRig')
+            referencePath = os.path.join(self.scene.directory, referenceName)
+
+            shutil.copyfile(defaultReferencePath, referencePath)
 
         # Return new control rig
         #
@@ -953,20 +959,55 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
 
             return
 
-        # Update user interface
+        # Check if control rig is outdated
         #
-        self._controlRig = controlRigs[0].weakReference()
-        self._currentComponent = self.nullWeakReference
+        controlRig = controlRigs[0]
+        isUpToDate = (controlRig.rigVersion >= 1.0)
 
-        self.nameLineEdit.setText(self.controlRig.rigName)
-        self.outlinerModel.rootComponent = self.scene(self.controlRig.rootComponent)
+        if isUpToDate:
 
-        # Update component status
-        #
-        self.invalidateProperties()
-        self.invalidateAttachments()
-        self.invalidateStatus()
-        self.invalidateRPC()
+            # Update user interface
+            #
+            self._controlRig = controlRig.weakReference()
+            self._currentComponent = self.nullWeakReference
+
+            self.nameLineEdit.setText(self.controlRig.rigName)
+            self.outlinerModel.rootComponent = self.scene(self.controlRig.rootComponent)
+
+            # Update component status
+            #
+            self.invalidateProperties()
+            self.invalidateAttachments()
+            self.invalidateStatus()
+            self.invalidateRPC()
+
+        else:
+
+            # Prompt user input
+            #
+            response = QtWidgets.QMessageBox.question(
+                self,
+                'Outdated Control Rig',
+                'Would you like to update this control rig?',
+                QtWidgets.QMessageBox.Yes,
+                QtWidgets.QMessageBox.No
+            )
+
+            if response != QtWidgets.QMessageBox.Yes:
+
+                return
+
+            # Try and update rig
+            #
+            success = controlRig.update(force=True)
+
+            if success:
+
+                self.invalidateControlRig()
+
+            else:
+
+                QtWidgets.QMessageBox.warning(self, 'Outdated Control Rig', 'Unable to update control rig!')
 
     def invalidateProperties(self):
         """
@@ -1040,10 +1081,14 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         :rtype: None
         """
 
-        referenceNode = self.controlRig.getSkeletonReference()
-        referencePath = referenceNode.filePath()
+        hasReferencedSkeleton = self.controlRig.hasReferencedSkeleton()
 
-        self._standaloneClient.open(referencePath)
+        if hasReferencedSkeleton:
+
+            referenceNode = self.controlRig.getSkeletonReference()
+            referencePath = referenceNode.filePath()
+
+            self._standaloneClient.open(referencePath)
 
     @undo.Undo(name='Align Nodes')
     def alignNodes(self, *nodes):
@@ -1216,7 +1261,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
 
         # Prompt user for name input
         #
-        text, success = QtWidgets.QInputDialog.getText(
+        text, referenced, success = qinputdialog.QInputDialog.getText(
             self,
             'Create New Rig',
             'Enter name:',
@@ -1225,7 +1270,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
 
         if success and not stringutils.isNullOrEmpty(text):
 
-            self.createControlRig(text)
+            self.createControlRig(text, referenced=referenced)
 
         else:
 
@@ -1405,7 +1450,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
 
         # Prompt user for name input
         #
-        text, success = QtWidgets.QInputDialog.getText(
+        text, referenced, success = qinputdialog.QInputDialog.getText(
             self,
             'Create New Rig',
             'Enter name:',
@@ -1414,7 +1459,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
 
         if success and not stringutils.isNullOrEmpty(text):
 
-            self.createControlRig(text)
+            self.createControlRig(text, referenced=referenced)
 
         else:
 

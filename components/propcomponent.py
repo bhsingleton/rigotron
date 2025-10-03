@@ -84,10 +84,18 @@ class PropComponent(basecomponent.BaseComponent):
         #
         return super(PropComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
+    def isWeapon(self):
+        """
+        Evaluates if this prop is used as a weapon.
+
+        :rtype: bool
+        """
+
+        return False
+
     def buildRig(self):
         """
         Builds the control rig for this component.
-        TODO: Add forearm space to space switcher!
 
         :rtype: None
         """
@@ -95,12 +103,12 @@ class PropComponent(basecomponent.BaseComponent):
         # Decompose component
         #
         referenceNode = self.skeletonReference()
-        propSpec, = self.skeletonSpecs()
+        propSpec, = self.skeleton()
         propExportJoint = propSpec.getNode(referenceNode=referenceNode)
         propExportMatrix = propExportJoint.worldMatrix()
 
         componentSide = self.Side(self.componentSide)
-        requiresMirroring = componentSide == self.Side.RIGHT
+        requiresMirroring = (componentSide == self.Side.RIGHT)
         mirrorSign = -1.0 if requiresMirroring else 1.0
         mirrorMatrix = self.__default_mirror_matrices__[componentSide]
 
@@ -121,8 +129,7 @@ class PropComponent(basecomponent.BaseComponent):
         propSpace.setWorldMatrix(propMatrix)
         propSpace.freezeTransform()
 
-        propSpaceSwitch = propSpace.addSpaceSwitch([], maintainOffset=True)
-        propSpaceSwitch.weighted = True
+        propSpaceSwitch = propSpace.addSpaceSwitch([], weighted=True, maintainOffset=True)
 
         propCtrlName = self.formatName(type='control')
         propCtrl = self.scene.createNode('transform', name=propCtrlName, parent=propSpace)
@@ -166,32 +173,45 @@ class PropComponent(basecomponent.BaseComponent):
     def finalizeRig(self):
         """
         Notifies the component that the rig requires finalizing.
+        Please note that some of the targets are out of order to preserve animation data on older rigs!
 
         :rtype: None
         """
 
-        # Find space options
+        # Find spine space targets
         #
         rootComponent = self.findRootComponent()
-        spineComponent = rootComponent.findComponentDescendants('SpineComponent')[0]
-        handComponents = spineComponent.findComponentDescendants('HandComponent')
+        worldCtrl = rootComponent.getPublishedNode('Motion')
+
+        spineComponents = rootComponent.findComponentDescendants('SpineComponent')
+        spineComponent = spineComponents[0] if (len(spineComponents) == 1) else None
+        pelvisCtrl, chestCtrl = None, None
+
+        if spineComponent is not None:
+
+            pelvisCtrl = spineComponent.getPublishedNode('Pelvis')
+            chestCtrl = spineComponent.getPublishedNode('Chest')
+
+        # Find hand space targets
+        #
+        parentComponent = spineComponent if (spineComponent is not None) else rootComponent
+        handComponents = parentComponent.findComponentDescendants('HandComponent')
 
         leftHandComponents = [component for component in handComponents if component.componentSide == self.Side.LEFT and component.componentId == self.componentId]
         leftHandComponent = leftHandComponents[0] if (len(leftHandComponents) > 0) else None
         rightHandComponents = [component for component in handComponents if component.componentSide == self.Side.RIGHT and component.componentId == self.componentId]
         rightHandComponent = rightHandComponents[0] if (len(rightHandComponents) > 0) else None
 
-        worldCtrl = rootComponent.getPublishedNode('Motion')
-        pelvisCtrl = spineComponent.getPublishedNode('Pelvis')
-        chestCtrl = spineComponent.getPublishedNode('Chest')
+        hasLeftHand = getattr(leftHandComponent, 'componentStatus', self.Status.META) == self.Status.RIG
+        leftHandCtrl = leftHandComponent.getPublishedNode('Hand') if hasLeftHand else None
+        leftForearmCtrl = leftHandComponent.componentParent().getPublishedNode('Forearm_Twist02') if hasLeftHand else None
 
-        hasLeftHand = leftHandComponent is not None
-        leftHandExists = leftHandComponent.componentStatus == self.Status.RIG if hasLeftHand else False
-        leftHandCtrl = leftHandComponent.getPublishedNode('Hand') if leftHandExists else None
+        hasRightHand = getattr(rightHandComponent, 'componentStatus', self.Status.META) == self.Status.RIG
+        rightHandCtrl = rightHandComponent.getPublishedNode('Hand') if hasRightHand else None
+        rightForearmCtrl = rightHandComponent.componentParent().getPublishedNode('Forearm_Twist02') if hasRightHand else None
 
-        hasRightHand = rightHandComponent is not None
-        rightHandExists = rightHandComponent.componentStatus == self.Status.RIG if hasRightHand else False
-        rightHandCtrl = rightHandComponent.getPublishedNode('Hand') if rightHandExists else None
+        isWeapon = self.isWeapon()
+        hasLeftForearm, hasRightForearm = (hasLeftHand and isWeapon), (hasRightHand and isWeapon)
 
         # Evaluate component side
         #
@@ -203,213 +223,190 @@ class PropComponent(basecomponent.BaseComponent):
 
         if componentSide == self.Side.LEFT:
 
-            # Add space attributes
+            # Add position space attributes
             #
             propCtrl.addDivider('Spaces')
             propCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (Pelvis)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Chest)', attributeType='float', min=0.0, max=1.0, keyable=True)
-            propCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (L_Hand)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+            propCtrl.addAttr(longName='positionSpaceW5', niceName='Position Space (L_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftForearm, hidden=(not hasLeftForearm))
+            propCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (L_Hand)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=hasLeftHand, hidden=(not hasLeftHand))
+            propCtrl.addAttr(longName='positionSpaceW6', niceName='Position Space (R_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasRightForearm, hidden=(not hasRightForearm))
+            propCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasRightHand, hidden=(not hasRightHand))
 
-            if hasRightHand:
-
-                propCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
-
+            # Add position space attributes
+            #
             propCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (Pelvis)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Chest)', attributeType='float', min=0.0, max=1.0, keyable=True)
-            propCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (L_Hand)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-
-            if hasRightHand:
-
-                propCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            propCtrl.addAttr(longName='rotationSpaceW5', niceName='Rotation Space (L_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftForearm, hidden=(not hasLeftForearm))
+            propCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (L_Hand)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=hasLeftHand, hidden=(not hasLeftHand))
+            propCtrl.addAttr(longName='rotationSpaceW6', niceName='Rotation Space (R_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasRightForearm, hidden=(not hasRightForearm))
+            propCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasRightHand, hidden=(not hasRightHand))
 
             # Add targets to space switch
             #
-            propSpaceSwitch.addTargets([worldCtrl, pelvisCtrl, chestCtrl, leftHandCtrl])
-            propSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0), 'targetOffsetRotate': (-90.0, 0.0, -90.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 1.0)}])
+            propSpaceSwitch.addTargets([worldCtrl, pelvisCtrl, chestCtrl, leftHandCtrl, rightHandCtrl, leftForearmCtrl, rightForearmCtrl])
+            propSpaceSwitch.setAttr(
+                'target',
+                [
+                    {'targetWeight': (0.0, 0.0, 0.0), 'targetOffsetRotate': (-90.0, 0.0, -90.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 1.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)}
+                ]
+            )
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW3'], 'target[3].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW4'], 'target[4].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW5'], 'target[5].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW6'], 'target[6].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW4'], 'target[4].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW5'], 'target[5].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW6'], 'target[6].targetRotateWeight')
 
             if hasRightHand:
 
-                propMatrix = propCtrl.worldMatrix()
-                handMatrix = leftHandCtrl.worldMatrix()
-                handOffsetMatrix = transformutils.createRotationMatrix([0.0, 0.0, 180.0])
-                propOffsetMatrix = propMatrix * (handOffsetMatrix * handMatrix).inverse()
-                propOffsetTranslation, propOffsetEulerRotation, propOffsetScale = transformutils.decomposeTransformMatrix(propOffsetMatrix)
-                propOffsetTranslation.z *= -1.0
-                propOffsetEulerRotation.x *= -1.0
-                propOffsetEulerRotation.y *= -1.0
-
-                targetOffsetMatrix = transformutils.composeMatrix(propOffsetTranslation, propOffsetEulerRotation, propOffsetScale)
-                targetOffsetTranslate, targetOffsetRotate, targetOffsetScale = transformutils.decomposeTransformMatrix(targetOffsetMatrix)
-
-                index = propSpaceSwitch.addTarget(rightHandCtrl)
-                propSpaceSwitch.setAttr(f'target[{index}]', {'targetWeight': (0.0, 0.0, 0.0), 'targetOffsetTranslate': targetOffsetTranslate, 'targetOffsetRotate': targetOffsetRotate}, convertUnits=False)
-                propSpaceSwitch.connectPlugs(propCtrl[f'positionSpaceW{index}'], f'target[{index}].targetTranslateWeight')
-                propSpaceSwitch.connectPlugs(propCtrl[f'rotationSpaceW{index}'], f'target[{index}].targetRotateWeight')
+                propSpaceSwitch.mirrorTarget(3)
+                propSpaceSwitch.mirrorTarget(5)
 
         elif componentSide == self.Side.RIGHT:
 
-            # Add space attributes
+            # Add position space attributes
             #
             propCtrl.addDivider('Spaces')
             propCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (Pelvis)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Chest)', attributeType='float', min=0.0, max=1.0, keyable=True)
-            propCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (R_Hand)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+            propCtrl.addAttr(longName='positionSpaceW5', niceName='Position Space (R_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasRightForearm, hidden=(not hasRightForearm))
+            propCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (R_Hand)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=hasRightHand, hidden=(not hasRightHand))
+            propCtrl.addAttr(longName='positionSpaceW6', niceName='Position Space (L_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftForearm, hidden=(not hasLeftForearm))
+            propCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftHand, hidden=(not hasLeftHand))
 
-            if hasLeftHand:
-
-                propCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
-
+            # Add rotation space attributes
+            #
             propCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (Pelvis)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Chest)', attributeType='float', min=0.0, max=1.0, keyable=True)
-            propCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (R_Hand)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-
-            if hasLeftHand:
-
-                propCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            propCtrl.addAttr(longName='rotationSpaceW5', niceName='Rotation Space (R_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasRightForearm, hidden=(not hasRightForearm))
+            propCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (R_Hand)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=hasRightHand, hidden=(not hasRightHand))
+            propCtrl.addAttr(longName='rotationSpaceW6', niceName='Rotation Space (L_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftForearm, hidden=(not hasLeftForearm))
+            propCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftHand, hidden=(not hasLeftHand))
 
             # Add targets to space switch
             #
-            propSpaceSwitch.addTargets([worldCtrl, pelvisCtrl, chestCtrl, rightHandCtrl])
-            propSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0), 'targetOffsetRotate': (90.0, 0.0, 90.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 1.0)}])
+            propSpaceSwitch.addTargets([worldCtrl, pelvisCtrl, chestCtrl, rightHandCtrl, leftHandCtrl, rightForearmCtrl, leftForearmCtrl])
+            propSpaceSwitch.setAttr(
+                'target',
+                [
+                    {'targetWeight': (0.0, 0.0, 0.0), 'targetOffsetRotate': (90.0, 0.0, 90.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 1.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)}
+                ]
+            )
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW3'], 'target[3].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW4'], 'target[4].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW5'], 'target[5].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW6'], 'target[6].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW4'], 'target[4].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW5'], 'target[5].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW6'], 'target[6].targetRotateWeight')
 
             if hasLeftHand:
 
-                propMatrix = propCtrl.worldMatrix()
-                handMatrix = rightHandCtrl.worldMatrix()
-                handOffsetMatrix = transformutils.createRotationMatrix([0.0, 0.0, 180.0])
-                propOffsetMatrix = propMatrix * (handOffsetMatrix * handMatrix).inverse()
-                propOffsetTranslation, propOffsetEulerRotation, propOffsetScale = transformutils.decomposeTransformMatrix(propOffsetMatrix)
-                propOffsetTranslation.z *= -1.0
-                propOffsetEulerRotation.x *= -1.0
-                propOffsetEulerRotation.y *= -1.0
-
-                targetOffsetMatrix = transformutils.composeMatrix(propOffsetTranslation, propOffsetEulerRotation, propOffsetScale)
-                targetOffsetTranslate, targetOffsetRotate, targetOffsetScale = transformutils.decomposeTransformMatrix(targetOffsetMatrix)
-
-                index = propSpaceSwitch.addTarget(leftHandCtrl)
-                propSpaceSwitch.setAttr(f'target[{index}]', {'targetWeight': (0.0, 0.0, 0.0), 'targetOffsetTranslate': targetOffsetTranslate, 'targetOffsetRotate': targetOffsetRotate}, convertUnits=False)
-                propSpaceSwitch.connectPlugs(propCtrl[f'positionSpaceW{index}'], f'target[{index}].targetTranslateWeight')
-                propSpaceSwitch.connectPlugs(propCtrl[f'rotationSpaceW{index}'], f'target[{index}].targetRotateWeight')
+                propSpaceSwitch.mirrorTarget(3)
+                propSpaceSwitch.mirrorTarget(5)
 
         elif componentSide == self.Side.CENTER:
 
-            # Add space attributes
+            # Add position space attributes
             #
             propCtrl.addDivider('Spaces')
             propCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (Pelvis)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Chest)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+            propCtrl.addAttr(longName='positionSpaceW5', niceName='Position Space (L_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftForearm, hidden=(not hasLeftForearm))
+            propCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftHand, hidden=(not hasLeftHand))
+            propCtrl.addAttr(longName='positionSpaceW6', niceName='Position Space (R_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasRightForearm, hidden=(not hasRightForearm))
+            propCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasRightHand, hidden=(not hasRightHand))
 
-            if hasLeftHand:
-
-                propCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
-
-            if hasRightHand:
-
-                propCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
-
+            # Add rotation space attributes
+            #
             propCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (Pelvis)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Chest)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-
-            if hasLeftHand:
-
-                propCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
-
-            if hasRightHand:
-
-                propCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            propCtrl.addAttr(longName='rotationSpaceW5', niceName='Rotation Space (L_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftForearm, hidden=(not hasLeftForearm))
+            propCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftHand, hidden=(not hasLeftHand))
+            propCtrl.addAttr(longName='rotationSpaceW6', niceName='Rotation Space (R_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasRightForearm, hidden=(not hasRightForearm))
+            propCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasRightHand, hidden=(not hasRightHand))
 
             # Add targets to space switch
             #
-            propSpaceSwitch.addTargets([worldCtrl, pelvisCtrl, chestCtrl])
-            propSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0), 'targetOffsetRotate': (-90.0, 0.0, -90.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 1.0)}])
+            propSpaceSwitch.addTargets([worldCtrl, pelvisCtrl, chestCtrl, leftHandCtrl, rightHandCtrl, leftForearmCtrl, rightForearmCtrl])
+            propSpaceSwitch.setAttr(
+                'target',
+                [
+                    {'targetWeight': (0.0, 0.0, 0.0), 'targetOffsetRotate': (-90.0, 0.0, -90.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 1.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)}
+                ]
+            )
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW3'], 'target[3].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW4'], 'target[4].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW5'], 'target[5].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW6'], 'target[6].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW4'], 'target[4].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW5'], 'target[5].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW6'], 'target[6].targetRotateWeight')
 
             propPosition = propCtrl.translation(space=om.MSpace.kWorld)
             isLeftSided = propPosition.x > 1e-3
             isRightSided = propPosition.x < -1e-3
 
-            if isLeftSided:
+            if isLeftSided and (hasLeftHand and hasRightHand):
 
-                if hasLeftHand:
+                propSpaceSwitch.mirrorTarget(3)
+                propSpaceSwitch.mirrorTarget(5)
 
-                    index = propSpaceSwitch.addTarget(leftHandCtrl, maintainOffset=True)
-                    propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW3'], f'target[{index}].targetTranslateWeight')
-                    propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW3'], f'target[{index}].targetRotateWeight')
+            elif isRightSided and (hasLeftHand and hasRightHand):
 
-                if hasRightHand:
-
-                    propMatrix = propCtrl.worldMatrix()
-                    handMirrorMatrix = transformutils.createRotationMatrix([0.0, 0.0, 180.0])
-                    propMirrorMatrix = transformutils.createRotationMatrix([0.0, 180.0, 0.0])
-                    targetOffsetMatrix = propMirrorMatrix * (propMatrix * (handMirrorMatrix * leftHandCtrl.worldMatrix()).inverse())
-                    targetOffsetTranslate, targetOffsetRotate, targetOffsetScale = transformutils.decomposeTransformMatrix(targetOffsetMatrix)
-
-                    index = propSpaceSwitch.addTarget(rightHandCtrl)
-                    propSpaceSwitch.setAttr(f'target[{index}]', {'targetWeight': (0.0, 0.0, 0.0), 'targetOffsetTranslate': targetOffsetTranslate, 'targetOffsetRotate': targetOffsetRotate}, convertUnits=False)
-                    propSpaceSwitch.connectPlugs(propCtrl[f'positionSpaceW{index}'], f'target[{index}].targetTranslateWeight')
-                    propSpaceSwitch.connectPlugs(propCtrl[f'rotationSpaceW{index}'], f'target[{index}].targetRotateWeight')
-
-            elif isRightSided:
-
-                if hasLeftHand:
-
-                    propMatrix = propCtrl.worldMatrix()
-                    handMirrorMatrix = transformutils.createRotationMatrix([0.0, 0.0, 180.0])
-                    propMirrorMatrix = transformutils.createRotationMatrix([0.0, 180.0, 0.0])
-                    targetOffsetMatrix = propMirrorMatrix * (propMatrix * (handMirrorMatrix * rightHandCtrl.worldMatrix()).inverse())
-                    targetOffsetTranslate, targetOffsetRotate, targetOffsetScale = transformutils.decomposeTransformMatrix(targetOffsetMatrix)
-
-                    index = propSpaceSwitch.addTarget(leftHandCtrl)
-                    propSpaceSwitch.setAttr(f'target[{index}]', {'targetWeight': (0.0, 0.0, 0.0), 'targetOffsetTranslate': targetOffsetTranslate, 'targetOffsetRotate': targetOffsetRotate}, convertUnits=False)
-                    propSpaceSwitch.connectPlugs(propCtrl[f'positionSpaceW{index}'], f'target[{index}].targetTranslateWeight')
-                    propSpaceSwitch.connectPlugs(propCtrl[f'rotationSpaceW{index}'], f'target[{index}].targetRotateWeight')
-
-                if hasRightHand:
-
-                    index = propSpaceSwitch.addTarget(rightHandCtrl, maintainOffset=True)
-                    propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW4'], f'target[{index}].targetTranslateWeight')
-                    propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW4'], f'target[{index}].targetRotateWeight')
+                propSpaceSwitch.mirrorTarget(4)
+                propSpaceSwitch.mirrorTarget(6)
 
             else:
 
-                if hasLeftHand:
-
-                    index = propSpaceSwitch.addTarget(leftHandCtrl, maintainOffset=True)
-                    propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW3'], f'target[{index}].targetTranslateWeight')
-                    propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW3'], f'target[{index}].targetRotateWeight')
-
-                if hasRightHand:
-
-                    index = propSpaceSwitch.addTarget(rightHandCtrl, maintainOffset=True)
-                    propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW4'], f'target[{index}].targetTranslateWeight')
-                    propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW4'], f'target[{index}].targetRotateWeight')
+                pass
 
         else:
 
@@ -419,49 +416,48 @@ class PropComponent(basecomponent.BaseComponent):
             propCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
             propCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (Pelvis)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Chest)', attributeType='float', min=0.0, max=1.0, keyable=True)
-
-            if hasLeftHand:
-
-                propCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
-
-            if hasRightHand:
-
-                propCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            propCtrl.addAttr(longName='positionSpaceW5', niceName='Position Space (L_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftForearm, hidden=(not hasLeftForearm))
+            propCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftHand, hidden=(not hasLeftHand))
+            propCtrl.addAttr(longName='positionSpaceW6', niceName='Position Space (R_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasRightForearm, hidden=(not hasRightForearm))
+            propCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasRightHand, hidden=(not hasRightHand))
 
             propCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
             propCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (Pelvis)', attributeType='float', min=0.0, max=1.0, keyable=True)
             propCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Chest)', attributeType='float', min=0.0, max=1.0, keyable=True)
-
-            if hasLeftHand:
-
-                propCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
-
-            if hasRightHand:
-
-                propCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            propCtrl.addAttr(longName='rotationSpaceW5', niceName='Rotation Space (L_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftForearm, hidden=(not hasLeftForearm))
+            propCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (L_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasLeftHand, hidden=(not hasLeftHand))
+            propCtrl.addAttr(longName='rotationSpaceW6', niceName='Rotation Space (R_Forearm)', attributeType='float', min=0.0, max=1.0, keyable=hasRightForearm, hidden=(not hasRightForearm))
+            propCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (R_Hand)', attributeType='float', min=0.0, max=1.0, keyable=hasRightHand, hidden=(not hasRightHand))
 
             # Add targets to space switch
             #
-            propSpaceSwitch.addTargets([worldCtrl, pelvisCtrl, chestCtrl], maintainOffset=True)
-            propSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}])
+            propSpaceSwitch.addTargets([worldCtrl, pelvisCtrl, chestCtrl, leftHandCtrl, rightHandCtrl, leftForearmCtrl, rightForearmCtrl], maintainOffset=True)
+            propSpaceSwitch.setAttr(
+                'target',
+                [
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 1.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)},
+                    {'targetWeight': (0.0, 0.0, 0.0)}
+                ]
+            )
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW3'], 'target[3].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW4'], 'target[4].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW5'], 'target[5].targetTranslateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW6'], 'target[6].targetTranslateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
             propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
-
-            if hasLeftHand:
-
-                index = propSpaceSwitch.addTarget(leftHandCtrl, maintainOffset=True)
-                propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW3'], f'target[{index}].targetTranslateWeight')
-                propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW3'], f'target[{index}].targetRotateWeight')
-
-            if hasRightHand:
-
-                index = propSpaceSwitch.addTarget(rightHandCtrl, maintainOffset=True)
-                propSpaceSwitch.connectPlugs(propCtrl['positionSpaceW4'], f'target[{index}].targetTranslateWeight')
-                propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW4'], f'target[{index}].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW4'], 'target[4].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW5'], 'target[5].targetRotateWeight')
+            propSpaceSwitch.connectPlugs(propCtrl['rotationSpaceW6'], 'target[6].targetRotateWeight')
 
         # Check if opposite rig requires repairs
         #
