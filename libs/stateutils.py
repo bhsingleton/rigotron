@@ -16,13 +16,14 @@ def metaToSkeleton(component):
     :rtype: None
     """
 
+    controlRig = component.findControlRig()
+
     for childComponent in component.walkComponents():
 
         childComponent.prepareToBuildSkeleton()
         childComponent.buildSkeleton()
         childComponent.skeletonCompleted()
 
-    controlRig = component.findControlRig()
     controlRig.saveSkeleton()
     controlRig.loadSkeleton(clearEdits=True)
 
@@ -56,14 +57,13 @@ def skeletonToRig(component):
 
         childComponent.componentStatus = Status.RIG  # Setting this too late prevents components from finalizing!
 
-    controlRig.saveSkeleton()
-
     for childComponent in component.walkComponents():
 
         childComponent.finalizeRig()
         childComponent.bindSkeleton()
 
-    controlRig.loadSkeleton(clearEdits=False)
+    controlRig.saveSkeleton()
+    controlRig.loadSkeleton(clearEdits=False, force=True)
 
 
 def rigToSkeleton(component):
@@ -73,6 +73,8 @@ def rigToSkeleton(component):
     :type component: basecomponent.BaseComponent
     :rtype: None
     """
+
+    controlRig = component.findControlRig()
 
     for childComponent in reversed(list(component.walkComponents())):
 
@@ -84,6 +86,9 @@ def rigToSkeleton(component):
 
         childComponent.componentStatus = Status.SKELETON
 
+    controlRig.saveSkeleton()
+    controlRig.loadSkeleton(clearEdits=True, force=True)
+
 
 def skeletonToMeta(component):
     """
@@ -93,6 +98,8 @@ def skeletonToMeta(component):
     :rtype: None
     """
 
+    controlRig = component.findControlRig()
+
     for childComponent in reversed(list(component.walkComponents())):
 
         childComponent.cachePivots(delete=True)
@@ -100,7 +107,6 @@ def skeletonToMeta(component):
 
         childComponent.componentStatus = Status.META
 
-    controlRig = component.findControlRig()
     controlRig.unloadSkeleton()
     controlRig.saveSkeleton()
 

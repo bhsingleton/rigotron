@@ -138,11 +138,12 @@ class SkeletonManager(object):
 
             log.debug(f'Referenced skeleton is already open...')
 
-    def load(self, clearEdits=False):
+    def load(self, clearEdits=False, force=False):
         """
         Loads the referenced skeleton.
 
         :type clearEdits: bool
+        :type force: bool
         :rtype: None
         """
 
@@ -160,9 +161,11 @@ class SkeletonManager(object):
 
         # Check if reference requires loading
         #
-        if not self.referenceNode.isLoaded():
+        isLoaded = self.referenceNode.isLoaded()
 
-            self.referenceNode.load()
+        if not isLoaded or force:
+
+            self.referenceNode.reload()
 
     def unload(self, clearEdits=False):
         """
@@ -523,35 +526,53 @@ class SkeletonManager(object):
         :rtype: bool
         """
 
-        # Cache transformation matrix
+        # Copy transformation matrix to skeleton spec
         #
-        success = skeletonSpec.cacheNode(referenceNode=self.referenceNode, **kwargs)
+        success = skeletonSpec.cacheNode(**kwargs)
 
         if not success:
 
+            log.error(f'Unable to cache "{skeletonSpec.name}" skeleton spec!')
             return False
 
-        # Check if transforms require pushing to source reference
+        # Check if transformation matrix require pushing to source reference
         #
         push = kwargs.get('push', False)
-        save = kwargs.get('save', False)
 
-        if push and self.isFromReferencedFile:
+        if not (push and self.isFromReferencedFile):
 
+            return True
+
+        # Check if referenced export joint exists
+        #
+        fullPathName = self.getNodeNameByUUID(skeletonSpec.uuid, long=True)
+
+        if not stringutils.isNullOrEmpty(fullPathName):
+
+            # Update transform attributes
+            #
             translation = skeletonSpec.matrix.translation(om.MSpace.kTransform)
             rotateOrder = skeletonSpec.matrix.rotationOrder() - 1
             eulerRotation = skeletonSpec.matrix.rotation(asQuaternion=False)
             eulerRotation.reorderIt(rotateOrder)
 
-            fullPathName = self.getNodeNameByUUID(skeletonSpec.uuid, long=True)
             self.referencedScene.setAttr(f'{fullPathName}.translate', *tuple(translation), type='double3')
             self.referencedScene.setAttr(f'{fullPathName}.rotate', *tuple(map(math.degrees, eulerRotation)), type='double3')
+
+            # Check if changes require saving
+            #
+            save = kwargs.get('save', False)
 
             if save:
 
                 self.save()
 
-        return True
+            return True
+
+        else:
+
+            log.error(f'Unable to cache "{skeletonSpec.name}" export joint @ <{skeletonSpec.uuid.asString()}>!')
+            return False
 
     def flushJoints(self, queue, save=False):
         """
