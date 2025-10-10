@@ -3,6 +3,7 @@ import os
 from maya.api import OpenMaya as om
 from mpy import mpyattribute
 from dcc.naming import namingutils
+from dcc.python import stringutils
 from ..abstract import abstractinterface, abstractcomponent
 from ..libs import Status, skeletonmanager, setuputils
 
@@ -73,7 +74,7 @@ class ControlRig(abstractinterface.AbstractInterface):
         parent = kwargs.get('parent', None)
 
         controlRig = super(ControlRig, cls).create('transform', parent=parent)
-        controlRig.rigName = kwargs.get('rigName', '')
+        controlRig.rigName = kwargs.get('rigName', 'Untitled')
         controlRig.rigVersion = kwargs.get('rigVersion', cls.__version__)
 
         # Create organizational groups and lock them
@@ -94,8 +95,11 @@ class ControlRig(abstractinterface.AbstractInterface):
         # Create skeleton reference
         #
         referencePath = kwargs.get('referencePath', '')
+        hasReferencePath = not stringutils.isNullOrEmpty(referencePath)
 
-        if os.path.isfile(referencePath):
+        expandedReferencePath = os.path.expandvars(os.path.normpath(referencePath)) if hasReferencePath else ''
+
+        if os.path.isfile(expandedReferencePath):
 
             skeletonReference = cls.scene.createReference(referencePath, namespace=':')  # Please Lord...forgive me for what I am about to do...
             skeletonReference.unload()
@@ -158,7 +162,7 @@ class ControlRig(abstractinterface.AbstractInterface):
         rigBoundingBoxMax = om.MPoint(self.rigBoundingBoxMax)
         difference = (rigBoundingBoxMax - rigBoundingBoxMin)  # type: om.MVector
 
-        if difference.isEquivalent(om.MVector.kZeroVector):
+        if difference.isEquivalent(om.MVector.kZeroVector, tolerance=1e-3):
 
             rigBoundingBox = setuputils.getBoundingBoxByTypeName(typeName='mesh')
             self.rigBoundingBoxMin = rigBoundingBox.min
@@ -244,16 +248,34 @@ class ControlRig(abstractinterface.AbstractInterface):
 
             return None
 
-    def loadSkeleton(self, clearEdits=False):
+    def getSkeletonNamespace(self):
+        """
+        Returns the namespace for the referenced skeleton.
+
+        :rtype: str
+        """
+
+        referenceNode = self.skeletonReference()
+
+        if referenceNode is not None:
+
+            return referenceNode.associatedNamespace()
+
+        else:
+
+            return ''
+
+    def loadSkeleton(self, clearEdits=False, force=False):
         """
         Reloads the referenced skeleton for this component.
 
         :type clearEdits: bool
+        :type force: bool
         :rtype: None
         """
 
         manager = self.getSkeletonManager()
-        manager.load(clearEdits=clearEdits)
+        manager.load(clearEdits=clearEdits, force=force)
 
     def unloadSkeleton(self, clearEdits=False):
         """
@@ -275,6 +297,72 @@ class ControlRig(abstractinterface.AbstractInterface):
 
         manager = self.getSkeletonManager()
         manager.save()
+
+    def convertToReferencedSkeleton(self, referencePath):
+        """
+        Promotes this control rig to a referenced skeleton.
+
+        :type referencePath: str
+        :rtype: bool
+        """
+
+        # Redundancy check
+        #
+        hasReferencedSkeleton = self.hasReferencedSkeleton()
+
+        if hasReferencedSkeleton:
+
+            return True
+
+        # Evaluate rig status
+        # This operation can only be done from the meta state!
+        #
+        rigStatus = self.getRigStatus()
+
+        if rigStatus != self.Status.META:
+
+            log.warning('Rig can only be promoted from the meta state!')
+            return False
+
+        # Evaluate reference path
+        #
+        hasReferencePath = not stringutils.isNullOrEmpty(referencePath)
+        expandedReferencePath = os.path.expandvars(os.path.normpath(referencePath)) if hasReferencePath else ''
+
+        if not os.path.isfile(expandedReferencePath):
+
+            log.warning(f'Rig requires a valid reference path: {expandedReferencePath}')
+            return False
+
+        # Evaluate rig version
+        # It's important that the internal specs are up-to-date!
+        #
+        isUpToDate = self.rigVersion >= 1.0
+
+        if not isUpToDate:
+
+            log.info('Updating internal skeleton specs!')
+            self.update(force=True)
+
+        # Reset skeleton specs
+        # By resetting the internal UUID trackers this will trigger the skeleton manager to recreate the export joints!
+        #
+        for component in self.walkComponents():
+
+            skeletonSpecs = component.skeleton(flatten=True)
+
+            for skeletonSpec in skeletonSpecs:
+
+                del skeletonSpec.uuid
+
+        # Create new reference from path
+        #
+        skeletonReference = self.scene.createReference(referencePath, namespace=':')
+        skeletonReference.unload()
+
+        self.skeletonReference = skeletonReference.object()
+
+        return True
 
     def hasRootComponent(self):
         """
@@ -358,4 +446,167 @@ class ControlRig(abstractinterface.AbstractInterface):
 
         yield rootComponent
         yield from rootComponent.iterComponentDescendants()
+
+    def refreshSkin(self, index, clearEdits=True):
+        """
+        Refreshes the connections on the specified skin.
+
+        :type index: int
+        :type clearEdits: bool
+        :rtype: bool
+        """
+
+        # Check if index is in range
+        #
+        referenceNodes = self.skinReference
+        numReferenceNodes = len(referenceNodes)
+
+        if not (0 <= index < numReferenceNodes):
+
+            return False
+
+        # Check if reference node is valid
+        #
+        referenceNode = self.scene(referenceNodes[index])
+
+        if referenceNode is None:
+
+            return False
+
+        # Check if edits should be cleared
+        #
+        if clearEdits:
+
+            referenceNode.clearEdits()
+            referenceNode.load()
+
+        # Update skeleton connections
+        #
+        sourceNamespace = self.getSkeletonNamespace()
+        referencedNodes = referenceNode.nodes()
+
+        for referencedNode in referencedNodes:
+
+            # Evaluate api type
+            #
+            if not referencedNode.hasFn(om.MFn.kJoint):
+
+                continue
+
+            # Find source node
+            #
+            targetNode = self.scene(referencedNode)
+            targetName = targetNode.name()
+
+            sourceName = f'{sourceNamespace}:{targetName}'
+            sourceNode = self.scene.getNodeByName(sourceName)
+
+            if sourceNode is None:
+
+                log.warning(f'Unable to locate {sourceName} source joint!')
+                continue
+
+            # Override connections
+            #
+            sourceNode.connectPlugs('translate', targetNode['translate'], force=True)
+            sourceNode.connectPlugs('rotateOrder', targetNode['rotateOrder'], force=True)
+            sourceNode.connectPlugs('rotate', targetNode['rotate'], force=True)
+            sourceNode.connectPlugs('scale', targetNode['scale'], force=True)
+
+        return True
+
+    def renameSkin(self, index, namespace):
+        """
+        Renames the skin at the specified index.
+
+        :type index: int
+        :type namespace: str
+        :rtype: bool
+        """
+
+        # Check if index is in range
+        #
+        referenceNodes = self.skinReference
+        numReferenceNodes = len(referenceNodes)
+
+        if not (0 <= index < numReferenceNodes):
+
+            return False
+
+        # Rename associated namespace
+        #
+        referenceNode = self.scene(referenceNodes[index])
+        success = referenceNode.setAssociatedNamespace(namespace)
+
+        return success
+
+    def addSkin(self, referencePath, namespace=None):
+        """
+        Adds a skin to this control rig.
+
+        :type referencePath: str
+        :type namespace: Union[str, None]
+        :rtype: bool
+        """
+
+        # Check if reference path is valid
+        #
+        hasReferencePath = not stringutils.isNullOrEmpty(referencePath)
+        expandedReferencePath = os.path.expandvars(os.path.normpath(referencePath)) if hasReferencePath else ''
+
+        isMayaFile = expandedReferencePath.endswith('.mb') or expandedReferencePath.endswith('.ma')
+
+        if not (os.path.isfile(expandedReferencePath) and isMayaFile):
+
+            log.warning(f'Unable to add invalid skin: {referencePath}')
+            return False
+
+        # Check if a namespace was supplied
+        #
+        if stringutils.isNullOrEmpty(namespace):
+
+            namespace = os.path.basename(expandedReferencePath)
+
+        # Create new reference
+        #
+        referenceNode = self.createReference(expandedReferencePath, namespace=namespace)
+
+        index = self.getNextAvailableConnection(self['skinReference'])
+        self.connectPlugs(referenceNode['message'], f'skinReference[{index}]')
+
+        # Override referenced skeleton connections
+        #
+        return self.refreshSkin(index, clearEdits=False)
+
+    def removeSkin(self, index):
+        """
+        Removes a skin from this control rig.
+
+        :type index: int
+        :rtype: bool
+        """
+
+        # Check if index is in range
+        #
+        referenceNodes = self.skinReference
+        numReferenceNodes = len(referenceNodes)
+
+        if not (0 <= index < numReferenceNodes):
+
+            return False
+
+        # Check if reference node is valid
+        #
+        referenceNode = self.scene(referenceNodes[index])
+
+        if referenceNode is None:
+
+            return False
+
+        # Delete reference node
+        #
+        referenceNode.disconnectPlugs('message', self[f'skinReference[{index}]'])
+        referenceNode.delete()
+
+        return True
     # endregion
