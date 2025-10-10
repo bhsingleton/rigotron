@@ -135,7 +135,7 @@ class InsectLegComponent(limbcomponent.LimbComponent):
     # endregion
 
     # region Methods
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
@@ -145,104 +145,50 @@ class InsectLegComponent(limbcomponent.LimbComponent):
 
         # Resize skeleton specs
         #
-        numMembers = len(self.LimbType)
-        coxaSpec, femurSpec, tibiaSpec, tibiaTipSpec = self.resizeSkeletonSpecs(numMembers, skeletonSpecs)
+        size = len(self.LimbType)
+        coxaSpec, femurSpec, tibiaSpec, tibiaTipSpec = self.resizeSkeleton(size, skeletonSpecs, hierarchical=True)
 
         # Iterate through limb specs
         #
-        limbNames = self.__default_limb_names__
-        limbSpecs = (coxaSpec, femurSpec, tibiaSpec, tibiaTipSpec)
+        coxaName, femurName, tibiaName, tibiaTipName = self.__default_limb_names__
+        side = self.Side(self.componentSide)
 
-        for (i, (limbName, limbSpec)) in enumerate(zip(limbNames, limbSpecs)):
+        coxaSpec.name = self.formatName(name=coxaName)
+        coxaSpec.side = side
+        coxaSpec.type = self.Type.OTHER
+        coxaSpec.otherType = coxaName
+        coxaSpec.drawStyle = self.Style.BOX
+        coxaSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.COXA]
+        coxaSpec.driver.name = self.formatName(name=coxaName, type='joint')
 
-            # Edit limb name
-            #
-            limbSpec.name = self.formatName(name=limbName)
-            limbSpec.driver = self.formatName(name=limbName, type='joint')
+        femurSpec.name = self.formatName(name=femurName)
+        femurSpec.side = side
+        femurSpec.type = self.Type.OTHER
+        femurSpec.otherType = femurName
+        femurSpec.drawStyle = self.Style.BOX
+        femurSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.FEMUR]
+        femurSpec.driver.name = self.formatName(name=femurName, type='joint')
 
-        coxaSpec.enabled = self.coxaEnabled
+        tibiaSpec.name = self.formatName(name=tibiaName)
+        tibiaSpec.side = side
+        tibiaSpec.type = self.Type.OTHER
+        tibiaSpec.otherType = tibiaName
+        tibiaSpec.drawStyle = self.Style.BOX
+        tibiaSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.TIBIA]
+        tibiaSpec.driver.name = self.formatName(name=tibiaName, type='joint')
+
         tibiaTipSpec.enabled = not self.hasExtremityComponent()
+        tibiaTipSpec.name = self.formatName(name=tibiaTipName)
+        tibiaTipSpec.side = side
+        tibiaTipSpec.type = self.Type.OTHER
+        tibiaTipSpec.otherType = tibiaTipName
+        tibiaTipSpec.drawStyle = self.Style.BOX
+        tibiaTipSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.TIBIA_TIP]
+        tibiaTipSpec.driver.name = self.formatName(name=tibiaTipName, type='joint')
 
         # Call parent method
         #
-        super(InsectLegComponent, self).invalidateSkeletonSpecs(skeletonSpecs)
-
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: List[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
-        #
-        componentSide = self.Side(self.componentSide)
-        coxaSpec, femurSpec, tibiaSpec, tibiaTipSpec = self.skeletonSpecs()
-
-        # Create coxa joint
-        #
-        coxaJoint = None
-
-        if coxaSpec.enabled:
-
-            coxaJoint = self.scene.createNode('joint', name=coxaSpec.name)
-            coxaJoint.side = componentSide
-            coxaJoint.type = self.Type.OTHER
-            coxaJoint.otherType = 'Coxa'
-            coxaJoint.displayLocalAxis = True
-            coxaSpec.uuid = coxaJoint.uuid()
-
-            defaultCoxaMatrix = self.__default_limb_matrices__[componentSide][self.LimbType.COXA]
-            coxaMatrix = coxaSpec.getMatrix(default=defaultCoxaMatrix)
-            coxaJoint.setWorldMatrix(coxaMatrix)
-
-        # Create femur joint
-        #
-        femurJoint = self.scene.createNode('joint', name=femurSpec.name, parent=coxaJoint)
-        femurJoint.side = componentSide
-        femurJoint.type = self.Type.OTHER
-        femurJoint.otherType = 'Femur'
-        femurJoint.drawStyle = self.Style.BOX
-        femurJoint.displayLocalAxis = True
-        femurSpec.uuid = femurJoint.uuid()
-
-        defaultFemurMatrix = self.__default_limb_matrices__[componentSide][self.LimbType.FEMUR]
-        femurMatrix = femurSpec.getMatrix(default=defaultFemurMatrix)
-        femurJoint.setWorldMatrix(femurMatrix)
-
-        # Create tibia joint
-        #
-        tibiaJoint = self.scene.createNode('joint', name=tibiaSpec.name, parent=femurJoint)
-        tibiaJoint.side = componentSide
-        tibiaJoint.type = self.Type.OTHER
-        tibiaJoint.otherType = 'Tibia'
-        tibiaJoint.drawStyle = self.Style.BOX
-        tibiaJoint.displayLocalAxis = True
-        tibiaSpec.uuid = tibiaJoint.uuid()
-
-        defaultTibiaMatrix = self.__default_limb_matrices__[componentSide][self.LimbType.TIBIA]
-        tibiaMatrix = tibiaSpec.getMatrix(default=defaultTibiaMatrix)
-        tibiaJoint.setWorldMatrix(tibiaMatrix)
-
-        # Create tibia tip joint
-        #
-        tibiaTipJoint = None
-
-        if tibiaTipSpec.enabled:
-
-            tibiaTipJoint = self.scene.createNode('joint', name=tibiaSpec.name, parent=femurJoint)
-            tibiaTipJoint.side = componentSide
-            tibiaTipJoint.type = self.Type.OTHER
-            tibiaTipJoint.otherType = 'Tibia'
-            tibiaTipJoint.drawStyle = self.Style.BOX
-            tibiaTipJoint.displayLocalAxis = True
-            tibiaTipSpec.uuid = tibiaTipJoint.uuid()
-
-            defaultTibiaTipMatrix = self.__default_limb_matrices__[componentSide][self.LimbType.TIBIA]
-            tibiaTipMatrix = tibiaTipSpec.getMatrix(default=defaultTibiaTipMatrix)
-            tibiaTipJoint.setWorldMatrix(tibiaTipMatrix)
-
-        return (coxaJoint, femurJoint, tibiaJoint, tibiaTipJoint)
+        return super(InsectLegComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def connectExtremityToIKHandle(self, extremityComponent):
         """

@@ -30,6 +30,7 @@ class LimbType(IntEnum):
 class TwoBoneLimbComponent(limbcomponent.LimbComponent):
     """
     Overload of `AbstractComponent` that outlines two-bone limb components.
+    TODO: Override `repairSkeleton` method to get rid of wrist/ankle joints!
     """
 
     # region Dunderscores
@@ -147,14 +148,13 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         hingeName = self.__default_hinge_name__
         upperLimbName, lowerLimbName, limbTipName = self.__default_limb_names__
 
-        referenceNode = self.skeletonReference()
         upperLimbSpec, = self.skeleton()
         *upperTwistSpecs, lowerLimbSpec  = upperLimbSpec.children
         *lowerTwistSpecs, hingeSpec, limbTipSpec = lowerLimbSpec.children
 
-        upperLimbExportJoint = upperLimbSpec.getNode(referenceNode=referenceNode)
-        lowerLimbExportJoint = lowerLimbSpec.getNode(referenceNode=referenceNode)
-        limbTipExportJoint = limbTipSpec.getNode(referenceNode=referenceNode)
+        upperLimbExportJoint = upperLimbSpec.getNode()
+        lowerLimbExportJoint = lowerLimbSpec.getNode()
+        limbTipExportJoint = limbTipSpec.getNode()
 
         upperLimbMatrix = upperLimbExportJoint.worldMatrix()
         lowerLimbMatrix = lowerLimbExportJoint.worldMatrix()
@@ -577,7 +577,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
             extremityComponent = extremityComponents[0]
             extremitySpecs = extremityComponent.skeleton()
-            extremityIKMatrix = mirrorMatrix * extremitySpecs[0].getNode(referenceNode=referenceNode).worldMatrix()
+            extremityIKMatrix = mirrorMatrix * extremitySpecs[0].getNode().worldMatrix()
 
         # Create IK extremity control
         #
@@ -911,7 +911,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         if hingeEnabled:
 
-            hingeExportJoint = hingeSpec.getNode(referenceNode=referenceNode)
+            hingeExportJoint = hingeSpec.getNode()
             hingeExportJoint.copyTransform(hingeCtrl, skipScale=True)
 
             hingeSpec.cacheNode(delete=False)
@@ -1263,7 +1263,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
                     # Finally, re-align export joint to control
                     # This will ensure there are no unwanted offsets when binding the skeleton!
                     #
-                    twistExportJoint = twistSpec.getNode(referenceNode=referenceNode)
+                    twistExportJoint = twistSpec.getNode()
                     twistExportJoint.copyTransform(twistCtrl, skipScale=True)
 
                     twistSpec.matrix = twistExportJoint.matrix(asTransformationMatrix=True)

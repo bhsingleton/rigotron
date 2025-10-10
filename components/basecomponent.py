@@ -1,9 +1,6 @@
-import math
-import os
-
 from maya.api import OpenMaya as om
 from mpy import mpynode, mpyattribute
-from dcc.maya.libs import dagutils
+from dcc.maya.libs import dagutils, shapeutils
 from dcc.python import stringutils
 from abc import abstractmethod
 from collections import deque
@@ -27,6 +24,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
     SKELETON_DIRTY_KEY = 'isSkeletonDirty'
     PIVOTS_KEY = 'pivots'
     PIVOTS_DIRTY_KEY = 'arePivotsDirty'
+    SHAPE_CACHE = 'shapes'
     # endregion
 
     # region Dunderscores
@@ -46,6 +44,33 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         self._callbackID = None
         self._pending = deque()
         self._bin = deque()
+
+    def __post_init__(self, *args, **kwargs):
+        """
+        Private method called after a new instance has been initialized.
+
+        :rtype: None
+        """
+
+        # Call parent method
+        #
+        super(BaseComponent, self).__post_init__(*args, **kwargs)
+
+        # Override user properties object hook
+        #
+        self.userProperties.object_init_hook = self.__user_property_init__
+
+    def __user_property_init__(self, obj):
+        """
+        Private method called after a user property has been created.
+
+        :type obj: Any
+        :rtype: None
+        """
+
+        if isinstance(obj, abstractspec.AbstractSpec):
+
+            obj._component = self.weakReference()
     # endregion
 
     # region Methods
@@ -244,7 +269,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
             #
             for i in range(currentSize, size, 1):
 
-                skeletonSpec = cls()
+                skeletonSpec = cls(component=self)
                 childSpecs.append(skeletonSpec)
 
         elif size < currentSize:
@@ -350,18 +375,32 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         :rtype: skeletonspec.SkeletonSpec
         """
 
+        # Check if attachment options exist
+        #
         attachmentSpecs = self.getAttachmentOptions()
         numAttachmentSpecs = len(attachmentSpecs)
 
+        if numAttachmentSpecs == 0:
+
+            return None
+
+        # Check if attachment index is within range
+        #
         attachmentIndex = int(self.attachmentId)
 
         if 0 <= attachmentIndex < numAttachmentSpecs:
 
             return attachmentSpecs[attachmentIndex]
 
+        elif attachmentIndex >= numAttachmentSpecs:
+
+            log.warning(f'Attachment index is out-of-range on {self} component!')
+            return attachmentSpecs[-1]
+
         else:
 
-            return None
+            log.warning(f'Attachment index is out-of-range on {self} component!')
+            return attachmentSpecs[0]
 
     def getAttachmentTargets(self):
         """
@@ -419,15 +458,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         :rtype: str
         """
 
-        referenceNode = self.skeletonReference()
-
-        if referenceNode is not None:
-
-            return referenceNode.associatedNamespace()
-
-        else:
-
-            return ''
+        return self.findControlRig().getSkeletonNamespace()
 
     def isSkeletonDirty(self):
         """
@@ -618,6 +649,12 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         :rtype: None
         """
 
+        # Check if component has a parent
+        #
+        if not self.hasComponentParent():
+
+            return
+
         # Check if skeleton exists
         #
         skeletonSpecs = self.skeleton(topLevelOnly=True)
@@ -634,6 +671,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         if not hasAttachment:
 
+            log.error(f'Unable to locate attachment spec for {self}!')
             return
 
         # Iterate through top-level skeleton specs
@@ -642,6 +680,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         for skeletonSpec in skeletonSpecs:
 
+            log.info(f'Parenting "{skeletonSpec.name}" > "{attachmentSpec.name}"')
             manager.parentJoint(skeletonSpec.uuid, attachmentSpec.uuid, absolute=True)
 
     def unparentSkeleton(self):
@@ -650,6 +689,12 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         :rtype: None
         """
+
+        # Check if component has a parent
+        #
+        if not self.hasComponentParent():
+
+            return
 
         # Check if skeleton exists
         #
@@ -667,6 +712,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
 
         for skeletonSpec in skeletonSpecs:
 
+            log.info(f'Unparenting "{skeletonSpec.name}" export joint!')
             manager.parentJoint(skeletonSpec.uuid, worldUUID, absolute=True)
 
     def bindSkeleton(self):
@@ -1119,6 +1165,64 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         """
 
         pass
+
+    def cacheShapes(self):
+        """
+        Caches the shape properties for all published controls.
+
+        :rtype: None
+        """
+
+        # Iterate through published controls
+        #
+        cache = self.userProperties.get(self.SHAPE_CACHE, {})
+
+        for control in self.publishedNodes():
+
+            cache[control.name()] = shapeutils.snapshot(control.object())
+
+        # Update shape cache
+        #
+        self.userProperties[self.SHAPE_CACHE] = cache
+
+    def repairShapes(self):
+        """
+        Repairs the shape properties from the shape cache.
+
+        :rtype: None
+        """
+
+        # Iterate through published controls
+        #
+        cache = self.userProperties.get(self.SHAPE_CACHE, {})
+
+        for control in self.publishedNodes():
+
+            # Check if control should be skipped
+            #
+            ignoreShapes = control.userProperties.get('ignoreShapes', False)
+
+            if ignoreShapes:
+
+                log.info(f'Skipping "{control}" cached shapes...')
+                continue
+
+            # Check if shape state exists
+            #
+            key = control.name()
+            state = cache.pop(key, None)
+
+            if not stringutils.isNullOrEmpty(state):
+
+                shapeutils.assumeSnapshot(control.object(), state)
+
+            else:
+
+                continue
+
+        # Update shape cache
+        #
+        self.userProperties[self.SHAPE_CACHE] = cache
 
     def deleteRig(self):
         """

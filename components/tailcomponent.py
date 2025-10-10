@@ -102,7 +102,7 @@ class TailComponent(basecomponent.BaseComponent):
         # Get component properties
         #
         *tailSpecs, tailTipSpec = self.skeletonSpecs(flatten=True)
-        tailExportJoints = [self.scene(tailSpec.uuid) for tailSpec in chain(tailSpecs, [tailTipSpec])]
+        tailExportJoints = [tailSpec.getNode() for tailSpec in chain(tailSpecs, [tailTipSpec])]
         firstTailExportJoint, lastTailExportJoint = tailExportJoints[0], tailExportJoints[-1]
 
         rigScale = self.findControlRig().getRigScale()

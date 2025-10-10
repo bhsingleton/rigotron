@@ -55,9 +55,8 @@ class LeafComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
         leafSpec, = self.skeleton()
-        leafExportJoint = leafSpec.getNode(referenceNode=referenceNode)
+        leafExportJoint = leafSpec.getNode()
         leafExportMatrix = leafExportJoint.worldMatrix()
 
         controlsGroup = self.scene(self.controlsGroup)

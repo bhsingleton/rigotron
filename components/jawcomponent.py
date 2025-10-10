@@ -78,9 +78,8 @@ class JawComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
         jawSpec, = self.skeleton()
-        jawExportJoint = jawSpec.getNode(referenceNode=referenceNode)
+        jawExportJoint = jawSpec.getNode()
         jawExportMatrix = jawExportJoint.worldMatrix()
 
         controlsGroup = self.scene(self.controlsGroup)

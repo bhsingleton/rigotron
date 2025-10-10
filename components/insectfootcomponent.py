@@ -34,36 +34,36 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
         Side.LEFT: {
             InsectFootType.TARSUS: om.MMatrix(
                 [
-                    (0.422618, 0.0, -0.906308, 0.0),
-                    (0.906308, 0.0, 0.422618, 0.0),
+                    (0.0, 0.0, -1.0, 0.0),
+                    (1.0, 0.0, 0.0, 0.0),
                     (0.0, -1.0, 0.0, 0.0),
-                    (55.0474, 0.0, 21.3865, 1.0)
+                    (50.0, 0.0, 20.0, 1.0)
                 ]
             ),
             InsectFootType.CLAW: om.MMatrix(
                 [
-                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (-1.0, 0.0, 0.0, 0.0),
                     (0.0, 0.0, 1.0, 0.0),
-                    (0.0, -1.0, 0.0, 0.0),
-                    (68.4578, 0.0, 0.720875, 1.0)
+                    (0.0, 0.0, 0.0, 1.0)
                 ]
             )
         },
         Side.RIGHT: {
             InsectFootType.TARSUS: om.MMatrix(
                 [
-                    (-0.422618, 0.0, -0.906308, 0.0),
-                    (-0.906308, 0.0, 0.422618, 0.0),
+                    (0.0, 0.0, -1.0, 0.0),
+                    (-1.0, 0.0, 0.0, 0.0),
                     (0.0, 1.0, 0.0, 0.0),
-                    (-55.0474, 0.0, 21.3865, 1.0)
+                    (-50.0, 0.0, 20.0, 1.0)
                 ]
             ),
             InsectFootType.CLAW: om.MMatrix(
                 [
+                    (0.0, 1.0, 0.0, 0.0),
                     (-1.0, 0.0, 0.0, 0.0),
                     (0.0, 0.0, 1.0, 0.0),
-                    (0.0, 1.0, 0.0, 0.0),
-                    (-68.4578, 0.0, 0.720875, 1.0)
+                    (0.0, 0.0, 0.0, 1.0)
                 ]
             )
         }
@@ -121,7 +121,7 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
 
             return self.scene(tipSpec.uuid).worldMatrix()
 
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
@@ -135,106 +135,53 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
         clawEnabled = bool(self.clawEnabled)
         size = numTarsusLinks + 2
 
-        *tarsusSpecs, clawSpec, tipSpec = self.resizeSkeletonSpecs(size, skeletonSpecs)
+        *tarsusSpecs, clawSpec, tipSpec = self.resizeSkeleton(size, skeletonSpecs, hierarchical=True)
 
         # Edit tarsus specs
         #
+        side = self.Side(self.componentSide)
+
         for (i, tarsusSpec) in enumerate(tarsusSpecs, start=1):
 
-            tarsusSpec.name = self.formatName(name='Tarsus', index=i)
-            tarsusSpec.driver = self.formatName(name='Tarsus', kinemat='Blend', index=i, type='joint')
+            isFirstTarsus = (i == 1)
+            defaultMatrix = om.MMatrix(self.__default_limb_matrices__[side][self.InsectFootType.TARSUS]) if isFirstTarsus else transformutils.createTranslateMatrix((self.__default_tarsus_spacing__, 0.0, 0.0))
+
             tarsusSpec.enabled = True
+            tarsusSpec.name = self.formatName(name='Tarsus', index=i)
+            tarsusSpec.side = side
+            tarsusSpec.type = self.Type.OTHER
+            tarsusSpec.otherType = 'Tarsus'
+            tarsusSpec.drawStyle = self.Style.BOX
+            tarsusSpec.defaultMatrix = defaultMatrix
+            tarsusSpec.driver.name = self.formatName(name='Tarsus', kinemat='Blend', index=i, type='joint')
 
         # Edit claw spec
         #
+        clawSpec.passthrough = not clawEnabled
         clawSpec.name = self.formatName(name='Claw')
-        clawSpec.driver = self.formatName(name='Claw', kinemat='Blend', type='joint')
-        clawSpec.enabled = clawEnabled
+        clawSpec.side = side
+        clawSpec.type = self.Type.OTHER
+        clawSpec.otherType = 'Claw'
+        clawSpec.drawStyle = self.Style.BOX
+        clawSpec.defaultMatrix = om.MMatrix(self.__default_component_matrices__[side][self.InsectFootType.CLAW]) * transformutils.createTranslateMatrix((self.__default_tarsus_spacing__, 0.0, 0.0))
+        clawSpec.driver.name = self.formatName(name='Claw', kinemat='Blend', type='joint')
 
         # Edit tip spec
         #
         tipName = 'ClawTip' if clawEnabled else 'TarsusTip'
-        tipSpec.name = self.formatName(name=tipName)
-        tipSpec.driver = self.formatName(name=tipName, kinemat='Blend', type='joint')
+
         tipSpec.enabled = True
+        tipSpec.name = self.formatName(name=tipName)
+        tipSpec.side = side
+        tipSpec.type = self.Type.OTHER
+        tipSpec.otherType = tipName
+        tipSpec.drawStyle = self.Style.BOX
+        tipSpec.defaultMatrix = transformutils.createTranslateMatrix((self.__default_tarsus_spacing__, 0.0, 0.0))
+        tipSpec.driver.name = self.formatName(name=tipName, kinemat='Blend', type='joint')
 
         # Call parent method
         #
-        super(InsectFootComponent, self).invalidateSkeletonSpecs(skeletonSpecs)
-
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: List[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
-        #
-        componentSide = self.Side(self.componentSide)
-        *tarsusSpecs, clawSpec, tipSpec = self.skeletonSpecs()
-
-        # Create tarsus joint
-        #
-        numTarsusJoints = len(tarsusSpecs)
-        tarsusJoints = [None] * numTarsusJoints
-
-        for (i, tarsusSpec) in enumerate(tarsusSpecs):
-
-            parent = tarsusJoints[i - 1] if (i > 0) else None
-
-            tarsusJoint = self.scene.createNode('joint', name=tarsusSpec.name, parent=parent)
-            tarsusJoint.side = componentSide
-            tarsusJoint.type = self.Type.OTHER
-            tarsusJoint.otherType = 'Tarsus'
-            tarsusJoint.displayLocalAxis = True
-            tarsusSpec.uuid = tarsusJoint.uuid()
-
-            offsetTarsusMatrix = transformutils.createTranslateMatrix([self.__default_tarsus_spacing__ * i, 0.0, 0.0])
-            defaultTarsusMatrix = offsetTarsusMatrix * self.__default_component_matrices__[componentSide][self.InsectFootType.TARSUS]
-            tarsusMatrix = tarsusSpec.getMatrix(default=defaultTarsusMatrix)
-            tarsusJoint.setWorldMatrix(tarsusMatrix)
-
-            tarsusJoints[i] = tarsusJoint
-
-        # Create claw joint
-        #
-        clawEnabled = bool(clawSpec.enabled)
-        clawJoint = None
-
-        if clawEnabled:
-
-            parent = tarsusJoints[-1]
-
-            clawJoint = self.scene.createNode('joint', name=clawSpec.name, parent=parent)
-            clawJoint.side = componentSide
-            clawJoint.type = self.Type.OTHER
-            clawJoint.otherType = 'Claw'
-            clawJoint.displayLocalAxis = True
-            clawSpec.uuid = clawJoint.uuid()
-
-            defaultClawMatrix = self.__default_component_matrices__[componentSide][self.InsectFootType.CLAW]
-            clawMatrix = clawSpec.getMatrix(default=defaultClawMatrix)
-            clawJoint.setWorldMatrix(clawMatrix)
-
-        # Create tip joint
-        #
-        parent = clawJoint if (clawJoint is not None) else tarsusJoints[-1]
-
-        if parent is not None:
-
-            tipJoint = self.scene.createNode('joint', name=tipSpec.name, parent=parent)
-            tipJoint.side = componentSide
-            tipJoint.type = self.Type.OTHER
-            tipJoint.otherType = f'{parent.otherType}Tip'
-            tipJoint.displayLocalAxis = True
-            tipSpec.uuid = tipJoint.uuid()
-
-            defaultTipMatrix = transformutils.createTranslateMatrix([15.0, 0.0, 0.0]) * parent.worldMatrix()
-            tipMatrix = tipSpec.getMatrix(default=defaultTipMatrix)
-            tipJoint.setWorldMatrix(tipMatrix)
-
-        return (*tarsusJoints, clawJoint, tipJoint)
+        return super(InsectFootComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def buildRig(self):
         """
@@ -246,7 +193,6 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
         # Decompose component
         #
         *tarsusSpecs, clawSpec, tipSpec = self.skeletonSpecs()
-
         tarsusExportJoints = [tarsusSpec.getNode() for tarsusSpec in tarsusSpecs]
         tarsusExportMatrices = [tarsusExportJoint.worldMatrix() for tarsusExportJoint in tarsusExportJoints]
 

@@ -22,6 +22,7 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
     __slots__ = (
         '__weakref__',
         '_scene',
+        '_component',
         '_enabled',
         '_name',
         '_uuid',
@@ -48,6 +49,7 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
         # Declare private variables
         #
         self._scene = mpyscene.MPyScene.getInstance(asWeakReference=True)
+        self._component = kwargs.get('component', self.nullWeakReference)
         self._name = str(self.__default_name__)
         self._uuid = om.MUuid()
         self._matrix = None
@@ -73,6 +75,16 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
         """
 
         return self._scene()
+
+    @property
+    def component(self):
+        """
+        Returns the component this spec belongs to.
+
+        :rtype: rigotron.components.basecomponent.BaseComponent
+        """
+
+        return self._component()
 
     @property
     def enabled(self):
@@ -379,7 +391,7 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
 
         return self.scene.doesNodeExist(self.uuid)
 
-    def getNode(self, referenceNode=None):
+    def getNode(self, **kwargs):
         """
         Returns the node associated with this spec.
 
@@ -397,13 +409,13 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
         #
         if dagutils.isValidUUID(self.uuid):
 
-            return self.scene.getNodeByUuid(self.uuid, referenceNode=referenceNode)
+            return self.scene.getNodeByUuid(self.uuid, referenceNode=self.component.skeletonReference())
 
         else:
 
             return None
 
-    def deleteNode(self, referenceNode=None):
+    def deleteNode(self, **kwargs):
         """
         Deletes the node associated with this spec.
 
@@ -419,6 +431,7 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
 
         # Check if node exists
         #
+        referenceNode = self.component.skeletonReference()
         node = self.getNode(referenceNode=referenceNode)
 
         if node is None:
@@ -432,6 +445,7 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
 
             node.removeConstraints()
             node.delete()
+
             return True
 
         else:
@@ -456,7 +470,7 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
 
         # Check if node exists
         #
-        referenceNode = kwargs.get('referenceNode', None)
+        referenceNode = self.component.skeletonReference()
         node = self.getNode(referenceNode=referenceNode)
 
         if node is None:

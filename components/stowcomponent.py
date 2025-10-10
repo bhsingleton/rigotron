@@ -51,9 +51,8 @@ class StowComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
         stowSpec, = self.skeletonSpecs()
-        stowExportJoint = stowSpec.getNode(referenceNode=referenceNode)
+        stowExportJoint = stowSpec.getNode()
         stowExportMatrix = stowExportJoint.worldMatrix()
 
         componentSide = self.Side(self.componentSide)

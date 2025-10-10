@@ -149,7 +149,7 @@ class HeadComponent(basecomponent.BaseComponent):
         if attachmentIndex == lastIndex:
 
             attachmentSpec = attachmentSpecs[attachmentIndex]
-            exportJoint = attachmentSpec.getNode(referenceNode=self.skeletonReference())
+            exportJoint = attachmentSpec.getNode()
             exportDriver = self.scene(componentParent.userProperties['spineTipIKTarget'])
 
             return exportJoint, exportDriver
@@ -157,7 +157,7 @@ class HeadComponent(basecomponent.BaseComponent):
         elif 0 <= attachmentIndex < numAttachmentSpecs:
 
             attachmentSpec = attachmentSpecs[attachmentIndex]
-            exportJoint = attachmentSpec.getNode(referenceNode=self.skeletonReference())
+            exportJoint = attachmentSpec.getNode()
             exportDriver = attachmentSpec.driver.getDriver()
 
             return exportJoint, exportDriver
@@ -175,10 +175,9 @@ class HeadComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
         *neckSpecs, headSpec = self.skeleton(flatten=True)
-        neckExportJoints = [neckSpec.getNode(referenceNode=referenceNode) for neckSpec in neckSpecs]
-        headExportJoint = headSpec.getNode(referenceNode=referenceNode)
+        neckExportJoints = [neckSpec.getNode() for neckSpec in neckSpecs]
+        headExportJoint = headSpec.getNode()
         headExportMatrix = headExportJoint.worldMatrix()
 
         controlsGroup = self.scene(self.controlsGroup)

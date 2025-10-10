@@ -102,9 +102,8 @@ class PropComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
         propSpec, = self.skeleton()
-        propExportJoint = propSpec.getNode(referenceNode=referenceNode)
+        propExportJoint = propSpec.getNode()
         propExportMatrix = propExportJoint.worldMatrix()
 
         componentSide = self.Side(self.componentSide)

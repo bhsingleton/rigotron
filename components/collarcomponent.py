@@ -59,9 +59,8 @@ class CollarComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
         collarSpec, = self.skeleton()
-        collarExportJoint = collarSpec.getNode(referenceNode=referenceNode)
+        collarExportJoint = collarSpec.getNode()
         collarExportMatrix = collarExportJoint.worldMatrix()
 
         controlsGroup = self.scene(self.controlsGroup)

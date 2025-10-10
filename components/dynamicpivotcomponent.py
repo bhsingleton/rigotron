@@ -98,9 +98,9 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
-        leafSpec, = self.skeletonSpecs(referenceNode=referenceNode)
+        leafSpec, = self.skeletonSpecs()
         leafExportJoint = leafSpec
+        leafExportMatrix = leafExportJoint.worldMatrix()
 
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
@@ -279,7 +279,7 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
         #
         leafSpaceName = self.formatName(type='space')
         leafSpace = self.scene.createNode('transform', name=leafSpaceName, parent=controlsGroup)
-        leafSpace.copyTransform(leafExportJoint)
+        leafSpace.setWorldMatrix(leafExportMatrix, skipScale=True)
         leafSpace.freezeTransform()
         leafSpace.addConstraint('transformConstraint', [leafPivotTarget], maintainOffset=True)
 

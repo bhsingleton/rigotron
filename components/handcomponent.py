@@ -337,7 +337,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
         # Evaluate parent matrix
         #
-        knucleSpec, = self.pivots(flatten=True, force=True)
+        knucleSpec, = self.pivots(force=True)
         requiresUpdating = knucleSpec.parentMatrix.isEquivalent(om.MMatrix.kIdentity, tolerance=1e-3)
 
         if requiresUpdating or force:
@@ -448,9 +448,8 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
         handSpec, = self.skeleton()
-        handExportJoint = handSpec.getNode(referenceNode=referenceNode)
+        handExportJoint = handSpec.getNode()
         handExportMatrix = handExportJoint.worldMatrix()
 
         knuckleSpec, = self.pivots()
@@ -671,10 +670,10 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
             *fingerSpecs, fingerTipSpec = self.flattenSpecs(metacarpalSpec.children)
 
-            fingerBaseExportJoint = fingerSpecs[0].getNode(referenceNode=referenceNode)
+            fingerBaseExportJoint = fingerSpecs[0].getNode()
             fingerBaseMatrix = fingerBaseExportJoint.worldMatrix()
 
-            fingerTipExportJoint = fingerTipSpec.getNode(referenceNode=referenceNode)
+            fingerTipExportJoint = fingerTipSpec.getNode()
             fingerTipMatrix = fingerTipExportJoint.worldMatrix()
 
             # Check if metacarpals are enabled
@@ -689,7 +688,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
                 # Decompose metacarpal spec
                 #
                 fullMetacarpalName = f'{fingerName}Metacarpal'
-                metacarpalExportJoint = metacarpalSpec.getNode(referenceNode=referenceNode)
+                metacarpalExportJoint = metacarpalSpec.getNode()
                 metacarpalMatrix = metacarpalExportJoint.worldMatrix()
 
                 # Create kinematic metacarpal joints
@@ -959,7 +958,7 @@ class HandComponent(extremitycomponent.ExtremityComponent):
                 # Create finger control
                 #
                 fingerIndex = i + 1
-                fingerExportJoint = fingerSpec.getNode(referenceNode=referenceNode)
+                fingerExportJoint = fingerSpec.getNode()
                 fingerMatrix = fingerExportJoint.worldMatrix()
                 fingerParent = fingerCtrls[i - 1] if (i > 0) else masterFingerCtrl
                 fingerAlias = f'{fullFingerName}{str(fingerIndex).zfill(2)}'

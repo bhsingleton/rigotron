@@ -409,6 +409,22 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         #
         return super(FootComponent, self).invalidatePivots(pivotSpecs, **kwargs)
 
+    def repairPivots(self, force=False):
+        """
+        Repairs the internal pivot specs for this component.
+
+        :rtype: None
+        """
+
+        # Invalidate pivot spec
+        # This will ensure the driver specs are up-to-date!
+        #
+        pivotSpec, = self.pivots(force=force)
+
+        # Call parent method
+        #
+        return super(FootComponent, self).repairPivots(force=force)
+
     def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
@@ -521,14 +537,12 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
-
         footSpec, = self.skeleton()
-        footExportJoint = footSpec.getNode(referenceNode=referenceNode)
+        footExportJoint = footSpec.getNode()
         footExportMatrix = footExportJoint.worldMatrix()
 
         ballSpec, = footSpec.children
-        ballExportJoint = ballSpec.getNode(referenceNode=referenceNode)
+        ballExportJoint = ballSpec.getNode()
         ballExportMatrix = ballExportJoint.worldMatrix()
 
         controlsGroup = self.scene(self.controlsGroup)
@@ -585,6 +599,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         footCtrl.addDivider('Spaces')
         footCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
         footCtrl.prepareChannelBoxForAnimation()
+        footCtrl.userProperties['ignoreShapes'] = True
         self.publishNode(footCtrl, alias=self.componentName)
 
         footSpaceSwitch = footSpace.addSpaceSwitch([limbFKCtrl, limbIKOffsetCtrl, motionCtrl], maintainOffset=True)
@@ -632,7 +647,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         localCenter = worldCenter * footCtrl.worldInverseMatrix()
         localSizeX, localSizeY, localSizeZ = footCurveBox.width, footCurveBox.height, footCurveBox.depth
 
-        footCtrl.addPointHelper(
+        footCtrlShape = footCtrl.addPointHelper(
             'square',
             size=1.0,
             localPosition=localCenter,
@@ -671,13 +686,14 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         footPivotCtrl = self.scene.createNode('transform', name=footPivotCtrlName, parent=footCtrl)
         footPivotCtrl.addCurve(footPivotCurvePoints, degree=1, form=om.MFnNurbsCurve.kClosed, colorRGB=lightColorRGB)
         footPivotCtrl.prepareChannelBoxForAnimation()
+        footPivotCtrl.userProperties['ignoreShapes'] = True
         self.publishNode(footPivotCtrl, alias='Foot_Pivot')
 
         footCenterName = self.formatName(subname='Center', type='vectorMath')
         footCenter = self.scene.createNode('vectorMath', name=footCenterName)
         footCenter.operation = 9  # Average
-        footCenter.connectPlugs(footIntermediateObject['boundingBoxMin'], 'inFloatA')
-        footCenter.connectPlugs(footIntermediateObject['boundingBoxMax'], 'inFloatB')
+        footCenter.connectPlugs(footCtrlShape['boundingBoxMin'], 'inFloatA')
+        footCenter.connectPlugs(footCtrlShape['boundingBoxMax'], 'inFloatB')
 
         footPivotMatrixName = self.formatName(subname='Pivot', type='composeMatrix')
         footPivotMatrix = self.scene.createNode('composeMatrix', name=footPivotMatrixName)
@@ -778,6 +794,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         heelRollCtrl.setWorldMatrix(heelMatrix, skipRotate=True, skipScale=True)
         heelRollCtrl.freezeTransform()
         heelRollCtrl.prepareChannelBoxForAnimation()
+        heelRollCtrl.userProperties['ignoreShapes'] = True
         self.publishNode(heelRollCtrl, alias='Heel')
 
         # Create toe-tip roll control
@@ -788,6 +805,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         toeRollCtrl.setWorldMatrix(toeTipMatrix, skipRotate=True, skipScale=True)
         toeRollCtrl.freezeTransform()
         toeRollCtrl.prepareChannelBoxForAnimation()
+        toeRollCtrl.userProperties['ignoreShapes'] = True
         self.publishNode(toeRollCtrl, alias='ToeTip')
 
         ballIKTargetName = self.formatName(subname='Ball', kinemat='IK', type='target')
@@ -1054,7 +1072,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
                 toeType = self.ToeType(toeType)
                 toeName = toeType.name.title()
                 fullToeName = f'{toeName}Toe'
-                firstToeExportJoint = firstToeSpec.getNode(referenceNode=referenceNode)
+                firstToeExportJoint = firstToeSpec.getNode()
 
                 masterToeCtrlName = self.formatName(subname=fullToeName, type='control')
                 masterToeCtrl = self.scene.createNode('transform', name=masterToeCtrlName, parent=toesCtrl)
@@ -1120,7 +1138,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
                 # Create toe tip target
                 #
-                toeTipExportJoint = toeTipSpec.getNode(referenceNode=referenceNode)
+                toeTipExportJoint = toeTipSpec.getNode()
 
                 toeTipTargetName = self.formatName(subname=f'{fullToeName}Tip', type='target')
                 toeTipTarget = self.scene.createNode('transform', name=toeTipTargetName, parent=toeCtrls[-1])

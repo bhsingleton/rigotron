@@ -126,7 +126,7 @@ class ClavicleComponent(basecomponent.BaseComponent):
         # Decompose component
         #
         clavicleSpec, = self.skeleton()
-        clavicleExportJoint = self.scene(clavicleSpec.name)
+        clavicleExportJoint = clavicleSpec.getNode()
         clavicleExportMatrix = clavicleExportJoint.worldMatrix()
 
         componentSide = self.Side(self.componentSide)

@@ -59,9 +59,8 @@ class BeltComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
         beltSpec, = self.skeleton()
-        beltExportJoint = beltSpec.getNode(referenceNode=referenceNode)
+        beltExportJoint = beltSpec.getNode()
         beltExportMatrix = beltExportJoint.worldMatrix()
 
         controlsGroup = self.scene(self.controlsGroup)

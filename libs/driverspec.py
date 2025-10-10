@@ -298,7 +298,7 @@ class DriverSpec(melsonobject.MELSONObject):
     # endregion
 
     # region Methods
-    def getDriven(self, referenceNode=None):
+    def getDriven(self, **kwargs):
         """
         Returns the node associated with the driver.
 
@@ -310,7 +310,7 @@ class DriverSpec(melsonobject.MELSONObject):
         #
         if isinstance(self.driven, abstractspec.AbstractSpec):
 
-            return self.driven.getNode(referenceNode=referenceNode)
+            return self.driven.getNode(**kwargs)
 
         else:
 

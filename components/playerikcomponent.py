@@ -211,14 +211,13 @@ class PlayerIKComponent(basecomponent.BaseComponent):
 
         # Iterate through skeleton specs
         #
-        referenceNode = self.skeletonReference()
         skeletonSpecs = self.skeleton(flatten=True, skipDisabled=True)
 
         for skeletonSpec in skeletonSpecs:
 
             driver = skeletonSpec.driver.getDriver()
 
-            joint = skeletonSpec.getNode(referenceNode=referenceNode)
+            joint = skeletonSpec.getNode()
             joint.copyTransform(driver, skipScale=True)
 
             skeletonSpec.cacheNode(delete=False)

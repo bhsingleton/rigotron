@@ -130,7 +130,7 @@ class HindLegComponent(limbcomponent.LimbComponent):
     # endregion
 
     # region Methods
-    def invalidateSkeletonSpecs(self, skeletonSpecs):
+    def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
         Rebuilds the internal skeleton specs for this component.
 
@@ -140,161 +140,65 @@ class HindLegComponent(limbcomponent.LimbComponent):
 
         # Resize skeleton specs
         #
-        numMembers = len(self.LimbType)
-        femurSpec, tibiaSpec, cannonSpec, tipSpec = self.resizeSkeletonSpecs(numMembers, skeletonSpecs)
+        twistCount = int(self.numTwistLinks)
+        upperCount, midCount, lowerCount = twistCount + 1, twistCount + 1, twistCount + 1
 
-        # Iterate through limb specs
+        upperSpec, = self.resizeSkeleton(1, skeletonSpecs, hierarchical=False)
+        *upperTwistSpecs, midSpec  = self.resizeSkeleton(upperCount, upperSpec.children, hierarchical=False)
+        *midTwistSpecs, lowerSpec = self.resizeSkeleton(midCount, midSpec.children, hierarchical=False)
+        *lowerTwistSpecs, tipSpec = self.resizeSkeleton(lowerCount, cannonSpec.children, hierarchical=False)
+
+        # Edit limb specs
         #
-        limbNames = self.__default_limb_names__[self.LimbType.THIGH], self.__default_limb_names__[self.LimbType.CALF], self.__default_limb_names__[self.LimbType.ANKLE]
-        limbSpecs = (femurSpec, tibiaSpec, cannonSpec)
+        upperName, midName, lowerName, tipName = self.__default_limb_names__
+        upperType, midType, lowerType, tipType = self.__default_limb_types__
+        side = self.Side(self.componentSide)
 
+        upperSpec.name = self.formatName(name=upperName)
+        upperSpec.side = side
+        upperSpec.type = upperType
+        upperSpec.drawStyle = self.Style.BOX
+        upperSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.THIGH]
+        upperSpec.driver.name = self.formatName(name=upperName, type='joint')
+
+        midSpec.name = self.formatName(name=midName)
+        midSpec.side = side
+        midSpec.type = midType
+        midSpec.drawStyle = self.Style.BOX
+        midSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.CALF]
+        midSpec.driver.name = self.formatName(name=midName, type='joint')
+
+        cannonSpec.name = self.formatName(name=lowerName)
+        cannonSpec.side = side
+        cannonSpec.type = lowerType
+        cannonSpec.drawStyle = self.Style.BOX
+        cannonSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.ANKLE]
+        cannonSpec.driver.name = self.formatName(name=lowerName, type='joint')
+
+        limbTipSpec.enabled = not self.hasExtremityComponent()
+        limbTipSpec.name = self.formatName(name=tipName)
+        limbTipSpec.side = side
+        limbTipSpec.type = tipType
+        limbTipSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.TIP]
+        limbTipSpec.driver.name = self.formatName(name=tipName, type='joint')
+
+        # Edit twist specs
+        #
         twistEnabled = bool(self.twistEnabled)
-        twistCount = self.numTwistLinks if twistEnabled else 0
 
-        for (i, (limbName, limbSpec)) in enumerate(zip(limbNames, limbSpecs)):
+        for (twistName, twistType, twistSpecs) in ((upperName, upperType, upperTwistSpecs), (midName, midType, midTwistSpecs), (lowerName, lowerType, lowerTwistSpecs)):
 
-            # Edit limb name
-            #
-            limbSpec.name = self.formatName(name=limbName)
-            limbSpec.driver = self.formatName(name=limbName, type='joint')
+            for (i, twistSpec) in enumerate(twistSpecs, start=1):
 
-            # Edit twist specs
-            #
-            twistSpecs = self.resizeSkeletonSpecs(twistCount, limbSpec.children)
-
-            for (j, twistSpec) in enumerate(twistSpecs, start=1):
-
-                twistSpec.name = self.formatName(name=limbName, subname='Twist', index=j)
-                twistSpec.driver = self.formatName(name=limbName, subname='Twist', index=j, type='control')
                 twistSpec.enabled = twistEnabled
-
-        tipName = self.__default_limb_names__[self.LimbType.TIP]
-        tipSpec.name = self.formatName(name=tipName)
-        tipSpec.driver = self.formatName(name=tipName, type='joint')
-        tipSpec.enabled = not self.hasExtremityComponent()
+                twistSpec.name = self.formatName(name=twistName, subname='Twist', index=i)
+                twistSpec.side = side
+                twistSpec.type = twistType
+                twistSpec.driver.name = self.formatName(name=twistName, subname='Twist', index=i, type='control')
 
         # Call parent method
         #
-        super(HindLegComponent, self).invalidateSkeletonSpecs(skeletonSpecs)
-
-    def buildSkeleton(self):
-        """
-        Builds the skeleton for this component.
-
-        :rtype: List[mpynode.MPyNode]
-        """
-
-        # Get skeleton specs
-        #
-        componentSide = self.Side(self.componentSide)
-
-        femurSpec, tibiaSpec, cannonSpec, tipSpec = self.skeletonSpecs()
-        femurType, tibiaType, cannonType, tipType = self.__default_limb_types__
-
-        # Create femur joint
-        #
-        femurJoint = self.scene.createNode('joint', name=femurSpec.name)
-        femurJoint.side = componentSide
-        femurJoint.type = femurType
-        femurJoint.drawStyle = self.Style.BOX
-        femurJoint.displayLocalAxis = True
-        femurSpec.uuid = femurJoint.uuid()
-
-        defaultFemurMatrix = self.__default_limb_matrices__[componentSide][self.LimbType.THIGH]
-        femurMatrix = femurSpec.getMatrix(default=defaultFemurMatrix)
-        femurJoint.setWorldMatrix(femurMatrix, skipScale=True)
-
-        # Create femur twist joints
-        #
-        femurTwistCount = len(femurSpec.children)
-        femurTwistJoints = [None] * femurTwistCount
-
-        for (i, twistSpec) in enumerate(femurSpec.children):
-
-            twistJoint = self.scene.createNode('joint', name=twistSpec.name, parent=femurJoint)
-            twistJoint.side = componentSide
-            twistJoint.type = self.Type.NONE
-            twistJoint.drawStyle = self.Style.JOINT
-            twistJoint.displayLocalAxis = True
-            twistSpec.uuid = twistJoint.uuid()
-
-            femurTwistJoints[i] = twistJoint
-
-        # Create tibia joint
-        #
-        tibiaJoint = self.scene.createNode('joint', name=tibiaSpec.name, parent=femurJoint)
-        tibiaJoint.side = componentSide
-        tibiaJoint.type = tibiaType
-        tibiaJoint.drawStyle = self.Style.BOX
-        tibiaJoint.displayLocalAxis = True
-        tibiaSpec.uuid = tibiaJoint.uuid()
-
-        defaultTibiaMatrix = self.__default_limb_matrices__[componentSide][self.LimbType.CALF]
-        tibiaMatrix = tibiaSpec.getMatrix(default=defaultTibiaMatrix)
-        tibiaJoint.setWorldMatrix(tibiaMatrix, skipScale=True)
-
-        # Create tibia twist joints
-        #
-        tibiaTwistCount = len(tibiaSpec.children)
-        tibiaTwistJoints = [None] * tibiaTwistCount
-
-        for (i, twistSpec) in enumerate(tibiaSpec.children):
-
-            twistJoint = self.scene.createNode('joint', name=twistSpec.name, parent=tibiaJoint)
-            twistJoint.side = componentSide
-            twistJoint.type = self.Type.NONE
-            twistJoint.drawStyle = self.Style.JOINT
-            twistJoint.displayLocalAxis = True
-            twistSpec.uuid = twistJoint.uuid()
-
-            tibiaTwistJoints[i] = twistJoint
-
-        # Create cannon joint
-        #
-        cannonJoint = self.scene.createNode('joint', name=cannonSpec.name, parent=tibiaJoint)
-        cannonJoint.side = componentSide
-        cannonJoint.type = cannonType
-        cannonJoint.drawStyle = self.Style.BOX
-        cannonJoint.displayLocalAxis = True
-        cannonSpec.uuid = cannonJoint.uuid()
-
-        defaultCannonMatrix = self.__default_limb_matrices__[componentSide][self.LimbType.ANKLE]
-        cannonMatrix = cannonSpec.getMatrix(default=defaultCannonMatrix)
-        cannonJoint.setWorldMatrix(cannonMatrix, skipScale=True)
-
-        # Create cannon twist joints
-        #
-        cannonTwistCount = len(cannonSpec.children)
-        cannonTwistJoints = [None] * cannonTwistCount
-
-        for (i, twistSpec) in enumerate(cannonSpec.children):
-
-            twistJoint = self.scene.createNode('joint', name=twistSpec.name, parent=cannonJoint)
-            twistJoint.side = componentSide
-            twistJoint.type = self.Type.NONE
-            twistJoint.drawStyle = self.Style.JOINT
-            twistJoint.displayLocalAxis = True
-            twistSpec.uuid = twistJoint.uuid()
-
-            cannonTwistJoints[i] = twistJoint
-
-        # Create tip joint
-        #
-        tipJoint = None
-
-        if tipSpec.enabled:
-
-            tipJoint = self.scene.createNode('joint', name=tipSpec.name, parent=cannonJoint)
-            tipJoint.side = componentSide
-            tipJoint.type = tipType
-            tipJoint.displayLocalAxis = True
-            tipSpec.uuid = tipJoint.uuid()
-
-            defaultLimbTipMatrix = self.__default_limb_matrices__[componentSide][self.LimbType.TIP]
-            tipMatrix = tipSpec.getMatrix(default=defaultLimbTipMatrix)
-            tipJoint.setWorldMatrix(tipMatrix, skipScale=True)
-
-        return (femurJoint, tibiaJoint, cannonJoint, tipJoint)
+        return super(HindLegComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
     def buildRig(self):
         """
@@ -309,10 +213,10 @@ class HindLegComponent(limbcomponent.LimbComponent):
         upperLimbName, midLimbName, lowerLimbName, limbTipName = self.__default_limb_names__
 
         upperLimbSpec, midLimbSpec, lowerLimbSpec, limbTipSpec = self.skeletonSpecs()
-        upperLimbExportJoint = self.scene(upperLimbSpec.uuid)
-        midLimbExportJoint = self.scene(midLimbSpec.uuid)
-        lowerLimbExportJoint = self.scene(lowerLimbSpec.uuid)
-        limbTipExportJoint = self.scene(limbTipSpec.uuid)
+        upperLimbExportJoint = upperLimbSpec.getNode()
+        midLimbExportJoint = midLimbSpec.getNode()
+        lowerLimbExportJoint = lowerLimbSpec.getNode()
+        limbTipExportJoint = limbTipSpec.getNode()
 
         upperLimbMatrix = upperLimbExportJoint.worldMatrix()
         midLimbMatrix = midLimbExportJoint.worldMatrix()
@@ -1712,7 +1616,7 @@ class HindLegComponent(limbcomponent.LimbComponent):
                     # Finally, re-align export joint to control
                     # This will ensure there are no unwanted offsets when binding the skeleton!
                     #
-                    twistExportJoint = self.scene(twistSpec.uuid)
+                    twistExportJoint = twistSpec.getNode()
                     twistExportJoint.copyTransform(twistCtrl, skipScale=True)
 
                     twistSpec.matrix = twistExportJoint.matrix(asTransformationMatrix=True)

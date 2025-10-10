@@ -93,10 +93,9 @@ class ChainComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
-        *chainSpecs, chainTipSpec = self.skeletonSpecs(flatten=True)
-        chainExportJoints = [chainSpec.getNode(referenceNode=referenceNode) for chainSpec in chainSpecs]
-        chainTipExportJoint = chainTipSpec.getNode(referenceNode=referenceNode)
+        *chainSpecs, chainTipSpec = self.skeleton(flatten=True)
+        chainExportJoints = [chainSpec.getNode() for chainSpec in chainSpecs]
+        chainTipExportJoint = chainTipSpec.getNode()
 
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)

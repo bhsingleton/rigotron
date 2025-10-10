@@ -68,9 +68,8 @@ class RootComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
         rootSpec, = self.skeleton()
-        rootExportJoint = rootSpec.getNode(referenceNode=referenceNode)
+        rootExportJoint = rootSpec.getNode()
         rootExportMatrix = rootExportJoint.worldMatrix()
 
         controlsGroup = self.scene(self.controlsGroup)

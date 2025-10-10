@@ -127,7 +127,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Evaluate parent matrix
         #
-        cogSpec, = self.pivots(flatten=True, force=True)
+        cogSpec, = self.pivots(force=True)
         requiresUpdating = cogSpec.parentMatrix.isEquivalent(om.MMatrix.kIdentity, tolerance=1e-3)
 
         if requiresUpdating or force:
@@ -212,11 +212,10 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
         pelvisSpec, nullSpec, *spineSpecs = self.skeleton(flatten=True, skipDisabled=False)
-        pelvisExportJoint = pelvisSpec.getNode(referenceNode=referenceNode)
-        spineNullJoint = nullSpec.getNode(referenceNode=referenceNode)
-        spineExportJoints = [spineSpec.getNode(referenceNode=referenceNode) for spineSpec in spineSpecs if spineSpec.enabled]
+        pelvisExportJoint = pelvisSpec.getNode()
+        spineNullJoint = nullSpec.getNode()
+        spineExportJoints = [spineSpec.getNode() for spineSpec in spineSpecs if spineSpec.enabled]
         firstSpineExportJoint, lastSpineExportJoint = spineExportJoints[0], spineExportJoints[-1]
 
         cogSpec, = self.pivots()
@@ -252,7 +251,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
             headComponent = headComponents[0]
             neckSpec, = headComponent.skeleton()
-            neckExportJoint = neckSpec.getNode(referenceNode=referenceNode)
+            neckExportJoint = neckSpec.getNode()
 
             spineTipPoint = neckExportJoint.translation(space=om.MSpace.kWorld)
 
@@ -297,7 +296,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
         if hasLegComponents:
 
-            legJoints = [legComponent.skeleton()[0].getNode(referenceNode=referenceNode) for legComponent in legComponents]
+            legJoints = [legComponent.skeleton()[0].getNode() for legComponent in legComponents]
             weight = 1.0 / numLegComponents
 
             waistCenter = sum([legJoint.translation(space=om.MSpace.kWorld) * weight for legJoint in legJoints], start=om.MVector.kZeroVector)
@@ -490,7 +489,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
         if hasClavicles:
 
-            clavicleJoints = [clavicleComponent.skeleton()[0].getNode(referenceNode=referenceNode) for clavicleComponent in clavicleComponents]
+            clavicleJoints = [clavicleComponent.skeleton()[0].getNode() for clavicleComponent in clavicleComponents]
             clavicleWeight = 1.0 / len(clavicleJoints)
             clavicleCenter = sum([clavicleJoint.translation(space=om.MSpace.kWorld) * clavicleWeight for clavicleJoint in clavicleJoints], start=om.MVector.kZeroVector)
 
@@ -880,9 +879,8 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
         pelvisSpec, nullSpec, *spineSpecs = self.skeleton(flatten=True, skipDisabled=False)
-        pelvisExportJoint = pelvisSpec.getNode(referenceNode=referenceNode)
+        pelvisExportJoint = pelvisSpec.getNode()
         pelvisMatrix = pelvisExportJoint.worldMatrix()
 
         cogSpec, = self.pivotSpecs()
@@ -949,7 +947,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
         if hasLegComponents:
 
-            legJoints = [legComponent.skeleton()[0].getNode(referenceNode=referenceNode) for legComponent in legComponents]
+            legJoints = [legComponent.skeleton()[0].getNode() for legComponent in legComponents]
             weight = 1.0 / numLegComponents
             waistCenter = sum([legJoint.translation(space=om.MSpace.kWorld) * weight for legJoint in legJoints], start=om.MVector.kZeroVector)
             waistMatrix = transformutils.createRotationMatrix(self.__default_component_matrix__) * transformutils.createTranslateMatrix([0.0, waistCenter.y, waistCenter.z])
