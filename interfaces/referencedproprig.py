@@ -237,4 +237,24 @@ class ReferencedPropRig(abstractinterface.AbstractInterface):
         else:
 
             log.debug('No stow component specified to attach to!')
+
+    def delete(self):
+        """
+        Removes this instance from the scene file.
+
+        :rtype: None
+        """
+
+        # Check if reference node exists
+        # If so, delete it!
+        #
+        referenceNode = self.scene(self.referenceNode)
+
+        if referenceNode is not None:
+
+            referenceNode.delete()
+
+        # Call parent method
+        #
+        return super(ReferencedPropRig, self).delete()
     # endregion
