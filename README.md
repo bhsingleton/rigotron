@@ -1,3 +1,5 @@
 # Rig o'tron
-A component based auto rigger for Maya.  
-Disclaimer: At this time the tool is undergoing a major refactor and is currently unstable for any sort of use!
+A python based rigging framework for Maya designed for Unreal Engine in mind.  
+Supports both referenced and non-referenced skeletons allowing for referenced skins to improve file load times.  
+  
+<img width="1117" height="753" alt="Rigotron" src="https://github.com/user-attachments/assets/43467f49-c977-4d11-ac6a-7d2d63c83e2a" />
