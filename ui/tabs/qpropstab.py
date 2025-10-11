@@ -5,6 +5,7 @@ from dcc.generators.inclusiverange import inclusiveRange
 from dcc.maya.decorators import undo
 from dcc.collections import weakreflist
 from dcc.ui import qsignalblocker
+from dcc.ui.validators import qslugvalidator
 from dcc.vendor.Qt import QtCore, QtWidgets, QtGui
 from enum import IntEnum
 from . import qabstracttab
@@ -144,10 +145,13 @@ class QPropsTab(qabstracttab.QAbstractTab):
         self.namespaceLabel.setFixedSize(QtCore.QSize(64, 24))
         self.namespaceLabel.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
 
+        self.nameValidator = qslugvalidator.QSlugValidator(parent=self)
+
         self.namespaceLineEdit = QtWidgets.QLineEdit()
         self.namespaceLineEdit.setObjectName('namespaceLineEdit')
         self.namespaceLineEdit.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
         self.namespaceLineEdit.setFixedHeight(24)
+        self.namespaceLineEdit.setValidator(self.nameValidator)
         self.namespaceLineEdit.setToolTip('The namespace for the referenced nodes.')
         self.namespaceLineEdit.returnPressed.connect(self.on_lineEdit_returnPressed)
         self.namespaceLineEdit.editingFinished.connect(self.on_namespaceLineEdit_editingFinished)
@@ -190,6 +194,7 @@ class QPropsTab(qabstracttab.QAbstractTab):
         self.animCurveLineEdit.setObjectName('animCurveLineEdit')
         self.animCurveLineEdit.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
         self.animCurveLineEdit.setFixedHeight(24)
+        self.animCurveLineEdit.setValidator(self.nameValidator)
         self.animCurveLineEdit.setToolTip('[Optional] The name for a custom attribute to bake animation onto.')
         self.animCurveLineEdit.returnPressed.connect(self.on_lineEdit_returnPressed)
         self.animCurveLineEdit.editingFinished.connect(self.on_stowLineEdit_editingFinished)
