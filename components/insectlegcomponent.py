@@ -235,19 +235,21 @@ class InsectLegComponent(limbcomponent.LimbComponent):
 
         # Decompose component
         #
-        coxaSpec, femurSpec, tibiaSpec, tibiaTipSpec = self.skeletonSpecs()
-        coxaExportJoint = self.scene(coxaSpec.uuid)
-        femurExportJoint = self.scene(femurSpec.uuid)
-        tibiaExportJoint = self.scene(tibiaSpec.uuid)
-        tibiaTipExportJoint = self.scene(tibiaTipSpec.uuid)
+        coxaSpec, femurSpec, tibiaSpec, tibiaTipSpec = self.skeletonSpecs(flatten=True)
 
         coxaEnabled = bool(coxaSpec.enabled)
-        coxaExportMatrix = coxaExportJoint.worldMatrix() if coxaEnabled else om.MMatrix.kIdentity
+        coxaExportJoint = coxaSpec.getNode() if coxaEnabled else None
+        coxaExportMatrix = coxaExportJoint.worldMatrix() if (coxaExportJoint is not None) else om.MMatrix.kIdentity
+        
+        femurExportJoint = femurSpec.getNode()
         femurExportMatrix = femurExportJoint.worldMatrix()
+
+        tibiaExportJoint = tibiaSpec.getNode()
         tibiaExportMatrix = tibiaExportJoint.worldMatrix()
 
         extremityMatrix = self.extremityMatrix()
         defaultTibiaTipMatrix = transformutils.createRotationMatrix(tibiaExportMatrix) * transformutils.createTranslateMatrix(extremityMatrix)
+        tibiaTipExportJoint = tibiaTipSpec.getNode()
         tibiaTipMatrix = tibiaTipExportJoint.worldMatrix() if (tibiaTipExportJoint is not None) else defaultTibiaTipMatrix
         tibiaTipPoint = transformutils.breakMatrix(tibiaTipMatrix)[3]
 

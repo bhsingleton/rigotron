@@ -98,8 +98,8 @@ class DynamicPivotComponent(leafcomponent.LeafComponent):
 
         # Decompose component
         #
-        leafSpec, = self.skeletonSpecs()
-        leafExportJoint = leafSpec
+        leafSpec, = self.skeleton()
+        leafExportJoint = leafSpec.getNode()
         leafExportMatrix = leafExportJoint.worldMatrix()
 
         controlsGroup = self.scene(self.controlsGroup)

@@ -1092,7 +1092,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
                     # Create toe control
                     #
                     toeIndex = i + 1
-                    toeExportJoint = self.scene(toeSpec.uuid)
+                    toeExportJoint = toeSpec.getNode()
                     toeParent = toeCtrls[i - 1] if (i > 0) else masterToeCtrl
                     toeAlias = f'{fullToeName}{str(toeIndex).zfill(2)}'
 

@@ -1,7 +1,9 @@
+import sys
+
 from maya.api import OpenMaya as om
 from mpy import mpynode, mpyattribute
 from enum import IntEnum
-from itertools import chain
+from dcc.math import floatmath
 from dcc.maya.libs import transformutils, plugutils
 from . import basecomponent
 from ..libs import Side, skeletonspec
@@ -56,7 +58,6 @@ class LowerFaceType(IntEnum):
     UPPER_LIPS = 0
     UPPER_TEETH = 1
     JAW = 2
-    THROAT = 3
 
 
 class JawType(IntEnum):
@@ -66,8 +67,10 @@ class JawType(IntEnum):
 
     TONGUE = 0
     LOWER_TEETH = 1
-    LOWER_LIPS = 2
-    CHIN = 3
+    LEFT_LIP_CORNER = 2
+    LOWER_LIPS = 3
+    RIGHT_LIP_CORNER = 4
+    CHIN = 5
 
 
 class FaceComponent(basecomponent.BaseComponent):
@@ -222,10 +225,9 @@ class FaceComponent(basecomponent.BaseComponent):
             )
         },
         FaceType.LOWER: {
-            LowerFaceType.JAW: om.MMatrix(
-
-            ),
-
+            LowerFaceType.UPPER_LIPS: om.MMatrix.kIdentity,
+            LowerFaceType.UPPER_TEETH: om.MMatrix.kIdentity,
+            LowerFaceType.JAW: om.MMatrix.kIdentity
         }
     }
     # endregion
@@ -241,7 +243,7 @@ class FaceComponent(basecomponent.BaseComponent):
     rightBrowCount = mpyattribute.MPyAttribute('rightBrowCount', attributeType='int', min=0, max=5, default=2)
     browSettings = mpyattribute.MPyAttribute('browSettings', attributeType='compound', children=('centerBrowCount', 'leftBrowCount', 'rightBrowCount'))
 
-    centerEyeCount = mpyattribute.MPyAttribute('centerEyeCount', attributeType='int', min=0, max=3, default=1)
+    centerEyeCount = mpyattribute.MPyAttribute('centerEyeCount', attributeType='int', min=0, max=3)
     leftEyeCount = mpyattribute.MPyAttribute('leftEyeCount', attributeType='int', min=0, max=3, default=1)
     rightEyeCount = mpyattribute.MPyAttribute('rightEyeCount', attributeType='int', min=0, max=3, default=1)
     eyeSettings = mpyattribute.MPyAttribute('eyeSettings', attributeType='compound', children=('centerEyeCount', 'leftEyeCount', 'rightEyeCount', 'eyelidsEnabled'))
@@ -262,8 +264,9 @@ class FaceComponent(basecomponent.BaseComponent):
     jawEnabled = mpyattribute.MPyAttribute('jawEnabled', attributeType='bool', default=True)
     teethEnabled = mpyattribute.MPyAttribute('teethEnabled', attributeType='bool', default=False)
     tongueCount = mpyattribute.MPyAttribute('tongueCount', attributeType='int', min=0, max=9, default=3)
+    lipsEnabled = mpyattribute.MPyAttribute('lipsEnabled', attributeType='bool', default=True)
+    lipSubdivisions = mpyattribute.MPyAttribute('lipSubdivisions', attributeType='int', min=1, max=9, default=3)
     chinEnabled = mpyattribute.MPyAttribute('chinEnabled', attributeType='bool', default=True)
-    throatEnabled = mpyattribute.MPyAttribute('throatEnabled', attributeType='bool', default=True)
     jawSettings = mpyattribute.MPyAttribute('jawSettings', attributeType='compound', children=('jawEnabled', 'teethEnabled', 'tongueCount', 'throatEnabled', 'chinEnabled'))
 
     @faceEnabled.changed
@@ -430,17 +433,6 @@ class FaceComponent(basecomponent.BaseComponent):
         """
 
         self.markSkeletonDirty()
-
-    @throatEnabled.changed
-    def throatEnabled(self, throatEnabled):
-        """
-        Changed method that notifies of any state changes.
-
-        :type throatEnabled: bool
-        :rtype: None
-        """
-
-        self.markSkeletonDirty()
     # endregion
 
     # region Methods
@@ -521,7 +513,7 @@ class FaceComponent(basecomponent.BaseComponent):
             browSpec.otherType = 'Brow'
             browSpec.driver.name = self.formatName(side=browSide, name='Brow', type='control')
 
-            browSpecs = self.resizeSkeletonSpecs(browSize, browSpec)
+            browSpecs = self.resizeSkeleton(browSize, browSpec)
 
             for (i, spec) in enumerate(browSpecs):
 
@@ -577,7 +569,7 @@ class FaceComponent(basecomponent.BaseComponent):
                 eyeSocketSpec.defaultMatrix = defaultEyeMatrix
                 eyeSocketSpec.driver.name = self.formatName(side=eyeSide, name='EyeSocket', index=eyeIndex, type='control')
 
-                upperEyelidSpec, eyeSpec, lowerEyelidSpec = self.resizeSkeletonSpecs(3, eyeSocketSpec)
+                upperEyelidSpec, eyeSpec, lowerEyelidSpec = self.resizeSkeleton(3, eyeSocketSpec)
 
                 upperEyelidSpec.enabled = eyeSocketSpec.enabled
                 upperEyelidSpec.name = self.formatName(side=eyeSide, name='UpperEyelid', index=eyeIndex)
@@ -692,6 +684,9 @@ class FaceComponent(basecomponent.BaseComponent):
         #
         noseEnabled = bool(self.noseEnabled)
 
+        initialNoseMatrix = om.MMatrix(self.__default_component_matrices__[self.FaceType.MID][self.MidFaceType.NOSE][self.Side.CENTER])
+        defaultNoseMatrix = initialNoseMatrix * defaultParentMatrix
+
         noseSpec = midFaceSpecs[self.MidFaceType.NOSE]
         noseSpec.enabled = noseEnabled
         noseSpec.name = self.formatName(name='Nose')
@@ -699,7 +694,7 @@ class FaceComponent(basecomponent.BaseComponent):
         noseSpec.type = self.Type.OTHER
         noseSpec.otherType = 'Nose'
         noseSpec.drawStyle = self.Style.BOX
-        noseSpec.defaultMatrix = om.MMatrix(self.__default_component_matrices__[self.FaceType.MID][self.MidFaceType.NOSE][self.Side.CENTER])
+        noseSpec.defaultMatrix = defaultNoseMatrix
         noseSpec.driver.name = self.formatName(name='Nose', type='control')
 
         noseTipSpec, leftNostrilSpec, rightNostrilSpec = self.resizeSkeleton(3, noseSpec, hierarchical=False)
@@ -715,7 +710,7 @@ class FaceComponent(basecomponent.BaseComponent):
             nostrilSpec.otherType = nostrilName
             nostrilSpec.defaultMatrix = om.MMatrix(self.__default_component_matrices__[self.FaceType.MID][self.MidFaceType.NOSE][nostrilSide])
             nostrilSpec.driver.name = self.formatName(side=nostrilSide, name=nostrilName, type='control')
-        
+
         # Resize lower-face specs
         #
         lowerFaceSpec.name = self.formatName(name=f'Lower{faceName}')
@@ -742,6 +737,9 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Edit jaw spec
         #
+        initialJawMatrix = om.MMatrix(self.__default_component_matrices__[self.FaceType.LOWER][self.LowerFaceType.JAW])
+        defaultJawMatrix = initialJawMatrix * defaultParentMatrix
+
         jawSpec = lowerFaceSpecs[self.LowerFaceType.JAW]
         jawSpec.enabled = jawEnabled
         jawSpec.name = self.formatName(name='Jaw')
@@ -749,6 +747,7 @@ class FaceComponent(basecomponent.BaseComponent):
         jawSpec.type = self.Type.OTHER
         jawSpec.otherType = 'Jaw'
         jawSpec.drawStyle = self.Style.BOX
+        jawSpec.defaultMatrix = defaultJawMatrix
         jawSpec.driver.name = self.formatName(name='Jaw', type='control')
 
         jawSize = len(self.JawType)
@@ -756,11 +755,12 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Edit tongue specs
         #
-        tongueCount = int(self.tongueCount)
+        tongueCount = floatmath.clamp(self.tongueCount, 1, sys.maxsize)
         tongueEnabled = (tongueCount > 0) and jawEnabled
+        initialTongueMatrix = om.MMatrix(self.__default_component_matrices__[self.FaceType.J][self.JawType.TONGUE])
 
         tongueBaseSpec = jawSpecs[self.JawType.TONGUE]
-        *tongueSpecs, tongueTipSpec = self.resizeSkeletonSpecs(tongueCount, tongueBaseSpec)
+        *tongueSpecs, tongueTipSpec = self.resizeSkeleton(tongueCount, tongueBaseSpec, hierarchical=True)
 
         for (i, tongueSpec) in enumerate(tongueSpecs, start=1):
 
@@ -769,20 +769,22 @@ class FaceComponent(basecomponent.BaseComponent):
             tongueSpec.side = faceSide
             tongueSpec.type = self.Type.OTHER
             tongueSpec.otherType = 'Tongue'
+            tongueSpec.defaultMatrix = transformutils.createTranslateMatrix((1.5, 0.0, 0.0))
             tongueSpec.driver.name = self.formatName(name='Tongue', index=i, type='control')
 
-        tongueTipSpec.enabled = False
+        tongueTipSpec.enabled = tongueEnabled
         tongueTipSpec.name = self.formatName(name='TongueTip')
         tongueTipSpec.side = faceSide
         tongueTipSpec.type = self.Type.OTHER
         tongueTipSpec.otherType = 'Tongue'
+        tongueTipSpec.defaultMatrix = transformutils.createTranslateMatrix((1.5, 0.0, 0.0))
         tongueTipSpec.driver.name = self.formatName(name='TongueTip', type='target')
 
         # Edit lower teeth spec
         #
         teethEnabled = bool(self.teethEnabled) and jawEnabled
 
-        lowerTeethSpec = jawSpecs[self.LowerFaceType.LOWER_TEETH]
+        lowerTeethSpec = jawSpecs[self.JawType.LOWER_TEETH]
         lowerTeethSpec.enabled = teethEnabled
         lowerTeethSpec.name = self.formatName(name='LowerTeeth')
         lowerTeethSpec.side = faceSide
@@ -794,25 +796,13 @@ class FaceComponent(basecomponent.BaseComponent):
         #
         chinEnabled = bool(self.chinEnabled) and jawEnabled
 
-        chinSpec = lowerFaceSpecs[self.LowerFaceType.CHIN]
+        chinSpec = jawSpecs[self.JawType.CHIN]
         chinSpec.enabled = chinEnabled
         chinSpec.name = self.formatName(name='Chin')
         chinSpec.side = faceSide
         chinSpec.type = self.Type.OTHER
         chinSpec.otherType = 'Chin'
         chinSpec.driver.name = self.formatName(name='Chin', type='control')
-
-        # Edit throat spec
-        #
-        throatEnabled = bool(self.throatEnabled) and chinEnabled
-
-        throatSpec = lowerFaceSpecs[self.LowerFaceType.THROAT]
-        throatSpec.enabled = throatEnabled
-        throatSpec.name = self.formatName(name='Throat')
-        throatSpec.side = faceSide
-        throatSpec.type = self.Type.OTHER
-        throatSpec.otherType = 'Throat'
-        throatSpec.driver.name = self.formatName(name='Throat', type='control')
 
         # Call parent method
         #
@@ -887,8 +877,7 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Create forehead control
         #
-        referenceNode = self.skeletonReference()
-        foreheadExportJoint = foreheadSpec.getNode(referenceNode=referenceNode)
+        foreheadExportJoint = foreheadSpec.getNode()
         foreheadExportMatrix = foreheadExportJoint.worldMatrix()
 
         foreheadSpace, foreheadGroup, foreheadCtrl = self.createFaceControl({'name': 'Forehead'}, matrix=foreheadExportMatrix, parent=parent)
@@ -916,8 +905,6 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Iterate through brow specs
         #
-        referenceNode = self.skeletonReference()
-
         for (side, browsSpec) in ((self.Side.CENTER, centerBrowsSpec), (self.Side.LEFT, leftBrowsSpec), (self.Side.RIGHT, rightBrowsSpec)):
 
             # Check if brow was enabled
@@ -933,7 +920,7 @@ class FaceComponent(basecomponent.BaseComponent):
             mirrorSign = -1.0 if (side == self.Side.RIGHT) else 1.0
             mirrorMatrix = self.__default_mirror_matrices__[side]
 
-            browExportJoints = [spec.getNode(referenceNode=referenceNode) for spec in browsSpec.children]
+            browExportJoints = [spec.getNode() for spec in browsSpec.children]
             browExportPoints = [om.MPoint(browExportJoint.translation(space=om.MSpace.kWorld)) for browExportJoint in browExportJoints]
 
             boundingBox = om.MBoundingBox()
@@ -980,7 +967,7 @@ class FaceComponent(basecomponent.BaseComponent):
             #
             masterBrowCtrl.tagAsController(parent=parent, children=browCtrls)
 
-    def buildEyeRigs(self, centerEyesSpec, leftEyesSpec, rightEyesSpec, scale=1.0, radius=0.5, parent=None):
+    def buildEyeRigs(self, centerEyesSpec, leftEyesSpec, rightEyesSpec, scale=1.0, diameter=0.5, parent=None):
         """
         Builds the eye rigs.
 
@@ -988,7 +975,7 @@ class FaceComponent(basecomponent.BaseComponent):
         :type leftEyesSpec: skeletonspec.SkeletonSpec
         :type rightEyesSpec: skeletonspec.SkeletonSpec
         :type scale: float
-        :type radius: float
+        :type diameter: float
         :type parent: mpynode.MPyNode
         :rtype: None
         """
@@ -1001,14 +988,13 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Calculate eye look-at origin
         #
-        referenceNode = self.skeletonReference()
         boundingBox = om.MBoundingBox()
 
         for eyesSpec in (centerEyesSpec, leftEyesSpec, rightEyesSpec):
 
             for eyeSocketSpec in eyesSpec.children:
 
-                eyeSocketExportJoint = eyeSocketSpec.getNode(referenceNode=referenceNode)
+                eyeSocketExportJoint = eyeSocketSpec.getNode()
                 eyeSocketPoint = om.MPoint(transformutils.breakMatrix(eyeSocketExportJoint.worldMatrix())[3])
 
                 boundingBox.expand(eyeSocketPoint)
@@ -1032,7 +1018,7 @@ class FaceComponent(basecomponent.BaseComponent):
         eyesLookAtCtrlName = self.formatName(name='Eyes', subname='LookAt', type='control')
         eyesLookAtCtrl = self.scene.createNode('transform', name=eyesLookAtCtrlName, parent=eyesLookAtGroup)
         eyesLookAtCtrl.addDivider('Settings')
-        eyesLookAtCtrl.addAttr(longName='lookAtOffset', attributeType='distance', min=0.0, default=radius, channelBox=True)
+        eyesLookAtCtrl.addAttr(longName='lookAtOffset', attributeType='distance', min=0.0, default=diameter, channelBox=True)
         eyesLookAtCtrl.addDivider('Spaces')
         eyesLookAtCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
         eyesLookAtCtrl.prepareChannelBoxForAnimation()
@@ -1074,7 +1060,7 @@ class FaceComponent(basecomponent.BaseComponent):
                 index = (i + 1) if (eyeCount > 1) else None
                 paddedIndex = str(index).zfill(2)
 
-                eyeSocketExportJoint = eyeSocketSpec.getNode(referenceNode=referenceNode)
+                eyeSocketExportJoint = eyeSocketSpec.getNode()
                 eyeSocketExportMatrix = eyeSocketExportJoint.worldMatrix()
                 eyeSocketMatrix = mirrorMatrix * eyeSocketExportMatrix
 
@@ -1086,7 +1072,7 @@ class FaceComponent(basecomponent.BaseComponent):
                 #
                 upperEyelidSpec, eyeSpec, lowerEyelidSpec = eyeSocketSpec.children
 
-                eyeExportJoint = eyeSpec.getNode(referenceNode=referenceNode)
+                eyeExportJoint = eyeSpec.getNode()
                 eyeExportMatrix = eyeExportJoint.worldMatrix()
                 eyeMatrix = mirrorMatrix * eyeExportMatrix
 
@@ -1114,11 +1100,11 @@ class FaceComponent(basecomponent.BaseComponent):
 
                 # Create soft eyelid group
                 #
-                upperEyelidExportJoint = upperEyelidSpec.getNode(referenceNode=referenceNode)
+                upperEyelidExportJoint = upperEyelidSpec.getNode()
                 upperEyelidExportMatrix = upperEyelidExportJoint.worldMatrix()
                 upperEyelidMatrix = mirrorMatrix * upperEyelidExportMatrix
 
-                lowerEyelidExportJoint = self.scene(lowerEyelidSpec.uuid)
+                lowerEyelidExportJoint = lowerEyelidSpec.getNode()
                 lowerEyelidExportMatrix = lowerEyelidExportJoint.worldMatrix()
                 lowerEyelidMatrix = mirrorMatrix * lowerEyelidExportMatrix
 
@@ -1270,7 +1256,7 @@ class FaceComponent(basecomponent.BaseComponent):
                 # Create ear control
                 #
                 earSpec = earSpecs[0]
-                earExportJoint = earSpec.getNode(referenceNode=referenceNode)
+                earExportJoint = earSpec.getNode()
                 earExportMatrix = earExportJoint.worldMatrix()
                 earMatrix = mirrorMatrix * earExportMatrix
 
@@ -1294,7 +1280,7 @@ class FaceComponent(basecomponent.BaseComponent):
                     paddedIndex = str(index).zfill(2)
                     previousEarCtrl = earCtrls[i - 1] if (i > 0) else parent
 
-                    earExportJoint = earSpec.getNode(referenceNode=referenceNode)
+                    earExportJoint = earSpec.getNode()
                     earExportMatrix = earExportJoint.worldMatrix()
                     earMatrix = mirrorMatrix * earExportMatrix
 
@@ -1343,7 +1329,7 @@ class FaceComponent(basecomponent.BaseComponent):
         # Create nose control
         #
         referenceNode = self.skeletonReference()
-        noseExportJoint = noseSpec.getNode(referenceNode=referenceNode)
+        noseExportJoint = noseSpec.getNode()
         noseExportMatrix = noseExportJoint.worldMatrix()
 
         noseSpace, noseGroup, noseCtrl = self.createFaceControl({'name': 'Nose'}, parent=parent, matrix=noseExportMatrix)
@@ -1360,7 +1346,7 @@ class FaceComponent(basecomponent.BaseComponent):
             sideChar = side.name[0].upper()
             mirrorMatrix = self.__default_mirror_matrices__[side]
 
-            nostrilExportJoint = nostrilSpec.getNode(referenceNode=referenceNode)
+            nostrilExportJoint = nostrilSpec.getNode()
             nostrilExportMatrix = nostrilExportJoint.worldMatrix()
             nostrilMatrix = mirrorMatrix * nostrilExportMatrix
 
@@ -1374,7 +1360,7 @@ class FaceComponent(basecomponent.BaseComponent):
         # Create nose tip control
         #
         noseTipSpec = noseSpec.groups[self.Side.NONE]
-        noseTipExportJoint = noseTipSpec.getNode(referenceNode=referenceNode)
+        noseTipExportJoint = noseTipSpec.getNode()
         noseTipExportMatrix = noseTipExportJoint.worldMatrix()
 
         noseTipSpace, noseTipGroup, noseTipCtrl = self.createFaceControl({'name': 'NoseTip'}, parent=noseCtrl, matrix=noseTipExportMatrix)
@@ -1422,7 +1408,7 @@ class FaceComponent(basecomponent.BaseComponent):
                 index = i + 1
                 paddedIndex = str(index).zfill(2)
 
-                cheekExportJoint = cheekSpec.getNode(referenceNode=referenceNode)
+                cheekExportJoint = cheekSpec.getNode()
                 cheekExportMatrix = cheekExportJoint.worldMatrix()
                 cheekMatrix = mirrorMatrix * cheekExportMatrix
 
@@ -1433,16 +1419,13 @@ class FaceComponent(basecomponent.BaseComponent):
 
                 cheekCtrls[i] = cheekCtrl
 
-    def buildJawRig(self, jawSpec, teethSpec, tongueSpec, chinSpec, throatSpec, scale=1.0):
+    def buildJawRig(self, jawSpec, scale=1.0, parent=None):
         """
         Builds the jaw rig.
 
         :type jawSpec: skeletonspec.SkeletonSpec
-        :type teethSpec: skeletonspec.SkeletonSpec
-        :type tongueSpec: skeletonspec.SkeletonSpec
-        :type chinSpec: skeletonspec.SkeletonSpec
-        :type throatSpec: skeletonspec.SkeletonSpec
-        :type rigScale: float
+        :type scale: float
+        :type parent: mpynode.MPyNode
         :rtype: None
         """
 
@@ -1454,10 +1437,10 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Create jaw control
         #
-        faceCtrl = self.getPublishedNode('Face')
-        jawExportJoint = self.scene(jawSpec.uuid)
+        jawExportJoint = jawSpec.getNode()
+        jawExportMatrix = jawExportJoint.worldMatrix()
 
-        jawSpace, jawGroup, jawCtrl = self.createFaceControl({'name': 'Jaw'}, matrix=jawExportJoint, parent=faceCtrl)
+        jawSpace, jawGroup, jawCtrl = self.createFaceControl({'name': 'Jaw'}, matrix=jawExportMatrix, parent=parent)
         jawCtrl.addShape('WedgeCurve', size=(2.0 * scale), localPosition=(-10.0 * scale, 7.5 * scale, 0.0), localRotate=(0.0, 0.0, 90.0), side=self.Side.CENTER)
         jawCtrl.prepareChannelBoxForAnimation()
         self.publishNode(jawCtrl, alias='Jaw')
@@ -1467,21 +1450,14 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Check if teeth were enabled
         #
-        upperTeethSpec, lowerTeethSpec = teethSpec.children
+        lowerTeethSpec = jawSpec.children[self.JawType.LOWER_TEETH]
 
-        if upperTeethSpec.enabled and lowerTeethSpec.enabled:
+        if lowerTeethSpec.enabled:
 
-            upperTeethExportJoint = self.scene(upperTeethSpec.uuid)
+            lowerTeethExportJoint = lowerTeethSpec.getNode()
+            lowerTeethExportMatrix = lowerTeethExportJoint.worldMatrix()
 
-            upperTeethSpace, upperTeethGroup, upperTeethCtrl = self.createFaceControl({'name': 'UpperTeeth'}, matrix=upperTeethExportJoint, parent=jawCtrl)
-            upperTeethCtrl.addPointHelper('box', size=(2.0 * scale), localScale=(0.5, 1.0, 2.0), localRotate=(0.0, 0.0, 90.0), side=self.Side.CENTER)
-            upperTeethCtrl.prepareChannelBoxForAnimation()
-            upperTeethCtrl.tagAsController(parent=jawCtrl)
-            self.publishNode(upperTeethCtrl, alias='UpperTeeth')
-
-            lowerTeethExportJoint = self.scene(lowerTeethSpec.uuid)
-
-            lowerTeethSpace, lowerTeethGroup, lowerTeethCtrl = self.createFaceControl({'name': 'LowerTeeth'}, matrix=lowerTeethExportJoint, parent=jawCtrl)
+            lowerTeethSpace, lowerTeethGroup, lowerTeethCtrl = self.createFaceControl({'name': 'LowerTeeth'}, matrix=lowerTeethExportMatrix, parent=jawCtrl)
             lowerTeethCtrl.addPointHelper('box', size=(2.0 * scale), localScale=(0.5, 1.0, 2.0), side=self.Side.CENTER)
             lowerTeethCtrl.prepareChannelBoxForAnimation()
             lowerTeethCtrl.tagAsController(parent=jawCtrl)
@@ -1489,79 +1465,66 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Check if the tongue was enabled
         #
-        tongueCount = len(tongueSpec.children)
-        tongueEnabled = tongueCount > 0
+        tongueBaseSpec = jawSpec.children[self.JawType.TONGUE]
 
-        if tongueEnabled:
+        if tongueBaseSpec.enabled:
+
+            *tongueSpecs, tongueTipSpec = self.flattenSpecs(tongueBaseSpec)
+            tongueCount = len(tongueSpecs)
 
             tongueCtrls = [None] * tongueCount
 
-            for (i, spec) in enumerate(tongueSpec.children):
+            for (i, spec) in enumerate(tongueSpecs):
 
-                exportJoint = self.scene(spec.uuid)
                 index = i + 1
                 parent = jawCtrl if (i == 0) else tongueCtrls[i - 1]
+                tongueExportJoint = spec.getNode()
+                tongueExportMatrix = tongueExportJoint.worldMatrix()
 
-                tongueSpace, tongueGroup, tongueCtrl = self.createFaceControl({'name': 'Tongue', 'index': index}, matrix=exportJoint, parent=parent)
+                tongueSpace, tongueGroup, tongueCtrl = self.createFaceControl({'name': 'Tongue', 'index': index}, matrix=tongueExportMatrix, parent=parent)
                 tongueCtrl.addPointHelper('box', size=(2.0 * scale), localScale=(1.0, 0.5, 2.0), side=self.Side.CENTER)
                 tongueCtrl.prepareChannelBoxForAnimation()
                 tongueCtrl.tagAsController(parent=jawCtrl)
                 self.publishNode(tongueCtrl, alias=f'Tongue{str(i).zfill(2)}')
 
+            tongueTipExportJoint = tongueTipSpec.getNode()
+            tongueTipExportMatrix = tongueTipExportJoint.worldMatrix()
+
+            tongueTipTargetName = self.formatName(name='TongueTip', type='target')
+            tongueTipTarget = self.scene.createNode('transform', name=tongueTipTargetName, parent=tongueCtrls[-1])
+            tongueTipTarget.setWorldMatrix(tongueTipExportMatrix, skipScale=True)
+            tongueTipTarget.displayLocalAxis = True
+            tongueTipTarget.visibility = False
+            tongueTipTarget.freezeTransform()
+            tongueTipTarget.lock()
+
         # Check if chin was enabled
         #
+        chinSpec = jawSpec.children[self.JawType.CHIN]
+
         if chinSpec.enabled:
 
-            chinExportJoint = self.scene(chinSpec.uuid)
+            chinExportJoint = chinSpec.getNode()
+            chinExportMatrix = chinExportJoint.worldMatrix()
 
-            chinSpace, chinGroup, chinCtrl = self.createFaceControl({'name': 'Chin'}, matrix=chinExportJoint, parent=jawCtrl)
+            chinSpace, chinGroup, chinCtrl = self.createFaceControl({'name': 'Chin'}, matrix=chinExportMatrix, parent=jawCtrl)
             chinCtrl.addPointHelper('disc', size=(2.0 * scale), localPosition=(0.0, 4.0 * scale, 0.0), localRotate=(0.0, 0.0, 90.0), side=self.Side.CENTER)
             chinCtrl.prepareChannelBoxForAnimation()
             self.publishNode(chinCtrl, alias='Chin')
 
             chinCtrl.tagAsController(parent=jawCtrl)
 
-        # Check if throat was enabled
-        #
-        if throatSpec.enabled:
-
-            # Create throat control
-            #
-            throatExportJoint = self.scene(throatSpec.uuid)
-
-            throatSpaceName = self.formatName(name='Throat', type='space')
-            throatSpace = self.scene.createNode('transform', name=throatSpaceName, parent=faceCtrl)
-            throatSpace.copyTransform(throatExportJoint)
-            throatSpace.freezeTransform()
-
-            throatGroupName = self.formatName(name='Throat', type='transform')
-            throatGroup = self.scene.createNode('transform', name=throatGroupName, parent=throatSpace)
-
-            throatCtrl = self.scene.createNode('transform', name=throatSpec.driver, parent=throatGroup)
-            throatCtrl.addShape('CrownCurve', side=self.Side.CENTER)
-            throatCtrl.prepareChannelBoxForAnimation()
-            throatCtrl.tagAsController(parent=jawCtrl)
-            self.publishNode(throatCtrl, alias='Throat')
-
-            throatCtrl.tagAsController(parent=jawCtrl)
-
-            # Constraint throat control
-            #
-            faceCtrl, chinCtrl = self.getPublishedNode('Face'), self.getPublishedNode('Chin')
-
-            throatSpace.addConstraint('transformConstraint', [faceCtrl, chinCtrl], maintainOffset=True, skipRotate=True)
-            throatSpace.addConstraint('aimConstraint', [chinCtrl], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpVector=(0.0, 0.0, 1.0), worldUpObject=chinCtrl, maintainOffset=True)
-
         # Tag controls
         #
-        jawCtrl.tagAsController(parent=faceCtrl)
+        jawCtrl.tagAsController(parent=parent)
 
-    def buildLipRigs(self, lipsSpec, scale=1.0):
+    def buildLipRigs(self, lipsSpec, scale=1.0, parent=None):
         """
         Builds the lip rigs.
 
         :type lipsSpec: skeletonspec.SkeletonSpec
         :type scale: float
+        :type parent: mpynode.MPyNode
         :rtype: None
         """
 
@@ -1585,7 +1548,7 @@ class FaceComponent(basecomponent.BaseComponent):
         faceCtrl = self.getPublishedNode('Face')
         jawCtrl = self.getPublishedNode('Jaw')
 
-        leftCornerLipExportJoint = self.scene(leftCornerLipSpec.uuid)
+        leftCornerLipExportJoint = leftCornerLipSpec.getNode()
         leftCornerLipSpace, leftCornerLipGroup, leftCornerLipCtrl = self.createFaceControl({'side': self.Side.LEFT, 'name': 'CornerLip'}, parent=faceCtrl, matrix=leftCornerLipExportJoint)
         leftCornerLipSpace.addConstraint('transformConstraint', [faceCtrl, jawCtrl], maintainOffset=True)
         leftCornerLipCtrl.addPointHelper('box', 'cross', size=1.0, side=self.Side.LEFT)
@@ -1606,7 +1569,7 @@ class FaceComponent(basecomponent.BaseComponent):
         leftUpperCornerLipCtrl.tagAsController(parent=leftCornerLipCtrl)
         leftLowerCornerLipCtrl.tagAsController(parent=leftCornerLipCtrl)
 
-        rightCornerLipExportJoint = self.scene(rightCornerLipSpec.uuid)
+        rightCornerLipExportJoint = rightCornerLipSpec.getNode()
         rightCornerLipSpace, rightCornerLipGroup, rightCornerLipCtrl = self.createFaceControl({'side': self.Side.RIGHT, 'name': 'CornerLip'}, parent=faceCtrl, matrix=rightCornerLipExportJoint)
         rightCornerLipSpace.addConstraint('transformConstraint', [faceCtrl, jawCtrl], maintainOffset=True)
         rightCornerLipCtrl.addPointHelper('box', 'cross', size=1.0, side=self.Side.RIGHT)
@@ -1630,7 +1593,7 @@ class FaceComponent(basecomponent.BaseComponent):
         # Create upper-lip macro controls
         #
         centerUpperLipSpec = centerUpperLipSpecs[0]
-        centerUpperLipExportJoint = self.scene(centerUpperLipSpec.uuid)
+        centerUpperLipExportJoint = centerUpperLipSpec.getNode()
 
         centerUpperLipSpace, centerUpperLipGroup, centerUpperLipCtrl = self.createFaceControl({'side': self.Side.CENTER, 'name': 'UpperLip'}, parent=faceCtrl, matrix=centerUpperLipExportJoint)
         centerUpperLipCtrl.addPointHelper('box', 'cross', size=1.0, side=self.Side.CENTER)
@@ -1768,7 +1731,7 @@ class FaceComponent(basecomponent.BaseComponent):
         # Create lower-lip macro controls
         #
         centerLowerLipSpec = centerLowerLipSpecs[0]
-        centerLowerLipExportJoint = self.scene(centerLowerLipSpec.uuid)
+        centerLowerLipExportJoint = centerLowerLipSpec.getNode()
 
         centerLowerLipSpace, centerLowerLipGroup, centerLowerLipCtrl = self.createFaceControl({'side': self.Side.CENTER, 'name': 'LowerLip'}, parent=faceCtrl, matrix=centerLowerLipExportJoint)
         centerLowerLipSpace.addConstraint('transformConstraint', [jawCtrl], maintainOffset=True)
@@ -1980,7 +1943,7 @@ class FaceComponent(basecomponent.BaseComponent):
     
                     constraint.connectPlugs(worldUpVector['outFloat'], 'worldUpVector')
 
-                    lipExportJoint = self.scene(lipSpec.uuid)
+                    lipExportJoint = lipSpec.getNode()
                     lipExportJoint.copyTransform(lipCtrl)
 
     def buildRig(self):
@@ -1992,8 +1955,7 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        referenceNode = self.skeletonReference()
-        faceSpec, = self.skeletonSpecs()
+        faceSpec, = self.skeleton()
         upperFaceSpec = faceSpec.children[self.FaceType.UPPER]
         midFaceSpec = faceSpec.children[self.FaceType.MID]
         lowerFaceSpec = faceSpec.children[self.FaceType.LOWER]
@@ -2003,15 +1965,15 @@ class FaceComponent(basecomponent.BaseComponent):
         jointsGroup = self.scene(self.jointsGroup)
 
         controlRig = self.findControlRig()
-        rigRadius = float(controlRig.rigRadius)
+        rigWidth, rigHeight = controlRig.getRigWidthAndHeight()
         rigScale = controlRig.getRigScale()
 
         parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
 
         # Create face control
         #
-        faceEnabled = bool(faceSpec.enabled)
-        faceExportJoint = faceSpec.getNode(referenceNode=referenceNode) if faceEnabled else None
+        faceEnabled = not faceSpec.passthrough
+        faceExportJoint = faceSpec.getNode() if faceEnabled else None
         faceExportMatrix = faceExportJoint.worldMatrix() if (faceExportJoint is not None) else parentExportJoint.worldMatrix()
 
         faceSpaceName = self.formatName(name='Face', type='space')
@@ -2028,14 +1990,14 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Create face subcontrols
         #
-        splitFace = upperFaceSpec.enabled and midFaceSpec.enabled and lowerFaceSpec.enabled
+        splitFace = not (upperFaceSpec.passthrough and midFaceSpec.passthrough and lowerFaceSpec.passthrough)
         upperFaceCtrl, midFaceCtrl, lowerFaceCtrl = None, None, None
 
         if splitFace:
 
             # Create upper-face control
             #
-            upperFaceExportJoint = upperFaceSpec.getNode(referenceNode=referenceNode)
+            upperFaceExportJoint = upperFaceSpec.getNode()
             upperFaceExportMatrix = upperFaceExportJoint.worldMatrix()
 
             upperFaceSpace, upperFaceGroup, upperFaceCtrl = self.createFaceControl({'name': 'UpperFace'}, parent=faceCtrl, matrix=upperFaceExportMatrix)
@@ -2043,11 +2005,9 @@ class FaceComponent(basecomponent.BaseComponent):
             upperFaceCtrl.prepareChannelBoxForAnimation()
             self.publishNode(upperFaceCtrl, alias='UpperFace')
 
-            # TODO: Build mid control
-
             # Create lower-face control
             #
-            lowerFaceExportJoint = lowerFaceSpec.getNode(referenceNode=referenceNode)
+            lowerFaceExportJoint = lowerFaceSpec.getNode()
             lowerFaceExportMatrix = lowerFaceExportJoint.worldMatrix()
 
             lowerFaceSpace, lowerFaceGroup, lowerFaceCtrl = self.createFaceControl({'name': 'LowerFace'}, parent=faceCtrl, matrix=lowerFaceExportMatrix)
@@ -2055,9 +2015,28 @@ class FaceComponent(basecomponent.BaseComponent):
             lowerFaceCtrl.prepareChannelBoxForAnimation()
             self.publishNode(lowerFaceCtrl, alias='LowerFace')
 
+            # Create mid-face control
+            #
+            midFaceExportJoint = midFaceSpec.getNode()
+            midFaceExportMatrix = midFaceExportJoint.worldMatrix()
+
+            midFaceSpace, midFaceGroup, midFaceCtrl = self.createFaceControl({'name': 'MidFace'}, parent=faceCtrl, matrix=midFaceExportMatrix)
+            midFaceCtrl.addPointHelper('disc', size=(50.0 * rigScale), localPosition=(0.0, 0.0, 0.0), side=self.Side.CENTER)
+            midFaceCtrl.addDivider('Settings')
+            midFaceCtrl.addAttr(longName='bias', attributeType='float', min=0.0, max=1.0, default=0.5, keyable=True)
+            midFaceCtrl.prepareChannelBoxForAnimation()
+            self.publishNode(midFaceCtrl, alias='MidFace')
+
+            spaceSwitch = midFaceSpace.addSpaceSwitch([lowerFaceCtrl, upperFaceCtrl], weighted=True, maintainOffset=True)
+            spaceSwitch.setAttr('target[0].targetReverse', (True, True, True))
+            spaceSwitch.connectPlugs(midFaceCtrl['bias'], 'target[0].targetWeight')
+            spaceSwitch.connectPlugs(midFaceCtrl['bias'], 'target[1].targetWeight')
+
+            midFaceCtrl.userProperties['spaceSwitch'] = spaceSwitch.uuid()
+
         # Create upper-face components
         #
-        upperFaceParent = upperFaceCtrl if (upperFaceCtrl is not None) else faceCtrl
+        upperFaceParent = upperFaceCtrl if splitFace else faceCtrl
 
         self.buildForeheadRig(
             upperFaceSpec.children[self.UpperFaceType.FOREHEAD],
@@ -2075,12 +2054,12 @@ class FaceComponent(basecomponent.BaseComponent):
             upperFaceSpec.children[self.UpperFaceType.CENTER_EYES],
             upperFaceSpec.children[self.UpperFaceType.LEFT_EYES],
             upperFaceSpec.children[self.UpperFaceType.RIGHT_EYES],
-            scale=rigScale, radius=rigRadius, parent=upperFaceParent
+            scale=rigScale, diameter=rigWidth, parent=upperFaceParent
         )
 
         # Create mid-face components
         #
-        midFaceParent = midFaceCtrl if (midFaceCtrl is not None) else faceCtrl
+        midFaceParent = midFaceCtrl if splitFace else faceCtrl
 
         self.buildEarRigs(
             midFaceSpec.children[self.MidFaceType.LEFT_EAR],
@@ -2101,6 +2080,6 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Create lower-face components
         #
-        self.buildJawRig(faceSpec.children[self.FaceType.JAW], faceSpec.children[self.FaceType.TEETH], faceSpec.children[self.FaceType.TONGUE], faceSpec.children[self.FaceType.CHIN], faceSpec.children[self.FaceType.THROAT], rigScale=rigScale)
+        #self.buildJawRig(faceSpec.children[self.FaceType.JAW], faceSpec.children[self.FaceType.TEETH], faceSpec.children[self.FaceType.TONGUE], faceSpec.children[self.FaceType.CHIN], faceSpec.children[self.FaceType.THROAT], rigScale=rigScale)
         #self.buildLipRigs(faceSpec.children[self.FaceType.LIPS], rigScale=rigScale)
     # endregion

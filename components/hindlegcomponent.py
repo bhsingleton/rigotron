@@ -212,7 +212,7 @@ class HindLegComponent(limbcomponent.LimbComponent):
         limbName = self.componentName
         upperLimbName, midLimbName, lowerLimbName, limbTipName = self.__default_limb_names__
 
-        upperLimbSpec, midLimbSpec, lowerLimbSpec, limbTipSpec = self.skeletonSpecs()
+        upperLimbSpec, midLimbSpec, lowerLimbSpec, limbTipSpec = self.skeleton()
         upperLimbExportJoint = upperLimbSpec.getNode()
         midLimbExportJoint = midLimbSpec.getNode()
         lowerLimbExportJoint = lowerLimbSpec.getNode()

@@ -111,15 +111,15 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
         :rtype: om.MMatrix
         """
 
-        *tarsusSpecs, clawSpec, tipSpec = self.skeletonSpecs()
+        *tarsusSpecs, clawSpec, tipSpec = self.skeleton()
 
         if clawSpec.enabled:
 
-            return self.scene(clawSpec.uuid).worldMatrix()
+            return clawSpec.getNode().worldMatrix()
 
         else:
 
-            return self.scene(tipSpec.uuid).worldMatrix()
+            return tipSpec.getNode().worldMatrix()
 
     def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
@@ -192,7 +192,7 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
 
         # Decompose component
         #
-        *tarsusSpecs, clawSpec, tipSpec = self.skeletonSpecs()
+        *tarsusSpecs, clawSpec, tipSpec = self.skeleton()
         tarsusExportJoints = [tarsusSpec.getNode() for tarsusSpec in tarsusSpecs]
         tarsusExportMatrices = [tarsusExportJoint.worldMatrix() for tarsusExportJoint in tarsusExportJoints]
 

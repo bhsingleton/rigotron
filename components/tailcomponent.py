@@ -101,7 +101,7 @@ class TailComponent(basecomponent.BaseComponent):
 
         # Get component properties
         #
-        *tailSpecs, tailTipSpec = self.skeletonSpecs(flatten=True)
+        *tailSpecs, tailTipSpec = self.skeleton(flatten=True)
         tailExportJoints = [tailSpec.getNode() for tailSpec in chain(tailSpecs, [tailTipSpec])]
         firstTailExportJoint, lastTailExportJoint = tailExportJoints[0], tailExportJoints[-1]
 
