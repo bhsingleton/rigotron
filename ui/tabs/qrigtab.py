@@ -685,7 +685,7 @@ class QRigTab(qabstracttab.QAbstractTab):
         # Return new control rig
         #
         controlRig = self.interfaceManager.createControlRig(name, referencePath=referencePath)
-        self.invalidateControlRig(defer=True)
+        self.invalidate()
 
         return controlRig
 
@@ -712,7 +712,7 @@ class QRigTab(qabstracttab.QAbstractTab):
         #
         if componentParent is None:
 
-            componentParent = self.selectedComponent()
+            componentParent = self.selectedComponent
 
         # Check if a side was supplied
         #
