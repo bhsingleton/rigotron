@@ -221,9 +221,7 @@ class QSkinsTab(qabstracttab.QAbstractTab):
         :rtype: None
         """
 
-        # Invalidate user interface
-        #
-        self.invalidate()
+        self.invalidateSkins()
     # endregion
 
     # region Methods
@@ -327,6 +325,25 @@ class QSkinsTab(qabstracttab.QAbstractTab):
 
         pass
 
+    def clear(self):
+        """
+        Resets the user interface.
+
+        :rtype: None
+        """
+
+        # Clear internal references
+        #
+        self._referenceNodes.clear()
+        self._referenceCount = 0
+
+        self._selectedRow = None
+        self._selectedReference = self.nullWeakReference
+
+        # Invalidate table widget
+        #
+        self.invalidateSkins()
+
     def invalidate(self):
         """
         Refreshes the user interface.
@@ -334,19 +351,28 @@ class QSkinsTab(qabstracttab.QAbstractTab):
         :rtype: None
         """
 
-        # Check if control rig exists
+        # Check if control-rig exists
         #
         if self.controlRig is None:
 
             return
 
-        # Get skin references
+        # Update internal references
         #
-        referenceNodes = tuple(map(self.scene, self.controlRig.skinReference))
-
         self._referenceNodes.clear()
-        self._referenceNodes.extend(referenceNodes)
+        self._referenceNodes.extend(tuple(map(self.scene, self.controlRig.skinReference)))
         self._referenceCount = len(self._referenceNodes)
+
+        # Invalidate table widget
+        #
+        self.invalidateSkins()
+
+    def invalidateSkins(self):
+        """
+        Refreshes the table widget.
+
+        :rtype: None
+        """
 
         # Iterate through rows
         #
@@ -462,6 +488,7 @@ class QSkinsTab(qabstracttab.QAbstractTab):
         if not stringutils.isNullOrEmpty(filePath):
 
             self.addSkin(filePath)
+            self.invalidate()
 
     @QtCore.Slot()
     def on_removeSkinPushButton_clicked(self):
@@ -505,7 +532,7 @@ class QSkinsTab(qabstracttab.QAbstractTab):
             self.controlRig.connectPlugs(currentReference['message'], f'skinReference[{previousIndex}]', force=True)
             self.controlRig.connectPlugs(previousReference['message'], f'skinReference[{currentIndex}]', force=True)
 
-            self.invalidate()
+            self.invalidateSkins()
 
         else:
 
@@ -536,7 +563,7 @@ class QSkinsTab(qabstracttab.QAbstractTab):
             self.controlRig.connectPlugs(currentReference['message'], f'skinReference[{nextIndex}]', force=True)
             self.controlRig.connectPlugs(nextReference['message'], f'skinReference[{currentIndex}]', force=True)
 
-            self.invalidate()
+            self.invalidateSkins()
 
         else:
 
@@ -589,7 +616,7 @@ class QSkinsTab(qabstracttab.QAbstractTab):
         if not isEmpty and isDifferent:
 
             self.controlRig.renameSkin(self._selectedRow, safeText)
-            self.invalidate()
+            self.invalidateSkins()
 
     @QtCore.Slot()
     def on_reloadSkinPushButton_clicked(self):

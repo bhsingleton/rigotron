@@ -255,7 +255,7 @@ class ControlRig(abstractinterface.AbstractInterface):
         :rtype: str
         """
 
-        referenceNode = self.skeletonReference()
+        referenceNode = self.getSkeletonReference()
 
         if referenceNode is not None:
 
@@ -569,7 +569,7 @@ class ControlRig(abstractinterface.AbstractInterface):
 
         # Create new reference
         #
-        referenceNode = self.createReference(expandedReferencePath, namespace=namespace)
+        referenceNode = self.scene.createReference(expandedReferencePath, namespace=namespace)
 
         index = self.getNextAvailableConnection(self['skinReference'])
         self.connectPlugs(referenceNode['message'], f'skinReference[{index}]')

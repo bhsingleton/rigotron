@@ -551,28 +551,6 @@ class QRigTab(qabstracttab.QAbstractTab):
         return self._selectedComponent()
     # endregion
 
-    # region Callbacks
-    def sceneOpening(self, *args, **kwargs):
-        """
-        Notifies the tab that a scene is being opened.
-
-        :key clientData: Any
-        :rtype: None
-        """
-
-        self.clear()
-
-    def sceneOpened(self, *args, **kwargs):
-        """
-        Notifies the tab that a scene has been opened.
-
-        :key clientData: Any
-        :rtype: None
-        """
-
-        self.invalidate()
-    # endregion
-
     # region Methods
     def cacheSkins(self):
         """
@@ -657,7 +635,7 @@ class QRigTab(qabstracttab.QAbstractTab):
         :rtype: str
         """
 
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'scenes', 'untitled.ma'))
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'scenes', 'untitled.ma'))
 
     @undo.Undo(state=False)
     def createControlRig(self, name, referenced=False):
@@ -670,7 +648,7 @@ class QRigTab(qabstracttab.QAbstractTab):
         :rtype: controlrig.ControlRig
         """
 
-        # Create referenced skeleton
+        # Check if referenced skeleton is required
         #
         referencePath = ''
 
@@ -684,10 +662,7 @@ class QRigTab(qabstracttab.QAbstractTab):
 
         # Return new control rig
         #
-        controlRig = self.interfaceManager.createControlRig(name, referencePath=referencePath)
-        self.invalidate()
-
-        return controlRig
+        return self.interfaceManager.createControlRig(name, referencePath=referencePath)
 
     @undo.Undo(state=False)
     def addComponent(self, typeName, componentParent=None, componentSide=None, componentId=None):
@@ -782,6 +757,14 @@ class QRigTab(qabstracttab.QAbstractTab):
 
             self.nameLineEdit.setText(self.controlRig.rigName)
             self.outlinerModel.rootComponent = self.scene(self.controlRig.rootComponent)
+
+        elif self.legacyRig is not None:
+
+            self.nameLineEdit.setText(self.legacyRig.rigName)
+
+        else:
+
+            pass
 
         # Update component status
         #
@@ -1036,6 +1019,7 @@ class QRigTab(qabstracttab.QAbstractTab):
         if success and not stringutils.isNullOrEmpty(text):
 
             self.createControlRig(text, referenced=referenced)
+            self.window().invalidate()
 
         else:
 
@@ -1099,6 +1083,14 @@ class QRigTab(qabstracttab.QAbstractTab):
 
             return QtWidgets.QMessageBox.information(self, 'Update Control Rig', 'Scene contains no outdated control rigs!')
 
+        # Check if legacy rig is in the skeleton or rig state
+        #
+        rigStatus = self.legacyRig.getRigStatus()
+
+        if rigStatus != self.legacyRig.Status.RIG:
+
+            return QtWidgets.QMessageBox.warning(self, 'Update Control Rig', 'Rig can only be updated from the rig state!')
+
         # Prompt user input
         #
         response = QtWidgets.QMessageBox.question(
@@ -1119,11 +1111,11 @@ class QRigTab(qabstracttab.QAbstractTab):
 
         if success:
 
-            self.invalidateControlRig()
+            return self.window().invalidate()
 
         else:
 
-            QtWidgets.QMessageBox.warning(self, 'Update Control Rig', 'Unable to update control rig.\nDo not save changes to the scene file!')
+            return QtWidgets.QMessageBox.warning(self, 'Update Control Rig', 'Unable to update control rig.\nDo not save changes to the scene file!')
 
     @QtCore.Slot()
     def on_referencePushButton_clicked(self):
@@ -1132,6 +1124,20 @@ class QRigTab(qabstracttab.QAbstractTab):
 
         :rtype: None
         """
+
+        # Check if control rig exists
+        #
+        if self.controlRig is None:
+
+            return QtWidgets.QMessageBox.warning(self, 'Convert Control Rig', 'Scene contains no control rigs to convert!')
+
+        # Check if control rig is in the meta state
+        #
+        rigStatus = self.controlRig.getRigStatus()
+
+        if rigStatus != self.controlRig.Status.META:
+
+            return QtWidgets.QMessageBox.warning(self, 'Convert Control Rig', 'Rig can only be converted from the meta state!')
 
         # Prompt user input
         #
@@ -1161,7 +1167,7 @@ class QRigTab(qabstracttab.QAbstractTab):
 
         if success:
 
-            self.invalidateControlRig()
+            self.invalidate()
 
         else:
 
@@ -1307,6 +1313,7 @@ class QRigTab(qabstracttab.QAbstractTab):
         if success and not stringutils.isNullOrEmpty(text):
 
             self.createControlRig(text, referenced=referenced)
+            self.window().invalidate()
 
         else:
 

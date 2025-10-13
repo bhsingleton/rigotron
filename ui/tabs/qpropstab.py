@@ -47,10 +47,12 @@ class QPropsTab(qabstracttab.QAbstractTab):
 
         # Declare private variables
         #
-        self._propComponents = weakreflist.WeakRefList()
-        self._stowComponents = weakreflist.WeakRefList()
         self._referencedProps = weakreflist.WeakRefList()
         self._referencedPropCount = 0
+
+        self._propComponents = weakreflist.WeakRefList()
+        self._stowComponents = weakreflist.WeakRefList()
+
         self._selectedRow = None
         self._selectedProp = self.nullWeakReference
         self._selectedReference = self.nullWeakReference
@@ -270,34 +272,7 @@ class QPropsTab(qabstracttab.QAbstractTab):
         :rtype: None
         """
 
-        # Check if control rig exists
-        #
-        self._propComponents.clear()
-        self._stowComponents.clear()
-
-        if self.controlRig is None:
-
-            return
-
-        # Check if root component exists
-        #
-        rootComponent = self.controlRig.findRootComponent()
-
-        if rootComponent is None:
-
-            return
-
-        # Update internal components
-        #
-        propComponents = rootComponent.findComponentDescendants('PropComponent')
-        self._propComponents.extend(propComponents)
-
-        stowComponents = rootComponent.findComponentDescendants('StowComponent')
-        self._stowComponents.extend(stowComponents)
-
-        # Invalidate user interface
-        #
-        self.invalidateReferencedProps()
+        self.invalidateComponents()
     # endregion
 
     # region Method
@@ -454,6 +429,79 @@ class QPropsTab(qabstracttab.QAbstractTab):
         referencedProp.delete()
         self.invalidateReferencedProps()
 
+    def clear(self):
+        """
+        Resets the user interface.
+
+        :rtype: None
+        """
+
+        # Reset internal references
+        #
+        self._referencedProps.clear()
+        self._referencedPropCount = 0
+
+        self._propComponents.clear()
+        self._stowComponents.clear()
+
+        self._selectedRow = None
+        self._selectedReference = self.nullWeakReference
+
+        # Invalidate table widget
+        #
+        self.invalidateReferencedProps()
+        self.invalidateProperties()
+
+    def invalidate(self):
+        """
+        Refresh the user interface.
+
+        :rtype: None
+        """
+
+        # Update internal references
+        #
+        self._referencedProps.clear()
+        self._referencedProps.extend(tuple(self.interfaceManager.iterInterfaces(typeName='ReferencedPropRig')))
+        self._referencedPropCount = len(self._referencedProps)
+
+        # Invalidate table widget
+        #
+        self.invalidateComponents()
+        self.invalidateReferencedProps()
+
+    def invalidateComponents(self):
+        """
+        Refreshes the internal prop/stow component references.
+
+        :rtype: None
+        """
+
+        # Check if control-rig exists
+        #
+        self._propComponents.clear()
+        self._stowComponents.clear()
+
+        if self.controlRig is None:
+
+            return
+
+        # Check if root component exists
+        #
+        rootComponent = self.controlRig.findRootComponent()
+
+        if rootComponent is None:
+
+            return
+
+        # Update internal prop/stow references
+        #
+        propComponents = rootComponent.findComponentDescendants('PropComponent')
+        self._propComponents.extend(propComponents)
+
+        stowComponents = rootComponent.findComponentDescendants('StowComponent')
+        self._stowComponents.extend(stowComponents)
+
     def invalidateReferencedProps(self, *rows, **kwargs):
         """
         Updates the referenced prop list widget.
@@ -468,12 +516,6 @@ class QPropsTab(qabstracttab.QAbstractTab):
 
         # Resize referenced props list widget
         #
-        referencedProps = list(self.interfaceManager.iterInterfaces(typeName='ReferencedPropRig'))
-
-        self._referencedProps.clear()
-        self._referencedProps.extend(referencedProps)
-        self._referencedPropCount = len(self._referencedProps)
-
         self.resizeTableWidgetItems(self.propTableWidget, self._referencedPropCount)
 
         # Invalidate requested rows
@@ -518,63 +560,72 @@ class QPropsTab(qabstracttab.QAbstractTab):
 
         # Check if a prop is selected
         #
-        if self.selectedProp is None:
+        if self.selectedProp is not None:
 
-            return
+            # Update namespace line-edit
+            #
+            referenceNode = self.scene(self.selectedProp.referenceNode)
+            isLoaded = referenceNode.isLoaded()
 
-        # Update namespace line-edit
-        #
-        referenceNode = self.scene(self.selectedProp.referenceNode)
-        isLoaded = referenceNode.isLoaded()
+            namespace = referenceNode.associatedNamespace()
 
-        namespace = referenceNode.associatedNamespace()
+            with qsignalblocker.QSignalBlocker(self.namespaceLineEdit):
 
-        with qsignalblocker.QSignalBlocker(self.namespaceLineEdit):
+                self.namespaceLineEdit.setText(namespace)
+                self.namespaceLineEdit.setReadOnly(not isLoaded)
 
-            self.namespaceLineEdit.setText(namespace)
-            self.namespaceLineEdit.setReadOnly(not isLoaded)
+            # Update prop widgets
+            #
+            with qsignalblocker.QSignalBlocker(self.propComboBox):
 
-        # Update prop widgets
-        #
-        with qsignalblocker.QSignalBlocker(self.propComboBox):
+                propItems = [propComponent.name() for propComponent in self._propComponents]
+                self.propComboBox.clear()
+                self.propComboBox.addItems(propItems)
 
-            propItems = [propComponent.name() for propComponent in self._propComponents]
-            self.propComboBox.clear()
-            self.propComboBox.addItems(propItems)
+                try:
 
-            try:
+                    propComponent = self.scene(self.selectedProp.propComponent)
+                    index = self._propComponents.index(propComponent)
 
-                propComponent = self.scene(self.selectedProp.propComponent)
-                index = self._propComponents.index(propComponent)
+                    self.propComboBox.setCurrentIndex(index)
 
-                self.propComboBox.setCurrentIndex(index)
+                except ValueError:
 
-            except ValueError:
+                    pass
 
-                pass
+            # Update stow widgets
+            #
+            stowIndex = self.stowComboBox.currentIndex()
 
-        # Update stow widgets
-        #
-        stowIndex = self.stowComboBox.currentIndex()
+            with qsignalblocker.QSignalBlocker(self.animCurveLineEdit, self.stowComboBox):
 
-        with qsignalblocker.QSignalBlocker(self.animCurveLineEdit, self.stowComboBox):
+                self.animCurveLineEdit.setText(self.selectedProp.stowName)
 
-            self.animCurveLineEdit.setText(self.selectedProp.stowName)
+                stowItems = [stowComponent.name() for stowComponent in self._stowComponents]
+                self.stowComboBox.clear()
+                self.stowComboBox.addItems(stowItems)
 
-            stowItems = [stowComponent.name() for stowComponent in self._stowComponents]
-            self.stowComboBox.clear()
-            self.stowComboBox.addItems(stowItems)
+                try:
 
-            try:
+                    stowComponent = self.scene(self.selectedProp.stowComponent)
+                    index = self._stowComponents.index(stowComponent)
 
-                stowComponent = self.scene(self.selectedProp.stowComponent)
-                index = self._stowComponents.index(stowComponent)
+                    self.stowComboBox.setCurrentIndex(index)
 
-                self.stowComboBox.setCurrentIndex(index)
+                except ValueError:
 
-            except ValueError:
+                    pass
 
-                pass
+        else:
+
+            # Reset widgets
+            #
+            with qsignalblocker.QSignalBlocker(self.namespaceLineEdit, self.propComboBox, self.stowComboBox, self.animCurveLineEdit):
+
+                self.namespaceLineEdit.setText('')
+                self.propComboBox.clear()
+                self.stowComboBox.clear()
+                self.animCurveLineEdit.setText('')
     # endregion
 
     # region Slots

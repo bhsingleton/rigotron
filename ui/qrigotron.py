@@ -223,19 +223,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         :rtype: None
         """
 
-        # Reset internal references
-        #
-        self._legacyRig = self.nullWeakReference
-        self._controlRig = self.nullWeakReference
-
-        # Iterate through tabs and notify
-        #
-        tabCount = self.tabControl.count()
-
-        for tabIndex in range(tabCount):
-
-            tab = self.tabControl.widget(tabIndex)
-            tab.sceneOpening(*args, **kwargs)
+        self.clear()
 
     def sceneOpened(self, *args, **kwargs):
         """
@@ -245,45 +233,7 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         :rtype: None
         """
 
-        # Evaluate scene contents
-        #
-        controlRigs = self.interfaceManager.controlRigs()
-        hasControlRig = len(controlRigs) == 1
-
-        if hasControlRig:
-
-            # Check if control rig is up-to-date
-            #
-            controlRig = controlRigs[0]
-            isUpToDate = (controlRig.rigVersion >= 1.0)
-
-            if isUpToDate:
-
-                self._controlRig = controlRig.weakReference()
-
-            else:
-
-                self._legacyRig = controlRig.weakReference()
-
-            # Check if control rig has a referenced skeleton
-            #
-            hasReferencedSkeleton = controlRig.hasReferencedSkeleton()
-
-            if hasReferencedSkeleton:
-
-                referenceNode = self.scene(controlRig.skeletonReference)
-                referencePath = referenceNode.filePath()
-
-                self.standaloneClient.open(referencePath)
-
-        # Iterate through tabs and notify
-        #
-        tabCount = self.tabControl.count()
-
-        for tabIndex in range(tabCount):
-
-            tab = self.tabControl.widget(tabIndex)
-            tab.sceneOpened(*args, **kwargs)
+        self.invalidate()
     # endregion
 
     # region Methods
@@ -361,6 +311,85 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
 
             om.MMessage.removeCallbacks(self._callbackIds)
             self._callbackIds.clear()
+
+    def iterTabs(self):
+        """
+        Returns a generator that yields tabs.
+
+        :rtype: Iterator[qabstracttab.QAbstractTab]
+        """
+
+        tabCount = self.tabControl.count()
+
+        for i in range(tabCount):
+
+            yield self.tabControl.widget(i)
+
+    def clear(self):
+        """
+        Resets the user interface.
+
+        :rtype: None
+        """
+
+        # Reset internal references
+        #
+        self._controlRig = self.nullWeakReference
+        self._legacyRig = self.nullWeakReference
+
+        # Iterate through tabs and notify
+        #
+        for tab in self.iterTabs():
+
+            tab.clear()
+
+    def invalidate(self):
+        """
+        Refresh the user interface.
+
+        :rtype: None
+        """
+
+        # Evaluate scene contents
+        #
+        controlRigs = self.interfaceManager.controlRigs()
+        hasControlRig = len(controlRigs) == 1
+
+        if hasControlRig:
+
+            # Check if control rig is up-to-date
+            #
+            controlRig = controlRigs[0]
+            isUpToDate = (controlRig.rigVersion >= 1.0)
+
+            if isUpToDate:
+
+                self._controlRig = controlRig.weakReference()
+
+            else:
+
+                self._legacyRig = controlRig.weakReference()
+
+            # Check if control rig has a referenced skeleton
+            #
+            hasReferencedSkeleton = controlRig.hasReferencedSkeleton()
+
+            if hasReferencedSkeleton:
+
+                referenceNode = self.scene(controlRig.skeletonReference)
+                referencePath = referenceNode.filePath()
+
+                self.standaloneClient.open(referencePath)
+
+        else:
+
+            log.debug('Scene contains no control-rigs...')
+
+        # Iterate through tabs and notify
+        #
+        for tab in self.iterTabs():
+
+            tab.invalidate()
     # endregion
 
     # region Slots

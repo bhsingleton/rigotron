@@ -132,21 +132,19 @@ class QAbstractTab(QtWidgets.QWidget, metaclass=qabcmeta.QABCMeta):
 
         pass
 
-    def sceneOpening(self, *args, **kwargs):
+    def clear(self):
         """
-        Notifies the tab that a scene is being opened.
+        Resets the user interface.
 
-        :key clientData: Any
         :rtype: None
         """
 
         pass
 
-    def sceneOpened(self, *args, **kwargs):
+    def invalidate(self):
         """
-        Notifies the tab that a scene has been opened.
+        Refresh the user interface.
 
-        :key clientData: Any
         :rtype: None
         """
 
