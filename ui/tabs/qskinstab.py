@@ -1,6 +1,7 @@
 import os
 
 from dcc.python import stringutils
+from dcc.perforce import clientutils
 from dcc.maya.decorators import undo
 from dcc.generators.inclusiverange import inclusiveRange
 from dcc.ui import qsignalblocker, qdivider
@@ -300,12 +301,26 @@ class QSkinsTab(qabstracttab.QAbstractTab):
         :rtype: mpy.builtins.referencemixin.ReferenceMixin
         """
 
+        # Check if path is absolute
+        #
+        client = clientutils.getCurrentClient()
+        clientExists = client is not None
+
+        isRelativeToClient = client.hasAbsoluteFile(referencePath) if clientExists else False
+
+        if isRelativeToClient:
+
+            relativePath = client.mapToRoot(filePath)
+            filePath = os.path.join('$P4ROOT', relativePath)
+
         # Check if a namespace was supplied
         #
         if stringutils.isNullOrEmpty(namespace):
 
             filename = os.path.basename(filePath)
-            namespace, extension = os.path.splitext(filename)
+            name, extension = os.path.splitext(filename)
+
+            namespace = name.replace('SKL_', '').replace('_ExportRig', '')
 
         # Create new scene file
         #

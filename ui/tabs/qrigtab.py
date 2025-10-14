@@ -7,6 +7,7 @@ from dcc.maya.libs import transformutils, layerutils
 from dcc.maya.decorators import undo
 from dcc.maya.models import qplugitemmodel, qplugstyleditemdelegate, qplugitemfiltermodel
 from dcc.python import stringutils
+from dcc.perforce import clientutils
 from dcc.ui import qdivider, qsignalblocker
 from dcc.vendor.Qt import QtCore, QtWidgets, QtGui
 from itertools import chain
@@ -628,14 +629,47 @@ class QRigTab(qabstracttab.QAbstractTab):
 
             component.repairShapes()
 
-    def defaultScenePath(self):
+    def untitledScenePath(self):
         """
-        Returns the default reference path to copy from for new rigs.
+        Returns the untitled scene path to copy from for new rigs.
 
         :rtype: str
         """
 
         return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'scenes', 'untitled.ma'))
+
+    def guessReferencePath(self, create=False):
+        """
+        Attempts to guess the location for a new referenced skeleton.
+
+        :type create: bool
+        :rtype: str
+        """
+
+        # Concatenate reference path
+        #
+        untitledScenePath = self.untitledScenePath()
+        referenceName = self.scene.filename.replace('RIG', 'SKL').replace('AnimRig', 'ExportRig')
+        referencePath = os.path.join(self.scene.directory, referenceName)
+
+        if self.scene.filePath != referencePath and create:
+
+            log.info(f'Creating new export skeleton @ {referencePath}')
+            shutil.copyfile(untitledScenePath, referencePath)
+
+        # Check if reference path can be simplified
+        #
+        client = clientutils.getCurrentClient()
+        clientExists = client is not None
+
+        isRelativeToClient = client.hasAbsoluteFile(referencePath) if clientExists else False
+
+        if isRelativeToClient:
+
+            relativePath = client.mapToRoot(referencePath)
+            referencePath = os.path.join('$P4ROOT', relativePath)
+
+        return referencePath
 
     @undo.Undo(state=False)
     def createControlRig(self, name, referenced=False):
@@ -654,11 +688,7 @@ class QRigTab(qabstracttab.QAbstractTab):
 
         if referenced:
 
-            defaultReferencePath = self.defaultScenePath()
-            referenceName = self.scene.filename.replace('RIG', 'SKL').replace('AnimRig', 'ExportRig')
-            referencePath = os.path.join(self.scene.directory, referenceName)
-
-            shutil.copyfile(defaultReferencePath, referencePath)
+            referencePath = self.guessReferencePath(create=True)
 
         # Return new control rig
         #
@@ -1153,16 +1183,9 @@ class QRigTab(qabstracttab.QAbstractTab):
 
             return
 
-        # Concatenate reference path
-        #
-        defaultReferencePath = self.defaultScenePath()
-        referenceName = self.scene.filename.replace('RIG', 'SKL').replace('AnimRig', 'ExportRig')
-        referencePath = os.path.join(self.scene.directory, referenceName)
-
-        shutil.copyfile(defaultReferencePath, referencePath)
-
         # Try and update rig
         #
+        referencePath = self.guessReferencePath(create=True)
         success = self.controlRig.convertToReferencedSkeleton(referencePath)
 
         if success:
