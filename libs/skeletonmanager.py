@@ -369,13 +369,18 @@ class SkeletonManager(object):
 
                 return
 
+            matrix = self.referencedScene.xform(child, query=True, matrix=True, worldSpace=True)
+
             if stringutils.isNullOrEmpty(parent):
 
-                self.referencedScene.parentNode(child, world=True, absolute=True)
+                self.referencedScene.parentNode(child, world=True, relative=True)
 
             else:
 
-                self.referencedScene.parentNode(child, parent, absolute=True)
+                self.referencedScene.parentNode(child, parent, relative=True)
+
+            child = self.getNodeNameByUUID(childUUID, long=True)
+            self.referencedScene.xform(child, matrix=matrix, worldSpace=True)
 
         else:
 
