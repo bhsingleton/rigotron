@@ -445,6 +445,7 @@ class QPropsTab(qabstracttab.QAbstractTab):
         self._stowComponents.clear()
 
         self._selectedRow = None
+        self._selectedProp = self.nullWeakReference
         self._selectedReference = self.nullWeakReference
 
         # Invalidate table widget
