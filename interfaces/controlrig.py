@@ -4,6 +4,7 @@ from maya.api import OpenMaya as om
 from mpy import mpyattribute
 from dcc.naming import namingutils
 from dcc.python import stringutils
+from collections import deque
 from ..abstract import abstractinterface, abstractcomponent
 from ..libs import Status, skeletonmanager, setuputils
 
@@ -463,6 +464,7 @@ class ControlRig(abstractinterface.AbstractInterface):
 
         if not (0 <= index < numReferenceNodes):
 
+            log.warning('Skin index is out-of-range!')
             return False
 
         # Check if reference node is valid
@@ -471,25 +473,38 @@ class ControlRig(abstractinterface.AbstractInterface):
 
         if referenceNode is None:
 
+            log.warning(f'Unable to locate reference node @ index {index}!')
             return False
 
         # Check if edits should be cleared
         #
         if clearEdits:
 
+            referenceNode.unload()
             referenceNode.clearEdits()
             referenceNode.load()
 
         # Update skeleton connections
         #
         sourceNamespace = self.getSkeletonNamespace()
-        referencedNodes = referenceNode.nodes()
+        referencedNodes = deque(referenceNode.nodes())
 
-        for referencedNode in referencedNodes:
+        while len(referencedNodes) > 0:
 
             # Evaluate api type
             #
-            if not referencedNode.hasFn(om.MFn.kJoint):
+            referencedNode = referencedNodes.popleft()
+
+            if referencedNode.hasFn(om.MFn.kReference):
+
+                referencedNodes.extendleft(self.scene(referencedNode).nodes())
+                continue
+
+            elif referencedNode.hasFn(om.MFn.kJoint):
+
+                pass
+
+            else:
 
                 continue
 
@@ -607,6 +622,8 @@ class ControlRig(abstractinterface.AbstractInterface):
         #
         referenceNode.disconnectPlugs('message', self[f'skinReference[{index}]'])
         referenceNode.delete()
+
+        self.removePlugElements('skinReference', [index])
 
         return True
     # endregion
