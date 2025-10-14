@@ -269,7 +269,7 @@ class BaseComponent(abstractcomponent.AbstractComponent):
             #
             for i in range(currentSize, size, 1):
 
-                skeletonSpec = cls(component=self)
+                skeletonSpec = cls(component=self.weakReference())
                 childSpecs.append(skeletonSpec)
 
         elif size < currentSize:

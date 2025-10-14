@@ -39,6 +39,7 @@ class AbstractSpec(melsonobject.MELSONObject, metaclass=ABCMeta):
         """
         Private method called after a new instance is created.
 
+        :type component: weakref.ref
         :rtype: None
         """
 
