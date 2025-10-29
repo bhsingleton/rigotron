@@ -172,7 +172,7 @@ class QRigTab(qabstracttab.QAbstractTab):
         self.addPropComponentAction.setToolTip('Adds a prop to the selected component.')
         self.addPropComponentAction.triggered.connect(self.on_addComponentAction_triggered)
 
-        self.addWeaponComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/PropComponent.svg'), 'Weapon', parent=self.mainToolBar)
+        self.addWeaponComponentAction = QtWidgets.QAction(QtGui.QIcon(':/rigotron/icons/WeaponComponent.svg'), 'Weapon', parent=self.mainToolBar)
         self.addWeaponComponentAction.setObjectName('addWeaponComponentAction')
         self.addWeaponComponentAction.setWhatsThis('WeaponComponent')
         self.addWeaponComponentAction.setToolTip('Adds a weapon to the selected component.')
@@ -255,7 +255,7 @@ class QRigTab(qabstracttab.QAbstractTab):
 
         self.outlinerGroupBox = QtWidgets.QGroupBox('Outliner:')
         self.outlinerGroupBox.setObjectName('outlinerGroupBox')
-        self.outlinerGroupBox.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.outlinerGroupBox.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding))
         self.outlinerGroupBox.setLayout(self.outlinerLayout)
 
         self.nameLabel = QtWidgets.QLabel('Rig:')
@@ -369,7 +369,7 @@ class QRigTab(qabstracttab.QAbstractTab):
 
         self.propertyGroupBox = QtWidgets.QGroupBox('Properties:')
         self.propertyGroupBox.setObjectName('propertyGroupBox')
-        self.propertyGroupBox.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.propertyGroupBox.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding))
         self.propertyGroupBox.setLayout(self.propertyLayout)
 
         self.filterPropertyLineEdit = QtWidgets.QLineEdit()
