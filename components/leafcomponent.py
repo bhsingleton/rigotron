@@ -86,17 +86,18 @@ class LeafComponent(basecomponent.BaseComponent):
 
         # Setup space switching
         #
-        requiresSpaceSwitch = bool(self.spaceSwitchEnabled)
+        rootComponent = self.findComponentAncestors('RootComponent')[0]
+        worldCtrl = rootComponent.getWorldTarget()
+
+        spaceSwitchEnabled = bool(self.spaceSwitchEnabled)
+        requiresSpaceSwitch = spaceSwitchEnabled and (parentExportCtrl is not worldCtrl)
 
         if requiresSpaceSwitch:
 
             leafCtrl.addDivider('Spaces')
             leafCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
 
-            rootComponent = self.findComponentAncestors('RootComponent')[0]
-            motionCtrl = rootComponent.getPublishedNode('Motion')
-
-            spaceSwitch = leafSpace.addSpaceSwitch([parentExportCtrl, motionCtrl], weighted=True, maintainOffset=True)
+            spaceSwitch = leafSpace.addSpaceSwitch([parentExportCtrl, worldCtrl], weighted=True, maintainOffset=True)
             spaceSwitch.setAttr('target[0].targetReverse', (True, True, True))
             spaceSwitch.connectPlugs(leafCtrl['localOrGlobal'], 'target[0].targetWeight')
             spaceSwitch.connectPlugs(leafCtrl['localOrGlobal'], 'target[1].targetWeight')

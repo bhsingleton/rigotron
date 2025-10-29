@@ -156,7 +156,7 @@ class ChainComponent(basecomponent.BaseComponent):
             #
             chainCtrls[i] = chainCtrl
 
-        # Create tip target
+        # Create chain tip target
         #
         firstChainCtrl, lastChainCtrl = chainCtrls[0], chainCtrls[-1]
 
