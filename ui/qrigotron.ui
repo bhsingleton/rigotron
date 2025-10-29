@@ -460,6 +460,7 @@
    <addaction name="addLegComponentAction"/>
    <addaction name="addFootComponentAction"/>
    <addaction name="separator"/>
+   <addaction name="separator"/>
    <addaction name="addInsectLegComponentAction"/>
    <addaction name="addInsectFootComponentAction"/>
    <addaction name="separator"/>
@@ -472,6 +473,7 @@
    <addaction name="addCollarComponentAction"/>
    <addaction name="separator"/>
    <addaction name="addPropComponentAction"/>
+   <addaction name="addWeaponComponentAction"/>
    <addaction name="addStowedComponentAction"/>
    <addaction name="separator"/>
    <addaction name="addLeafComponentAction"/>
@@ -826,6 +828,24 @@
    </property>
    <property name="whatsThis">
     <string>FootComponent</string>
+   </property>
+  </action>
+  <action name="addWeaponComponentAction">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/rigotron/icons/WeaponComponent.svg</normaloff>:/rigotron/icons/WeaponComponent.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Weapon</string>
+   </property>
+   <property name="toolTip">
+    <string>Adds a prop to the selected component.</string>
+   </property>
+   <property name="statusTip">
+    <string/>
+   </property>
+   <property name="whatsThis">
+    <string>PropComponent</string>
    </property>
   </action>
  </widget>

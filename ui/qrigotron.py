@@ -6,7 +6,7 @@ from dcc.maya.standalone import rpc
 from Qt import QtCore, QtWidgets, QtGui, QtCompat
 from functools import partial
 from . import resources
-from .tabs import qrigtab, qpropstab, qskinstab
+from .tabs import qrigtab, qpropstab, qskinstab, qlogstab
 from ..libs import componentfactory, interfacefactory
 
 import logging
@@ -134,10 +134,12 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         self.rigTab = qrigtab.QRigTab(parent=self.tabControl)
         self.propsTab = qpropstab.QPropsTab(parent=self.tabControl)
         self.skinsTab = qskinstab.QSkinsTab(parent=self.tabControl)
+        self.logsTab = qlogstab.QLogsTab(parent=self.tabControl)
 
         self.tabControl.addTab(self.rigTab, 'Control-Rig')
         self.tabControl.addTab(self.propsTab, 'Props')
         self.tabControl.addTab(self.skinsTab, 'Skins')
+        self.tabControl.addTab(self.logsTab, 'Logs')
 
         centralLayout.addWidget(self.tabControl)
     # endregion
@@ -251,6 +253,10 @@ class QRigotron(qsingletonwindow.QSingletonWindow):
         # Initialize remote standalone server
         #
         self._standaloneProcess, self._standaloneClient = rpc.initializeRemoteStandalone()
+
+        if isinstance(self._standaloneProcess, QtCore.QProcess):
+
+            self.logsTab.process = self._standaloneProcess
 
         # Force callback update
         #
