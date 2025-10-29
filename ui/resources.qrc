@@ -1,5 +1,6 @@
 <RCC>
   <qresource prefix="rigotron">
+    <file>icons/WeaponComponent.svg</file>
     <file>icons/InsectFootComponent.svg</file>
     <file>icons/InsectLegComponent.svg</file>
     <file>icons/PlayerIKComponent.svg</file>
