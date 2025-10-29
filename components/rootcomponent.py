@@ -26,6 +26,7 @@ class RootComponent(basecomponent.BaseComponent):
     forwardAxisFlip = mpyattribute.MPyAttribute('forwardAxisFlip', attributeType='bool', default=True)
     upAxis = mpyattribute.MPyAttribute('upAxis', attributeType='enum', fields=('X', 'Y', 'Z'), default=2)
     upAxisFlip = mpyattribute.MPyAttribute('upAxisFlip', attributeType='bool', default=False)
+    usedAsProp = mpyattribute.MPyAttribute('usedAsProp', attributeType='bool', default=False)
     # endregion
 
     # region Methods
@@ -38,6 +39,29 @@ class RootComponent(basecomponent.BaseComponent):
         """
 
         return self
+
+    def getWorldTarget(self):
+        """
+        Returns the world target for space switch use.
+
+        :rtype: Union[mpynode.MPyNode, None]
+        """
+
+        # Evaluate component state
+        #
+        if self.Status(self.componentStatus) != self.Status.RIG:
+
+            return None
+
+        # Check if this component is used as a prop
+        #
+        if self.usedAsProp:
+
+            return self.getPublishedNode('Root')
+
+        else:
+
+            return self.getPublishedNode('Motion')
 
     def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
@@ -83,47 +107,81 @@ class RootComponent(basecomponent.BaseComponent):
 
         rigScale = self.findControlRig().getRigScale()
 
-        # Create master control
+        # Check if this component is used as a prop
         #
-        masterCtrlName = self.formatName(name='Master', type='control')
-        masterCtrl = self.scene.createNode('transform', name=masterCtrlName, parent=controlsGroup)
-        masterCtrl.addPointHelper('tearDrop', size=(100.0 * rigScale), localRotate=(90.0, 90.0, 0.0), colorRGB=colorRGB, lineWidth=4.0)
-        masterCtrl.setWorldMatrix(rootExportMatrix, skipScale=True)
-        masterCtrl.addGlobalScale()
-        masterCtrl.prepareChannelBoxForAnimation()
-        self.publishNode(masterCtrl, alias='Master')
+        usedAsProp = bool(self.usedAsProp)
 
-        # Create motion control
-        #
-        motionCtrlName = self.formatName(name='Motion', type='control')
-        motionCtrl = self.scene.createNode('transform', name=motionCtrlName, parent=masterCtrl)
-        motionCtrl.addPointHelper('disc', size=(80.0 * rigScale), localRotate=(0.0, 90.0, 0.0), colorRGB=lightColorRGB, lineWidth=2.0)
-        motionCtrl.prepareChannelBoxForAnimation()
-        self.publishNode(motionCtrl, alias='Motion')
+        if usedAsProp:
 
-        # Create root control
-        #
-        rootSpaceName = self.formatName(name='Root', type='space')
-        rootSpace = self.scene.createNode('transform', name=rootSpaceName, parent=controlsGroup)
+            # Create root control
+            #
+            rootSpaceName = self.formatName(name='Root', type='space')
+            rootSpace = self.scene.createNode('transform', name=rootSpaceName, parent=controlsGroup)
+            rootSpace.setWorldMatrix(rootExportMatrix)
+            rootSpace.freezeTransform()
 
-        rootCtrlName = self.formatName(name='Root', type='control')
-        rootCtrl = self.scene.createNode('transform', name=rootCtrlName, parent=rootSpace)
-        rootCtrl.addPointHelper('sphere', size=(15.0 * rigScale), colorRGB=darkColorRGB)
-        rootCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=(0.0, (-7.5 * rigScale), 0.0), localRotate=(0.0, 0.0, -90.0), colorRGB=darkColorRGB)
-        rootCtrl.addDivider('Spaces')
-        rootCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
-        rootCtrl.prepareChannelBoxForAnimation()
-        self.publishNode(rootCtrl, alias='Root')
+            rootCtrlName = self.formatName(name='Root', type='control')
+            rootCtrl = self.scene.createNode('transform', name=rootCtrlName, parent=rootSpace)
+            rootCtrl.addPointHelper('sphere', size=(5.0 * rigScale), colorRGB=darkColorRGB)
+            rootCtrl.prepareChannelBoxForAnimation()
+            rootCtrl.tagAsController()
+            self.publishNode(rootCtrl, alias='Root')
 
-        rootSpaceSwitch = rootSpace.addSpaceSwitch([motionCtrl, masterCtrl])
-        rootSpaceSwitch.weighted = True
-        rootSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (True, True, True)}, {'targetWeight': (0.0, 0.0, 0.0)}])
-        rootSpaceSwitch.connectPlugs(rootCtrl['localOrGlobal'], 'target[0].targetWeight')
-        rootSpaceSwitch.connectPlugs(rootCtrl['localOrGlobal'], 'target[1].targetWeight')
+            # Add stow space switch placeholder
+            # Connections will be handled by the `ReferencedPropRig` interface!
+            #
+            stowSpaceSwitchName = self.formatName(subname='Stow', type='spaceSwitch')
+            stowSpaceSwitch = self.scene.createNode('spaceSwitch', name=stowSpaceSwitchName)
+            stowSpaceSwitch.weighted = True
+            stowSpaceSwitch.setDriven(rootSpace)
+            stowSpaceSwitch.setAttr('target', [{'targetName': 'Default', 'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (True, True, True)}, {'targetName': 'Stow', 'targetWeight': (0.0, 0.0, 0.0)}])
 
-        # Tag and publish controllers
-        #
-        masterCtrl.tagAsController(children=[motionCtrl])
-        motionCtrl.tagAsController(parent=masterCtrl, children=[rootCtrl])
-        rootCtrl.tagAsController(parent=motionCtrl)
+            rootCtrl.userProperties['space'] = rootSpace.uuid()
+            rootCtrl.userProperties['stowSpaceSwitch'] = stowSpaceSwitch.uuid()
+
+        else:
+
+            # Create master control
+            #
+            masterCtrlName = self.formatName(name='Master', type='control')
+            masterCtrl = self.scene.createNode('transform', name=masterCtrlName, parent=controlsGroup)
+            masterCtrl.addPointHelper('tearDrop', size=(100.0 * rigScale), localRotate=(90.0, 90.0, 0.0), colorRGB=colorRGB, lineWidth=4.0)
+            masterCtrl.setWorldMatrix(rootExportMatrix, skipScale=True)
+            masterCtrl.addGlobalScale()
+            masterCtrl.prepareChannelBoxForAnimation()
+            self.publishNode(masterCtrl, alias='Master')
+
+            # Create motion control
+            #
+            motionCtrlName = self.formatName(name='Motion', type='control')
+            motionCtrl = self.scene.createNode('transform', name=motionCtrlName, parent=masterCtrl)
+            motionCtrl.addPointHelper('disc', size=(80.0 * rigScale), localRotate=(0.0, 90.0, 0.0), colorRGB=lightColorRGB, lineWidth=2.0)
+            motionCtrl.prepareChannelBoxForAnimation()
+            self.publishNode(motionCtrl, alias='Motion')
+
+            # Create root control
+            #
+            rootSpaceName = self.formatName(name='Root', type='space')
+            rootSpace = self.scene.createNode('transform', name=rootSpaceName, parent=controlsGroup)
+
+            rootCtrlName = self.formatName(name='Root', type='control')
+            rootCtrl = self.scene.createNode('transform', name=rootCtrlName, parent=rootSpace)
+            rootCtrl.addPointHelper('sphere', size=(15.0 * rigScale), colorRGB=darkColorRGB)
+            rootCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=(0.0, (-7.5 * rigScale), 0.0), localRotate=(0.0, 0.0, -90.0), colorRGB=darkColorRGB)
+            rootCtrl.addDivider('Spaces')
+            rootCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, default=0.0, keyable=True)
+            rootCtrl.prepareChannelBoxForAnimation()
+            self.publishNode(rootCtrl, alias='Root')
+
+            rootSpaceSwitch = rootSpace.addSpaceSwitch([motionCtrl, masterCtrl])
+            rootSpaceSwitch.weighted = True
+            rootSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0), 'targetReverse': (True, True, True)}, {'targetWeight': (0.0, 0.0, 0.0)}])
+            rootSpaceSwitch.connectPlugs(rootCtrl['localOrGlobal'], 'target[0].targetWeight')
+            rootSpaceSwitch.connectPlugs(rootCtrl['localOrGlobal'], 'target[1].targetWeight')
+
+            # Tag and publish controllers
+            #
+            masterCtrl.tagAsController(children=[motionCtrl])
+            motionCtrl.tagAsController(parent=masterCtrl, children=[rootCtrl])
+            rootCtrl.tagAsController(parent=motionCtrl)
     # endregion

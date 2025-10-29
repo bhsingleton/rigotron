@@ -70,7 +70,7 @@ class TailComponent(basecomponent.BaseComponent):
         for (i, tailSpec) in enumerate(tailSpecs, start=1):
 
             isFirstTailSpec = (i == 1)
-            defaultMatrix = om.MMatrix(self.__default_tail_matrix__) if isFirstTailSpec else transformutils.createTranslateMatrix((self.__default_component_spacing__, 0.0, 0.0))
+            defaultMatrix = om.MMatrix(self.__default_component_matrix__) if isFirstTailSpec else transformutils.createTranslateMatrix((self.__default_component_spacing__, 0.0, 0.0))
 
             tailSpec.name = self.formatName(index=i)
             tailSpec.side = tailSide
