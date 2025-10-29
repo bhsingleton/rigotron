@@ -128,16 +128,27 @@ class SpineComponent(basecomponent.BaseComponent):
         # Evaluate parent matrix
         #
         cogSpec, = self.pivots(force=True)
+        cogSpec.enabled = True
+
         requiresUpdating = cogSpec.parentMatrix.isEquivalent(om.MMatrix.kIdentity, tolerance=1e-3)
 
         if requiresUpdating or force:
 
+            # Update parent matrix
+            #
             driver = cogSpec.driver.getDriver()
-            matrix = cogSpec.matrix.asMatrix()
             parentMatrix = driver.worldMatrix()
 
-            cogSpec.matrix = matrix * parentMatrix.inverse()
             cogSpec.parentMatrix = parentMatrix
+
+            # Check if transformation matrix requires updating
+            #
+            matrix = cogSpec.matrix.asMatrix()
+            isIdentityMatrix = matrix.isEquivalent(om.MMatrix.kIdentity, tolerance=1e-3)
+
+            if not isIdentityMatrix:
+
+                cogSpec.matrix = matrix * parentMatrix.inverse()
 
         # Call parent method
         #
@@ -583,18 +594,29 @@ class SpineComponent(basecomponent.BaseComponent):
 
             controlNodes.append(spineFKTipTarget)
 
+        # Get curve length to derive initial skin weights from
+        #
+        intermediateCurve = skinCluster.intermediateObject()
+        numControlPoints = int(intermediateCurve.numCVs)
+
+        curveLength = 0.0
+
+        if neckEnabled:
+
+            chestPoint = intermediateCurve.cvPosition(numControlPoints - 2)
+            maxParameter = intermediateCurve.getParamAtPoint(chestPoint)
+            curveLength = intermediateCurve.findLengthFromParam(maxParameter)
+
+        else:
+
+            curveLength = intermediateCurve.length()
+
         # Create remap for skin weights
         #
         weightRemapName = self.formatName(subname='Weights', type='remapArray')
         weightRemap = self.scene.createNode('remapArray', name=weightRemapName)
         weightRemap.clamp = True
         weightRemap.setAttr('value', [{'value_FloatValue': 0.0, 'value_Interp': 2}, {'value_FloatValue': 1.0, 'value_Interp': 2}])
-
-        intermediateCurve = skinCluster.intermediateObject()
-        numControlPoints = int(intermediateCurve.numCVs)
-        chestPoint = intermediateCurve.cvPosition(numControlPoints - 2)
-        maxParameter = intermediateCurve.getParamAtPoint(chestPoint)
-        curveLength = intermediateCurve.findLengthFromParam(maxParameter)
 
         parameters = [None] * numControlPoints
 

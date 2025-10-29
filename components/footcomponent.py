@@ -512,7 +512,7 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         :rtype: None
         """
 
-        # Rename legacy joints
+        # Check if legacy joints exist
         #
         toesName = self.formatName(subname='Toes')
         ballName = self.formatName(subname='Ball')
@@ -523,6 +523,23 @@ class FootComponent(extremitycomponent.ExtremityComponent):
 
             log.warning(f'Renaming "{toesName}" > "{ballName}"')
             toesExportJoint.setName(ballName)
+
+        # Check if attachment index is valid
+        #
+        attachmentSpecs = self.getAttachmentOptions()
+        numAttachmentSpecs = len(attachmentSpecs)
+
+        componentParent = self.componentParent()
+        hingeOffset = int(getattr(componentParent, 'hingeEnabled', False))
+        twistOffset = getattr(componentParent, 'numTwistLinks', 0) if getattr(componentParent, 'twistEnabled', False) else 0
+
+        oldAttachmentId = int(self.attachmentId)
+        newAttachmentId = (numAttachmentSpecs - 1) - (hingeOffset + twistOffset)
+
+        if oldAttachmentId != newAttachmentId:
+
+            log.warning(f'Updating out-of-range attachment ID @ {self} from {oldAttachmentId} > {newAttachmentId}')
+            self.attachmentId = newAttachmentId
 
         # Call parent method
         #

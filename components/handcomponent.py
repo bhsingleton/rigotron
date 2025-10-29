@@ -439,6 +439,35 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         #
         return super(HandComponent, self).invalidateSkeleton(skeletonSpecs)
 
+    def repairSkeleton(self, force=False):
+        """
+        Repairs the internal skeleton specs for this component.
+
+        :type force: bool
+        :rtype: None
+        """
+
+        # Check if attachment index is valid
+        #
+        attachmentSpecs = self.getAttachmentOptions()
+        numAttachmentSpecs = len(attachmentSpecs)
+
+        componentParent = self.componentParent()
+        hingeOffset = int(getattr(componentParent, 'hingeEnabled', False))
+        twistOffset = getattr(componentParent, 'numTwistLinks', 0) if getattr(componentParent, 'twistEnabled', False) else 0
+
+        oldAttachmentId = int(self.attachmentId)
+        newAttachmentId = (numAttachmentSpecs - 1) - (hingeOffset + twistOffset)
+
+        if oldAttachmentId != newAttachmentId:
+
+            log.warning(f'Updating out-of-range attachment ID @ {self} from {oldAttachmentId} > {newAttachmentId}')
+            self.attachmentId = newAttachmentId
+
+        # Call parent method
+        #
+        return super(HandComponent, self).repairSkeleton(force=force)
+
     def buildFullRig(self):
         """
         Builds the full control rig for this component.

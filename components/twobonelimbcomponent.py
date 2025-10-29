@@ -135,6 +135,31 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         #
         return super(TwoBoneLimbComponent, self).invalidateSkeleton(skeletonSpecs, **kwargs)
 
+    def repairSkeleton(self, force=False):
+        """
+        Repairs the internal skeleton specs for this component.
+
+        :type force: bool
+        :rtype: None
+        """
+
+        # Rename legacy joints
+        #
+        upperName, lowerName, tipName = self.__default_limb_names__
+        limbTipName = self.formatName(name=tipName)
+
+        if self.scene.doesNodeExist(limbTipName):
+
+            limbTipExportJoint = self.scene(limbTipName)
+            limbTipExportJoint.rehomeChildren(limbTipExportJoint.parent())
+
+            log.warning(f'Deleting "{limbTipName}" export joint!')
+            limbTipExportJoint.delete()
+
+        # Call parent method
+        #
+        return super(TwoBoneLimbComponent, self).repairSkeleton(force=force)
+
     def buildRig(self):
         """
         Builds the control rig for this component.
