@@ -1436,7 +1436,7 @@ class FaceComponent(basecomponent.BaseComponent):
         noseExportMatrix = noseExportJoint.worldMatrix()
 
         noseSpace, noseGroup, noseCtrl = self.createFaceControl({'name': 'Nose'}, parent=parent, matrix=noseExportMatrix)
-        noseCtrl.addPointHelper('pyramid', size=(5.0 * scale), localRotate=(0.0, 0.0, 180.0), side=self.Side.CENTER)
+        noseCtrl.addPointHelper('pyramid', size=(5.0 * scale), localRotate=(0.0, 0.0, -90.0), side=self.Side.CENTER)
         self.publishNode(noseCtrl, alias='Nose')
 
         # Create nostril controls
@@ -1520,6 +1520,435 @@ class FaceComponent(basecomponent.BaseComponent):
                 self.publishNode(cheekCtrl, alias=f'{sideChar}_Cheek{paddedIndex}')
 
                 cheekCtrls[i] = cheekCtrl
+
+    def buildLipRigs(self, leftCornerLipSpec, upperLipsSpec, lowerLipsSpec, rightCornerLipSpec, scale=1.0, parent=None):
+        """
+        Builds the lip rigs.
+
+        :type leftCornerLipSpec: skeletonspec.SkeletonSpec
+        :type upperLipsSpec: skeletonspec.SkeletonSpec
+        :type lowerLipsSpec: skeletonspec.SkeletonSpec
+        :type rightCornerLipSpec: skeletonspec.SkeletonSpec
+        :type scale: float
+        :type parent: mpynode.MPyNode
+        :rtype: None
+        """
+
+        # Check if lips were enabled
+        #
+        isEnabled = leftCornerLipSpec.enabled and rightCornerLipSpec.enabled
+
+        if not isEnabled:
+
+            return
+
+        # Decompose lip specs
+        #
+        leftCornerLipExportJoint = leftCornerLipSpec.getNode()
+        leftCornerLipExportMatrix = leftCornerLipExportJoint.worldMatrix()
+        
+        leftUpperCornerLipExportSpec, leftLowerCornerLipExportSpec = leftCornerLipSpec.children
+        leftUpperCornerLipExportJoint, leftLowerCornerLipExportJoint = leftUpperCornerLipExportSpec.getNode(), leftLowerCornerLipExportSpec.getNode()
+        leftUpperCornerLipExportMatrix, leftLowerCornerLipExportMatrix = leftUpperCornerLipExportJoint.worldMatrix(), leftLowerCornerLipExportJoint.worldMatrix()
+
+        rightCornerLipExportJoint = rightCornerLipSpec.getNode()
+        rightCornerLipExportMatrix = rightCornerLipExportJoint.worldMatrix()
+        
+        rightUpperCornerLipExportSpec, rightLowerCornerLipExportSpec = rightCornerLipSpec.children
+        rightUpperCornerLipExportJoint, rightLowerCornerLipExportJoint = rightUpperCornerLipExportSpec.getNode(), rightLowerCornerLipExportSpec.getNode()
+        rightUpperCornerLipExportMatrix, rightLowerCornerLipExportMatrix = rightUpperCornerLipExportJoint.worldMatrix(), rightLowerCornerLipExportJoint.worldMatrix()
+        
+        numSubdivisions = int((len(upperLipsSpec.children) - 1) / 2)
+        leftUpperLipSpecs, centerUpperLipSpecs, rightUpperLipSpecs = self.unpackSpecs(numSubdivisions, 1, numSubdivisions, upperLipsSpec.children)
+        leftLowerLipSpecs, centerLowerLipSpecs, rightLowerLipSpecs = self.unpackSpecs(numSubdivisions, 1, numSubdivisions, lowerLipsSpec.children)
+
+        centerUpperLipSpec = centerUpperLipSpecs[0]
+        centerUpperLipExportJoint = centerUpperLipSpec.getNode()
+        centerUpperLipExportMatrix = centerUpperLipExportJoint.worldMatrix()
+
+        centerLowerLipSpec = centerLowerLipSpecs[0]
+        centerLowerLipExportJoint = centerLowerLipSpec.getNode()
+        centerLowerLipExportMatrix = centerLowerLipExportJoint.worldMatrix()
+
+        # Create lip corner controls
+        #
+        jawCtrl = self.getPublishedNode('Jaw')
+
+        leftCornerLipSpace, leftCornerLipGroup, leftCornerLipCtrl = self.createFaceControl({'side': self.Side.LEFT, 'name': 'CornerLip'}, parent=parent, matrix=leftCornerLipExportMatrix)
+        leftCornerLipSpace.addConstraint('transformConstraint', [parent, jawCtrl], maintainOffset=True)
+        leftCornerLipCtrl.addPointHelper('box', 'cross', size=1.0, side=self.Side.LEFT)
+        self.publishNode(leftCornerLipCtrl, alias='L_CornerLip')
+
+        leftUpperCornerLipSpace, leftUpperCornerLipGroup, leftUpperCornerLipCtrl = self.createFaceControl({'side': self.Side.LEFT, 'name': 'UpperCornerLip'}, parent=leftCornerLipCtrl)
+        leftUpperCornerLipCtrl.addPointHelper('box', 'centerMarker', size=0.5, localPosition=(0.125, 0.0, 0.0), localScale=(0.5, 1.0, 1.0), side=self.Side.LEFT)
+        self.publishNode(leftUpperCornerLipCtrl, alias='L_UpperCornerLip')
+
+        leftLowerCornerLipSpace, leftLowerCornerLipGroup, leftLowerCornerLipCtrl = self.createFaceControl({'side': self.Side.LEFT, 'name': 'LowerCornerLip'}, parent=leftCornerLipCtrl)
+        leftLowerCornerLipCtrl.addPointHelper('box', 'centerMarker', size=0.5, localPosition=(-0.125, 0.0, 0.0), localScale=(0.5, 1.0, 1.0), side=self.Side.LEFT)
+        self.publishNode(leftLowerCornerLipCtrl, alias='L_LowerCornerLip')
+
+        leftCornerLipCtrl.tagAsController(parent=parent, children=[leftUpperCornerLipCtrl, leftLowerCornerLipCtrl])
+        leftUpperCornerLipCtrl.tagAsController(parent=leftCornerLipCtrl)
+        leftLowerCornerLipCtrl.tagAsController(parent=leftCornerLipCtrl)
+
+        rightCornerLipSpace, rightCornerLipGroup, rightCornerLipCtrl = self.createFaceControl({'side': self.Side.RIGHT, 'name': 'CornerLip'}, parent=parent, matrix=rightCornerLipExportMatrix)
+        rightCornerLipSpace.addConstraint('transformConstraint', [parent, jawCtrl], maintainOffset=True)
+        rightCornerLipCtrl.addPointHelper('box', 'cross', size=1.0, side=self.Side.RIGHT)
+        self.publishNode(rightCornerLipCtrl, alias='R_CornerLip')
+
+        rightUpperCornerLipSpace, rightUpperCornerLipGroup, rightUpperCornerLipCtrl = self.createFaceControl({'side': self.Side.RIGHT, 'name': 'UpperCornerLip'}, parent=rightCornerLipCtrl)
+        rightUpperCornerLipCtrl.addPointHelper('box', 'centerMarker', size=0.5, localPosition=(0.125, 0.0, 0.0), localScale=(0.5, 1.0, 1.0), side=self.Side.RIGHT)
+        self.publishNode(rightUpperCornerLipCtrl, alias='R_UpperCornerLip')
+
+        rightLowerCornerLipSpace, rightLowerCornerLipGroup, rightLowerCornerLipCtrl = self.createFaceControl({'side': self.Side.RIGHT, 'name': 'LowerCornerLip'}, parent=rightCornerLipCtrl)
+        rightLowerCornerLipCtrl.addPointHelper('box', 'centerMarker', size=0.5, localPosition=(-0.125, 0.0, 0.0), localScale=(0.5, 1.0, 1.0), side=self.Side.RIGHT)
+        self.publishNode(rightLowerCornerLipCtrl, alias='R_LowerCornerLip')
+
+        rightCornerLipCtrl.tagAsController(parent=parent, children=[rightUpperCornerLipCtrl, rightLowerCornerLipCtrl])
+        rightUpperCornerLipCtrl.tagAsController(parent=rightCornerLipCtrl)
+        rightLowerCornerLipCtrl.tagAsController(parent=rightCornerLipCtrl)
+
+        # Create upper-lip macro controls
+        #
+        centerUpperLipSpace, centerUpperLipGroup, centerUpperLipCtrl = self.createFaceControl({'side': self.Side.CENTER, 'name': 'UpperLip'}, parent=parent, matrix=centerUpperLipExportMatrix)
+        centerUpperLipCtrl.addPointHelper('box', 'cross', size=1.0, side=self.Side.CENTER)
+        self.publishNode(centerUpperLipCtrl, alias='C_UpperLip')
+
+        leftUpperLipSpace, leftUpperLipGroup, leftUpperLipCtrl = self.createFaceControl({'side': self.Side.LEFT, 'name': 'UpperLip'}, parent=centerUpperLipCtrl)
+        leftUpperLipCtrl.addPointHelper('box', 'centerMarker', size=0.5, side=self.Side.LEFT)
+        self.publishNode(leftUpperLipCtrl, alias='L_UpperLip')
+
+        rightUpperLipSpace, rightUpperLipGroup, rightUpperLipCtrl = self.createFaceControl({'side': self.Side.RIGHT, 'name': 'UpperLip'}, parent=centerUpperLipCtrl)
+        rightUpperLipCtrl.addPointHelper('box', 'centerMarker', size=0.5, side=self.Side.RIGHT)
+        self.publishNode(rightUpperLipCtrl, alias='R_UpperLip')
+
+        centerUpperLipCtrl.tagAsController(parent=parent, children=[leftUpperLipCtrl, rightUpperLipCtrl])
+        leftUpperLipCtrl.tagAsController(parent=centerUpperLipCtrl)
+        rightUpperLipCtrl.tagAsController(parent=centerUpperLipCtrl)
+
+        centerUpperLipCurveFromPointName = self.formatName(side=self.Side.CENTER, name='UpperLip', type='curveFromPoint')
+        centerUpperLipCurveFromPoint = self.scene.createNode('curveFromPoint', name=centerUpperLipCurveFromPointName)
+        centerUpperLipCurveFromPoint.degree = 1
+
+        for (i, ctrl) in enumerate([leftUpperLipCtrl, centerUpperLipCtrl, rightUpperLipCtrl]):
+
+            ctrl.connectPlugs(f'worldMatrix[{ctrl.instanceNumber()}]', centerUpperLipCurveFromPoint[f'inputMatrix[{i}]'])
+
+        centerUpperLipCurve = self.scene.createNode('nurbsCurve', parent=centerUpperLipCtrl)
+        centerUpperLipCurve.connectPlugs(f'parentInverseMatrix[{centerUpperLipCurve.instanceNumber()}]', centerUpperLipCurveFromPoint['parentInverseMatrix'])
+        centerUpperLipCurve.connectPlugs(centerUpperLipCurveFromPoint['outputCurve'], 'create')
+        centerUpperLipCurve.useObjectColor = 2
+        centerUpperLipCurve.wireColorRGB = (1.0, 1.0, 0.0)
+
+        centerUpperLipCtrl.renameShapes()
+
+        # Setup upper-lip macro controls
+        #
+        centerUpperLipBreakMatrix = self.scene.createNode('breakMatrix')
+        centerUpperLipBreakMatrix.normalize = True
+        centerUpperLipBreakMatrix.connectPlugs(centerUpperLipCtrl[f'parentMatrix[{centerUpperLipCtrl.instanceNumber()}]'], 'inMatrix')
+
+        leftCornerLipBreakMatrixName = self.formatName(side=self.Side.LEFT, name='CornerLip', type='breakMatrix')
+        leftCornerLipBreakMatrix = self.scene.createNode('breakMatrix', name=leftCornerLipBreakMatrixName)
+        leftCornerLipBreakMatrix.connectPlugs(leftCornerLipCtrl[f'worldMatrix[{leftCornerLipCtrl.instanceNumber()}]'], 'inMatrix')
+
+        leftUpperLipVectorName = self.formatName(side=self.Side.LEFT, name='UpperLip', subname='Vector', type='vectorMath')
+        leftUpperLipVector = self.scene.createNode('vectorMath', name=leftUpperLipVectorName)
+        leftUpperLipVector.operation = 1  # Subtract
+        leftUpperLipVector.normalize = False
+        leftUpperLipVector.connectPlugs(leftCornerLipBreakMatrix['row4X'], 'inFloatAX')
+        leftUpperLipVector.connectPlugs(leftCornerLipBreakMatrix['row4Y'], 'inFloatAY')
+        leftUpperLipVector.connectPlugs(leftCornerLipBreakMatrix['row4Z'], 'inFloatAZ')
+        leftUpperLipVector.connectPlugs(centerUpperLipBreakMatrix['row4X'], 'inFloatBX')
+        leftUpperLipVector.connectPlugs(centerUpperLipBreakMatrix['row4Y'], 'inFloatBY')
+        leftUpperLipVector.connectPlugs(centerUpperLipBreakMatrix['row4Z'], 'inFloatBZ')
+
+        leftUpperLipDotName = self.formatName(side=self.Side.LEFT, name='UpperLip', subname='Dot', type='vectorMath')
+        leftUpperLipDot = self.scene.createNode('vectorMath', name=leftUpperLipDotName)
+        leftUpperLipDot.operation = 16  # Dot
+        leftUpperLipDot.normalize = False
+        leftUpperLipDot.connectPlugs(centerUpperLipBreakMatrix['row3X'], 'inFloatAX')
+        leftUpperLipDot.connectPlugs(centerUpperLipBreakMatrix['row3Y'], 'inFloatAY')
+        leftUpperLipDot.connectPlugs(centerUpperLipBreakMatrix['row3Z'], 'inFloatAZ')
+        leftUpperLipDot.connectPlugs(leftUpperLipVector['outFloat'], 'inFloatB')
+
+        leftUpperLipHalfDotName = self.formatName(side=self.Side.LEFT, name='UpperLip', subname='HalfDot', type='floatMath')
+        leftUpperLipHalfDot = self.scene.createNode('floatMath', name=leftUpperLipHalfDotName)
+        leftUpperLipHalfDot.operation = 6  # Half
+        leftUpperLipHalfDot.connectPlugs(leftUpperLipDot['outFloatX'], 'inFloatA')
+        leftUpperLipHalfDot.connectPlugs('outFloat', leftUpperLipSpace['translateZ'])
+
+        rightCornerLipBreakMatrixName = self.formatName(side=self.Side.RIGHT, name='CornerLip', type='breakMatrix')
+        rightCornerLipBreakMatrix = self.scene.createNode('breakMatrix', name=rightCornerLipBreakMatrixName)
+        rightCornerLipBreakMatrix.connectPlugs(rightCornerLipCtrl[f'worldMatrix[{rightCornerLipCtrl.instanceNumber()}]'], 'inMatrix')
+
+        rightUpperLipVectorName = self.formatName(side=self.Side.RIGHT, name='UpperLip', subname='Vector', type='vectorMath')
+        rightUpperLipVector = self.scene.createNode('vectorMath', name=rightUpperLipVectorName)
+        rightUpperLipVector.operation = 1  # Subtract
+        rightUpperLipVector.normalize = False
+        rightUpperLipVector.connectPlugs(rightCornerLipBreakMatrix['row4X'], 'inFloatAX')
+        rightUpperLipVector.connectPlugs(rightCornerLipBreakMatrix['row4Y'], 'inFloatAY')
+        rightUpperLipVector.connectPlugs(rightCornerLipBreakMatrix['row4Z'], 'inFloatAZ')
+        rightUpperLipVector.connectPlugs(centerUpperLipBreakMatrix['row4X'], 'inFloatBX')
+        rightUpperLipVector.connectPlugs(centerUpperLipBreakMatrix['row4Y'], 'inFloatBY')
+        rightUpperLipVector.connectPlugs(centerUpperLipBreakMatrix['row4Z'], 'inFloatBZ')
+
+        rightUpperLipDotName = self.formatName(side=self.Side.RIGHT, name='UpperLip', subname='Dot', type='vectorMath')
+        rightUpperLipDot = self.scene.createNode('vectorMath', name=rightUpperLipDotName)
+        rightUpperLipDot.operation = 16  # Dot
+        rightUpperLipDot.normalize = False
+        rightUpperLipDot.connectPlugs(centerUpperLipBreakMatrix['row3X'], 'inFloatAX')
+        rightUpperLipDot.connectPlugs(centerUpperLipBreakMatrix['row3Y'], 'inFloatAY')
+        rightUpperLipDot.connectPlugs(centerUpperLipBreakMatrix['row3Z'], 'inFloatAZ')
+        rightUpperLipDot.connectPlugs(rightUpperLipVector['outFloat'], 'inFloatB')
+
+        rightUpperLipHalfDotName = self.formatName(side=self.Side.RIGHT, name='UpperLip', subname='HalfDot', type='floatMath')
+        rightUpperLipHalfDot = self.scene.createNode('floatMath', name=rightUpperLipHalfDotName)
+        rightUpperLipHalfDot.operation = 6  # Half
+        rightUpperLipHalfDot.connectPlugs(rightUpperLipDot['outFloatX'], 'inFloatA')
+        rightUpperLipHalfDot.connectPlugs('outFloat', rightUpperLipSpace['translateZ'])
+
+        # Create upper-lip proxy curves
+        #
+        leftUpperLipCurveFromPointName = self.formatName(side=self.Side.LEFT, name='UpperLip', type='curveFromPoint')
+        leftUpperLipCurveFromPoint = self.scene.createNode('curveFromPoint', name=leftUpperLipCurveFromPointName)
+        leftUpperLipCurveFromPoint.degree = 3
+
+        for (i, ctrl) in enumerate([centerUpperLipCtrl, leftUpperLipCtrl, leftUpperCornerLipCtrl, leftCornerLipCtrl]):
+
+            ctrl.connectPlugs(f'worldMatrix[{ctrl.instanceNumber()}]', leftUpperLipCurveFromPoint[f'inputMatrix[{i}]'])
+
+        leftUpperLipCurve = self.scene.createNode('nurbsCurve', parent=centerUpperLipCtrl)
+        leftUpperLipCurve.connectPlugs(f'parentInverseMatrix[{leftUpperLipCurve.instanceNumber()}]', leftUpperLipCurveFromPoint['parentInverseMatrix'])
+        leftUpperLipCurve.connectPlugs(leftUpperLipCurveFromPoint['outputCurve'], 'create')
+        leftUpperLipCurve.template = True
+
+        centerUpperLipCtrl.renameShapes()
+
+        rightUpperLipCurveFromPointName = self.formatName(side=self.Side.RIGHT, name='UpperLip', type='curveFromPoint')
+        rightUpperLipCurveFromPoint = self.scene.createNode('curveFromPoint', name=rightUpperLipCurveFromPointName)
+        rightUpperLipCurveFromPoint.degree = 3
+
+        for (i, ctrl) in enumerate([centerUpperLipCtrl, rightUpperLipCtrl, rightUpperCornerLipCtrl, rightCornerLipCtrl]):
+
+            ctrl.connectPlugs(f'worldMatrix[{ctrl.instanceNumber()}]', rightUpperLipCurveFromPoint[f'inputMatrix[{i}]'])
+
+        rightUpperLipCurve = self.scene.createNode('nurbsCurve', parent=centerUpperLipCtrl)
+        rightUpperLipCurve.connectPlugs(f'parentInverseMatrix[{rightUpperLipCurve.instanceNumber()}]', rightUpperLipCurveFromPoint['parentInverseMatrix'])
+        rightUpperLipCurve.connectPlugs(rightUpperLipCurveFromPoint['outputCurve'], 'create')
+        rightUpperLipCurve.template = True
+
+        centerUpperLipCtrl.renameShapes()
+
+        # Create lower-lip macro controls
+        #
+        centerLowerLipSpace, centerLowerLipGroup, centerLowerLipCtrl = self.createFaceControl({'side': self.Side.CENTER, 'name': 'LowerLip'}, parent=parent, matrix=centerLowerLipExportMatrix)
+        centerLowerLipSpace.addConstraint('transformConstraint', [jawCtrl], maintainOffset=True)
+        centerLowerLipCtrl.addPointHelper('box', 'cross', size=1.0, side=self.Side.CENTER)
+        self.publishNode(centerLowerLipCtrl, alias='C_LowerLip')
+
+        leftLowerLipSpace, leftLowerLipGroup, leftLowerLipCtrl = self.createFaceControl({'side': self.Side.LEFT, 'name': 'LowerLip'}, parent=centerLowerLipCtrl)
+        leftLowerLipCtrl.addPointHelper('box', 'centerMarker', size=0.5, side=self.Side.LEFT)
+        self.publishNode(leftLowerLipCtrl, alias='L_LowerLip')
+
+        rightLowerLipSpace, rightLowerLipGroup, rightLowerLipCtrl = self.createFaceControl({'side': self.Side.RIGHT, 'name': 'LowerLip'}, parent=centerLowerLipCtrl)
+        rightLowerLipCtrl.addPointHelper('box', 'centerMarker', size=0.5, side=self.Side.RIGHT)
+        self.publishNode(rightLowerLipCtrl, alias='R_LowerLip')
+
+        centerLowerLipCtrl.tagAsController(parent=parent, children=[leftLowerLipCtrl, rightLowerLipCtrl])
+        leftLowerLipCtrl.tagAsController(parent=centerLowerLipCtrl)
+        rightLowerLipCtrl.tagAsController(parent=centerLowerLipCtrl)
+
+        centerLowerLipCurveFromPointName = self.formatName(side=self.Side.CENTER, name='LowerLip', type='curveFromPoint')
+        centerLowerLipCurveFromPoint = self.scene.createNode('curveFromPoint', name=centerLowerLipCurveFromPointName)
+        centerLowerLipCurveFromPoint.degree = 1
+
+        for (i, ctrl) in enumerate([leftLowerLipCtrl, centerLowerLipCtrl, rightLowerLipCtrl]):
+
+            ctrl.connectPlugs(f'worldMatrix[{ctrl.instanceNumber()}]', centerLowerLipCurveFromPoint[f'inputMatrix[{i}]'])
+
+        centerLowerLipCurve = self.scene.createNode('nurbsCurve', parent=centerLowerLipCtrl)
+        centerLowerLipCurve.connectPlugs(f'parentInverseMatrix[{centerLowerLipCurve.instanceNumber()}]', centerLowerLipCurveFromPoint['parentInverseMatrix'])
+        centerLowerLipCurve.connectPlugs(centerLowerLipCurveFromPoint['outputCurve'], 'create')
+        centerLowerLipCurve.useObjectColor = 2
+        centerLowerLipCurve.wireColorRGB = (1.0, 1.0, 0.0)
+
+        centerLowerLipCtrl.renameShapes()
+
+        # Create lower-lip proxy curves
+        #
+        leftLowerLipCurveFromPointName = self.formatName(side=self.Side.LEFT, name='LowerLip', type='curveFromPoint')
+        leftLowerLipCurveFromPoint = self.scene.createNode('curveFromPoint', name=leftLowerLipCurveFromPointName)
+        leftLowerLipCurveFromPoint.degree = 3
+
+        for (i, ctrl) in enumerate([centerLowerLipCtrl, leftLowerLipCtrl, leftLowerCornerLipCtrl, leftCornerLipCtrl]):
+
+            ctrl.connectPlugs(f'worldMatrix[{ctrl.instanceNumber()}]', leftLowerLipCurveFromPoint[f'inputMatrix[{i}]'])
+
+        leftLowerLipCurve = self.scene.createNode('nurbsCurve', parent=centerLowerLipCtrl)
+        leftLowerLipCurve.connectPlugs(f'parentInverseMatrix[{leftLowerLipCurve.instanceNumber()}]', leftLowerLipCurveFromPoint['parentInverseMatrix'])
+        leftLowerLipCurve.connectPlugs(leftLowerLipCurveFromPoint['outputCurve'], 'create')
+        leftLowerLipCurve.template = True
+
+        centerLowerLipCtrl.renameShapes()
+
+        rightLowerLipCurveFromPointName = self.formatName(side=self.Side.RIGHT, name='LowerLip', type='curveFromPoint')
+        rightLowerLipCurveFromPoint = self.scene.createNode('curveFromPoint', name=rightLowerLipCurveFromPointName)
+        rightLowerLipCurveFromPoint.degree = 3
+
+        for (i, ctrl) in enumerate([centerLowerLipCtrl, rightLowerLipCtrl, rightLowerCornerLipCtrl, rightCornerLipCtrl]):
+
+            ctrl.connectPlugs(f'worldMatrix[{ctrl.instanceNumber()}]', rightLowerLipCurveFromPoint[f'inputMatrix[{i}]'])
+
+        rightLowerLipCurve = self.scene.createNode('nurbsCurve', parent=centerLowerLipCtrl)
+        rightLowerLipCurve.connectPlugs(f'parentInverseMatrix[{rightLowerLipCurve.instanceNumber()}]', rightLowerLipCurveFromPoint['parentInverseMatrix'])
+        rightLowerLipCurve.connectPlugs(rightLowerLipCurveFromPoint['outputCurve'], 'create')
+        rightLowerLipCurve.template = True
+
+        centerLowerLipCtrl.renameShapes()
+
+        # Setup lower-lip macro controls
+        #
+        centerLowerLipBreakMatrix = self.scene.createNode('breakMatrix')
+        centerLowerLipBreakMatrix.normalize = True
+        centerLowerLipBreakMatrix.connectPlugs(centerLowerLipCtrl[f'parentMatrix[{centerLowerLipCtrl.instanceNumber()}]'], 'inMatrix')
+
+        leftLowerLipVectorName = self.formatName(side=self.Side.LEFT, name='LowerLip', subname='Vector', type='vectorMath')
+        leftLowerLipVector = self.scene.createNode('vectorMath', name=leftLowerLipVectorName)
+        leftLowerLipVector.operation = 1  # Subtract
+        leftLowerLipVector.normalize = False
+        leftLowerLipVector.connectPlugs(leftCornerLipBreakMatrix['row4X'], 'inFloatAX')
+        leftLowerLipVector.connectPlugs(leftCornerLipBreakMatrix['row4Y'], 'inFloatAY')
+        leftLowerLipVector.connectPlugs(leftCornerLipBreakMatrix['row4Z'], 'inFloatAZ')
+        leftLowerLipVector.connectPlugs(centerLowerLipBreakMatrix['row4X'], 'inFloatBX')
+        leftLowerLipVector.connectPlugs(centerLowerLipBreakMatrix['row4Y'], 'inFloatBY')
+        leftLowerLipVector.connectPlugs(centerLowerLipBreakMatrix['row4Z'], 'inFloatBZ')
+
+        leftLowerLipDotName = self.formatName(side=self.Side.LEFT, name='LowerLip', subname='Dot', type='vectorMath')
+        leftLowerLipDot = self.scene.createNode('vectorMath', name=leftLowerLipDotName)
+        leftLowerLipDot.operation = 16  # Dot
+        leftLowerLipDot.normalize = False
+        leftLowerLipDot.connectPlugs(centerLowerLipBreakMatrix['row3X'], 'inFloatAX')
+        leftLowerLipDot.connectPlugs(centerLowerLipBreakMatrix['row3Y'], 'inFloatAY')
+        leftLowerLipDot.connectPlugs(centerLowerLipBreakMatrix['row3Z'], 'inFloatAZ')
+        leftLowerLipDot.connectPlugs(leftLowerLipVector['outFloat'], 'inFloatB')
+
+        leftLowerLipHalfDotName = self.formatName(side=self.Side.LEFT, name='LowerLip', subname='HalfDot', type='floatMath')
+        leftLowerLipHalfDot = self.scene.createNode('floatMath', name=leftLowerLipHalfDotName)
+        leftLowerLipHalfDot.operation = 6  # Half
+        leftLowerLipHalfDot.connectPlugs(leftLowerLipDot['outFloatX'], 'inFloatA')
+        leftLowerLipHalfDot.connectPlugs('outFloat', leftLowerLipSpace['translateZ'])
+
+        rightLowerLipVectorName = self.formatName(side=self.Side.RIGHT, name='LowerLip', subname='Vector', type='vectorMath')
+        rightLowerLipVector = self.scene.createNode('vectorMath', name=rightLowerLipVectorName)
+        rightLowerLipVector.operation = 1  # Subtract
+        rightLowerLipVector.normalize = False
+        rightLowerLipVector.connectPlugs(rightCornerLipBreakMatrix['row4X'], 'inFloatAX')
+        rightLowerLipVector.connectPlugs(rightCornerLipBreakMatrix['row4Y'], 'inFloatAY')
+        rightLowerLipVector.connectPlugs(rightCornerLipBreakMatrix['row4Z'], 'inFloatAZ')
+        rightLowerLipVector.connectPlugs(centerLowerLipBreakMatrix['row4X'], 'inFloatBX')
+        rightLowerLipVector.connectPlugs(centerLowerLipBreakMatrix['row4Y'], 'inFloatBY')
+        rightLowerLipVector.connectPlugs(centerLowerLipBreakMatrix['row4Z'], 'inFloatBZ')
+
+        rightLowerLipDotName = self.formatName(side=self.Side.RIGHT, name='LowerLip', subname='Dot', type='vectorMath')
+        rightLowerLipDot = self.scene.createNode('vectorMath', name=rightLowerLipDotName)
+        rightLowerLipDot.operation = 16  # Dot
+        rightLowerLipDot.normalize = False
+        rightLowerLipDot.connectPlugs(centerLowerLipBreakMatrix['row3X'], 'inFloatAX')
+        rightLowerLipDot.connectPlugs(centerLowerLipBreakMatrix['row3Y'], 'inFloatAY')
+        rightLowerLipDot.connectPlugs(centerLowerLipBreakMatrix['row3Z'], 'inFloatAZ')
+        rightLowerLipDot.connectPlugs(rightLowerLipVector['outFloat'], 'inFloatB')
+
+        rightLowerLipHalfDotName = self.formatName(side=self.Side.RIGHT, name='LowerLip', subname='HalfDot', type='floatMath')
+        rightLowerLipHalfDot = self.scene.createNode('floatMath', name=rightLowerLipHalfDotName)
+        rightLowerLipHalfDot.operation = 6  # Half
+        rightLowerLipHalfDot.connectPlugs(rightLowerLipDot['outFloatX'], 'inFloatA')
+        rightLowerLipHalfDot.connectPlugs('outFloat', rightLowerLipSpace['translateZ'])
+
+        # Create lip micro controls
+        #
+        lipComponents = {
+            'UpperLip': (
+                centerUpperLipCtrl,
+                {
+                    self.Side.LEFT: (leftUpperLipCurve, leftUpperLipSpecs),
+                    self.Side.RIGHT: (rightUpperLipCurve, rightUpperLipSpecs)
+                }
+            ),
+            'LowerLip': (
+                centerLowerLipCtrl,
+                {
+                    self.Side.LEFT: (leftLowerLipCurve, leftLowerLipSpecs),
+                    self.Side.RIGHT: (rightLowerLipCurve, rightLowerLipSpecs)
+                }
+            )
+        }
+
+        for (lipName, (centerLipCtrl, lipSubcomponent)) in lipComponents.items():
+
+            lipSpace, lipGroup, lipCtrl = self.createFaceControl({'side': self.Side.CENTER, 'name': lipName, 'index': 1}, parent=parent)
+            lipSpace.addConstraint('transformConstraint', [centerLipCtrl], maintainOffset=False)
+            lipCtrl.addPointHelper('sphere', size=0.25, side=self.Side.CENTER)
+            lipCtrl.tagAsController(parent=centerLipCtrl)
+            self.publishNode(lipCtrl, alias=f'C_{lipName}01')
+
+            for (side, (lipCurve, lipSpecs)) in lipSubcomponent.items():
+
+                sideChar = side.name.upper()[0]
+                mirrorSign = -1.0 if (side == self.Side.RIGHT) else 1.0
+
+                lipCurveFromPoint = self.scene(lipCurve['create'].source().node())
+                lipCtrls = [self.scene(element.source().node()) for element in plugutils.iterElements(lipCurveFromPoint['inputMatrix'])]
+                lipStartCtrl, lipEndCtrl = lipCtrls[1], lipCtrls[-2]
+
+                startBreakMatrixName = self.formatName(side=side, name=lipName, type='breakMatrix')
+                startBreakMatrix = self.scene.createNode('breakMatrix', name=startBreakMatrixName)
+                startBreakMatrix.normalize = True
+                startBreakMatrix.connectPlugs(lipStartCtrl[f'worldMatrix[{lipStartCtrl.instanceNumber()}]'], 'inMatrix')
+
+                endBreakMatrixName = self.formatName(side=side, name=f'{lipName}Corner', type='breakMatrix')
+                endBreakMatrix = self.scene.createNode('breakMatrix', name=endBreakMatrixName)
+                endBreakMatrix.normalize = True
+                endBreakMatrix.connectPlugs(lipEndCtrl[f'worldMatrix[{lipEndCtrl.instanceNumber()}]'], 'inMatrix')
+
+                denominator = len(lipSpecs) + 1
+
+                for (i, lipSpec) in enumerate(lipSpecs, start=1):
+
+                    lipSpace, lipGroup, lipCtrl = self.createFaceControl({'side': side, 'name': lipName, 'index': i}, parent=parent)
+                    lipCtrl.addPointHelper('sphere', size=0.25, side=side)
+                    lipCtrl.tagAsController(parent=centerLipCtrl)
+                    self.publishNode(lipCtrl, alias=f'{sideChar}_{lipName}{str(i).zfill(2)}')
+
+                    numerator = float(i)
+                    parameter = numerator / denominator
+
+                    constraint = lipSpace.addConstraint(
+                        'pointOnCurveConstraint',
+                        [lipCurve],
+                        parameter=parameter,
+                        useFraction=True,
+                        forwardVector=(0.0, 0.0, 1.0 * mirrorSign),
+                        upVector=(1.0, 0.0, 0.0),
+                        worldUpType=3,  # Vector
+                        maintainOffset=False
+                    )
+
+                    worldUpVectorName = self.formatName(side=side, name='UpperLip', index=i, type='vectorMath')
+                    worldUpVector = self.scene.createNode('vectorMath', name=worldUpVectorName)
+                    worldUpVector.operation = 19  # Lerp
+                    worldUpVector.weight = parameter
+                    worldUpVector.connectPlugs(startBreakMatrix['row1X'], 'inFloatAX')
+                    worldUpVector.connectPlugs(startBreakMatrix['row1Y'], 'inFloatAY')
+                    worldUpVector.connectPlugs(startBreakMatrix['row1Z'], 'inFloatAZ')
+                    worldUpVector.connectPlugs(endBreakMatrix['row1X'], 'inFloatBX')
+                    worldUpVector.connectPlugs(endBreakMatrix['row1Y'], 'inFloatBY')
+                    worldUpVector.connectPlugs(endBreakMatrix['row1Z'], 'inFloatBZ')
+
+                    constraint.connectPlugs(worldUpVector['outFloat'], 'worldUpVector')
+
+                    lipExportJoint = lipSpec.getNode()
+                    lipExportJoint.copyTransform(lipCtrl)
 
     def buildJawRig(self, jawSpec, scale=1.0, parent=None):
         """
@@ -1778,9 +2207,18 @@ class FaceComponent(basecomponent.BaseComponent):
         # Create lower-face components
         #
         lowerFaceParent = lowerFaceCtrl if splitFace else faceCtrl
+        jawSpec = lowerFaceSpec.children[self.LowerFaceType.JAW]
 
         self.buildJawRig(
-            lowerFaceSpec.children[self.LowerFaceType.JAW],
+            jawSpec,
+            scale=rigScale, parent=lowerFaceParent
+        )
+
+        self.buildLipRigs(
+            jawSpec.children[self.JawType.LEFT_LIP_CORNER],
+            lowerFaceSpec.children[self.LowerFaceType.UPPER_LIPS],
+            jawSpec.children[self.JawType.LOWER_LIPS],
+            jawSpec.children[self.JawType.RIGHT_LIP_CORNER],
             scale=rigScale, parent=lowerFaceParent
         )
     # endregion
