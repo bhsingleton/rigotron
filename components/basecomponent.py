@@ -192,17 +192,21 @@ class BaseComponent(abstractcomponent.AbstractComponent):
         #
         numArgs = len(args)
 
-        if not (numArgs >= 2):
+        if not (numArgs >= 3):
 
-            raise TypeError(f'unpackSpecs() expects at least 2 args ({numArgs} given)!')
+            raise TypeError(f'unpackSpecs() expects at least 3 args ({numArgs} given)!')
 
         # Evaluate argument types
         #
         *sizes, specs = args
 
-        if not (all(isinstance(size, int) for size in sizes) and isinstance(specs, MutableSequence)):
+        if not all(isinstance(size, int) for size in sizes):
 
-            raise TypeError(f'unpackSpecs() expects a sequence of sizes and specs!')
+            raise TypeError(f'unpackSpecs() expects a sequence of sizes!')
+
+        if not isinstance(specs, MutableSequence):
+
+            raise TypeError(f'unpackSpecs() expects a list of specs ({type(specs).__name__} given)!')
 
         # Evaluate sizes with array size
         #
