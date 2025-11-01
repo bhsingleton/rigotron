@@ -117,6 +117,12 @@ class QSkinsTab(qabstracttab.QAbstractTab):
         self.editGroupBox.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
         self.editGroupBox.setLayout(self.editLayout)
 
+        self.createSkinPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/dcc/icons/new_file.svg'), 'Create')
+        self.createSkinPushButton.setObjectName('createSkinPushButton')
+        self.createSkinPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding))
+        self.createSkinPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.createSkinPushButton.clicked.connect(self.on_createSkinPushButton_clicked)
+
         self.addSkinPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/dcc/icons/add.svg'), 'Add')
         self.addSkinPushButton.setObjectName('addSkinPushButton')
         self.addSkinPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
@@ -161,13 +167,14 @@ class QSkinsTab(qabstracttab.QAbstractTab):
         self.moveSkinDownPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
         self.moveSkinDownPushButton.clicked.connect(self.on_moveSkinDownPushButton_clicked)
 
-        self.editLayout.addWidget(self.addSkinPushButton, 0, 0)
-        self.editLayout.addWidget(self.removeSkinPushButton, 0, 1)
-        self.editLayout.addWidget(self.divider, 0, 2, 2, 1)
-        self.editLayout.addWidget(self.moveSkinUpPushButton, 0, 3)
-        self.editLayout.addWidget(self.renameSkinPushButton, 1, 0)
-        self.editLayout.addWidget(self.reloadSkinPushButton, 1, 1)
-        self.editLayout.addWidget(self.moveSkinDownPushButton, 1, 3)
+        self.editLayout.addWidget(self.createSkinPushButton, 0, 0, 2, 1)
+        self.editLayout.addWidget(self.addSkinPushButton, 0, 1)
+        self.editLayout.addWidget(self.removeSkinPushButton, 0, 2)
+        self.editLayout.addWidget(self.divider, 0, 3, 2, 1)
+        self.editLayout.addWidget(self.moveSkinUpPushButton, 0, 4)
+        self.editLayout.addWidget(self.renameSkinPushButton, 1, 1)
+        self.editLayout.addWidget(self.reloadSkinPushButton, 1, 2)
+        self.editLayout.addWidget(self.moveSkinDownPushButton, 1, 4)
 
         centralLayout.addWidget(self.editGroupBox)
     # endregion
@@ -292,9 +299,9 @@ class QSkinsTab(qabstracttab.QAbstractTab):
         return isinstance(self._selectedRow, int)
 
     @undo.Undo(state=False)
-    def addSkin(self, filePath, namespace=None):
+    def createSkin(self, filePath, namespace=None):
         """
-        Adds a new skin to the scene file.
+        Creates a new skin and adds it to the scene file.
 
         :type filePath: str
         :type namespace: Union[str, None]
@@ -305,13 +312,14 @@ class QSkinsTab(qabstracttab.QAbstractTab):
         #
         client = clientutils.getCurrentClient()
         clientExists = client is not None
+        isRelativeToClient = client.hasAbsoluteFile(filePath) if clientExists else False
 
-        isRelativeToClient = client.hasAbsoluteFile(referencePath) if clientExists else False
+        resolvedPath = filePath
 
         if isRelativeToClient:
 
             relativePath = client.mapToRoot(filePath)
-            filePath = os.path.join('$P4ROOT', relativePath)
+            resolvedPath = os.path.join('$P4ROOT', relativePath)
 
         # Check if a namespace was supplied
         #
@@ -333,12 +341,54 @@ class QSkinsTab(qabstracttab.QAbstractTab):
 
         # Create reference to scene file
         #
-        return self.controlRig.addSkin(filePath, namespace=namespace)
+        return self.controlRig.addSkin(resolvedPath, namespace=namespace)
 
     @undo.Undo(state=False)
-    def removeSkin(self):
+    def addSkin(self, filePath, namespace=None):
+        """
+        Adds a pre-existing skin to the scene file.
 
-        pass
+        :type filePath: str
+        :type namespace: Union[str, None]
+        :rtype: mpy.builtins.referencemixin.ReferenceMixin
+        """
+
+        # Check if path is absolute
+        #
+        client = clientutils.getCurrentClient()
+        clientExists = client is not None
+        isRelativeToClient = client.hasAbsoluteFile(filePath) if clientExists else False
+
+        resolvedPath = filePath
+
+        if isRelativeToClient:
+
+            relativePath = client.mapToRoot(filePath)
+            resolvedPath = os.path.join('$P4ROOT', relativePath)
+
+        # Check if a namespace was supplied
+        #
+        if stringutils.isNullOrEmpty(namespace):
+
+            filename = os.path.basename(filePath)
+            name, extension = os.path.splitext(filename)
+
+            namespace = name.replace('SKL_', '').replace('_ExportRig', '')
+
+        # Create reference to scene file
+        #
+        return self.controlRig.addSkin(resolvedPath, namespace=namespace)
+
+    @undo.Undo(state=False)
+    def removeSkin(self, index):
+        """
+        Removes the skin at the specified index.
+
+        :type index: int
+        :rtype: bool
+        """
+
+        return self.controlRig.removeSkin(index)
 
     def clear(self):
         """
@@ -470,6 +520,42 @@ class QSkinsTab(qabstracttab.QAbstractTab):
             self._selectedReference = self.nullWeakReference
 
     @QtCore.Slot()
+    def on_createSkinPushButton_clicked(self):
+        """
+        Slot method for the `createSkinPushButton` widget's `clicked` signal.
+
+        :rtype: None
+        """
+
+        # Check if control rig exists
+        #
+        if self.controlRig is None:
+
+            return QtWidgets.QMessageBox.warning(self, 'Create Skin', 'No control rig available to add skin to!')
+
+        # Check if control rig has a referenced skeleton
+        #
+        hasReferencedSkeleton = self.controlRig.hasReferencedSkeleton()
+
+        if not hasReferencedSkeleton:
+
+            return QtWidgets.QMessageBox.warning(self, 'Create Skin', 'Control rig requires a referenced skeleton!')
+
+        # Prompt user for save location
+        #
+        filePath, fileFilter = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            'Create New Skin',
+            self.scene.directory,
+            'Maya Scenes (*.ma)'
+        )
+
+        if not stringutils.isNullOrEmpty(filePath):
+
+            self.createSkin(filePath)
+            self.invalidate()
+
+    @QtCore.Slot()
     def on_addSkinPushButton_clicked(self):
         """
         Slot method for the `addSkinPushButton` widget's `clicked` signal.
@@ -493,11 +579,11 @@ class QSkinsTab(qabstracttab.QAbstractTab):
 
         # Prompt user for save location
         #
-        filePath, fileFilter = QtWidgets.QFileDialog.getSaveFileName(
+        filePath, fileFilter = QtWidgets.QFileDialog.getOpenFileName(
             self,
             'Add New Skin',
             self.scene.directory,
-            'Maya Scenes (*.mb *.ma)'
+            'Maya Scenes (*.ma)'
         )
 
         if not stringutils.isNullOrEmpty(filePath):
@@ -515,7 +601,7 @@ class QSkinsTab(qabstracttab.QAbstractTab):
 
         if self.hasSelection():
 
-            self.controlRig.removeSkin(self._selectedRow)
+            self.removeSkin(self._selectedRow)
             self.invalidate()
 
         else:
