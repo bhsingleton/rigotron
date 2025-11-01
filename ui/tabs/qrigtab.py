@@ -3,7 +3,7 @@ import shutil
 
 from maya import cmds as mc
 from maya.api import OpenMaya as om
-from dcc.maya.libs import transformutils, layerutils
+from dcc.maya.libs import transformutils
 from dcc.maya.decorators import undo
 from dcc.maya.models import qplugitemmodel, qplugstyleditemdelegate, qplugitemfiltermodel
 from dcc.python import stringutils
@@ -14,7 +14,7 @@ from itertools import chain
 from . import qabstracttab
 from ..dialogs import qinputdialog
 from ..models import qcomponentitemmodel, qpropertyitemmodel
-from ...libs import Status, stateutils
+from ...libs import Status, stateutils, layerutils
 
 import logging
 logging.basicConfig()
