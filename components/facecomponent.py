@@ -899,7 +899,7 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Edit throat spec
         #
-        throatEnabled = bool(self.throatEnabled) and jawEnabled
+        throatEnabled = bool(self.throatEnabled) and chinEnabled
 
         throatSpec = jawSpecs[self.JawType.THROAT]
         throatSpec.enabled = throatEnabled
@@ -1342,9 +1342,8 @@ class FaceComponent(basecomponent.BaseComponent):
 
         # Create ear controls
         #
-        referenceNode = self.skeletonReference()
-        leftEarSpecs = self.flattenSpecs(leftEarSpec)
-        rightEarSpecs = self.flattenSpecs(rightEarSpec)
+        leftEarSpecs = list(self.flattenSpecs(leftEarSpec))
+        rightEarSpecs = list(self.flattenSpecs(rightEarSpec))
 
         for (side, earSpecs) in ((self.Side.LEFT, leftEarSpecs), (self.Side.RIGHT, rightEarSpecs)):
 
@@ -1570,7 +1569,7 @@ class FaceComponent(basecomponent.BaseComponent):
 
         if tongueBaseSpec.enabled:
 
-            *tongueSpecs, tongueTipSpec = self.flattenSpecs(tongueBaseSpec)
+            *tongueSpecs, tongueTipSpec = list(self.flattenSpecs(tongueBaseSpec))
             tongueCount = len(tongueSpecs)
 
             tongueCtrls = [None] * tongueCount
@@ -1578,14 +1577,17 @@ class FaceComponent(basecomponent.BaseComponent):
             for (i, spec) in enumerate(tongueSpecs):
 
                 index = i + 1
-                parent = jawCtrl if (i == 0) else tongueCtrls[i - 1]
+                previousTongueCtrl = jawCtrl if (i == 0) else tongueCtrls[i - 1]
+
                 tongueExportJoint = spec.getNode()
                 tongueExportMatrix = tongueExportJoint.worldMatrix()
 
-                tongueSpace, tongueGroup, tongueCtrl = self.createFaceControl({'name': 'Tongue', 'index': index}, matrix=tongueExportMatrix, parent=parent)
+                tongueSpace, tongueGroup, tongueCtrl = self.createFaceControl({'name': 'Tongue', 'index': index}, matrix=tongueExportMatrix, parent=previousTongueCtrl)
                 tongueCtrl.addPointHelper('box', size=(2.0 * scale), localScale=(1.0, 0.5, 2.0), side=self.Side.CENTER)
                 tongueCtrl.tagAsController(parent=jawCtrl)
-                self.publishNode(tongueCtrl, alias=f'Tongue{str(i).zfill(2)}')
+                self.publishNode(tongueCtrl, alias=f'Tongue{str(index).zfill(2)}')
+
+                tongueCtrls[i] = tongueCtrl
 
             tongueTipExportJoint = tongueTipSpec.getNode()
             tongueTipExportMatrix = tongueTipExportJoint.worldMatrix()
