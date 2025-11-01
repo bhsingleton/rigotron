@@ -1,9 +1,9 @@
 from maya import cmds as mc
 from maya.api import OpenMaya as om
 from mpy import mpyscene, mpynode
-from dcc.ui import qsingletonwindow
 from dcc.maya.standalone import rpc
-from Qt import QtCore, QtWidgets, QtGui, QtCompat
+from dcc.vendor.Qt import QtCore, QtWidgets, QtGui, QtCompat
+from dcc.ui import qsingletonwindow
 from functools import partial
 from . import resources
 from .tabs import qrigtab, qpropstab, qskinstab, qlogstab

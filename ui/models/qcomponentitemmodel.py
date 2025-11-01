@@ -2,9 +2,9 @@ import json
 
 from maya.api import OpenMaya as om
 from mpy import mpyscene, mpynode
-from Qt import QtCore, QtWidgets, QtGui, QtCompat
-from enum import IntEnum
+from dcc.vendor.Qt import QtCore, QtWidgets, QtGui, QtCompat
 from dcc.python import stringutils
+from enum import IntEnum
 from ...libs import Status
 from ...components import rootcomponent
 

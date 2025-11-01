@@ -2,6 +2,11 @@ from maya.api import OpenMaya as om
 from mpy import mpynode
 from dcc.maya.models import qplugitemmodel
 
+import logging
+logging.basicConfig()
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+
 
 class QPropertyItemModel(qplugitemmodel.QPlugItemModel):
     """
