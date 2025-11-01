@@ -754,24 +754,14 @@ class HeadComponent(basecomponent.BaseComponent):
             if spineExists:
 
                 spineComponent = spineComponents[0]
-                spineIntermediateCurve = self.scene(spineComponent.userProperties['intermediateCurve'])
-                spineBreakMatrices = plugutils.getConnectedNodes(spineIntermediateCurve['controlPoints'], source=True, destination=False, includeNullObjects=False)
-                spineMultMatrices = plugutils.getConnectedNodes(spineIntermediateCurve[f'parentInverseMatrix[{spineIntermediateCurve.instanceNumber()}]'], source=False, destination=True, includeNullObjects=False)
-                lastSpineBreakMatrix, lastSpineMultMatrix = self.scene(spineBreakMatrices[-1]), self.scene(spineMultMatrices[-1])
 
-                multMatrixName = self.formatName(name='Neck', subname='SpineOverride', kinemat='IK', type='multMatrix')
-                multMatrix = self.scene.createNode('multMatrix', name=multMatrixName)
-                multMatrix.connectPlugs(firstNeckFKCtrl[f'worldMatrix[{firstNeckFKCtrl.instanceNumber()}]'], 'matrixIn[0]')
-                multMatrix.connectPlugs(chestCtrl[f'worldInverseMatrix[{chestCtrl.instanceNumber()}]'], 'matrixIn[1]')
-                multMatrix.connectPlugs(chestCtrl[f'parentMatrix[{chestCtrl.instanceNumber()}]'], 'matrixIn[2]')
+                blendTransform = self.scene(spineComponent.userProperties['controlPointOverride'])
+                blendTransform.connectPlugs(firstNeckFKCtrl['affectsSpine'], 'blender', force=True)
 
-                blendTransformName = self.formatName(name='Neck', subname='SpineOverride', kinemat='IK', type='blendTransform')
-                blendTransform = self.scene.createNode('blendTransform', name=blendTransformName)
-                blendTransform.connectPlugs(firstNeckFKCtrl['affectsSpine'], 'blender')
-                blendTransform.connectPlugs(lastSpineMultMatrix['matrixSum'], 'inMatrix1')
-                blendTransform.connectPlugs(multMatrix['matrixSum'], 'inMatrix2')
-
-                lastSpineBreakMatrix.connectPlugs(blendTransform['outMatrix'], 'inMatrix', force=True)
+                multMatrix = self.scene(blendTransform['inMatrix2'].source().node())
+                multMatrix.connectPlugs(firstNeckFKCtrl[f'worldMatrix[{firstNeckFKCtrl.instanceNumber()}]'], 'matrixIn[0]', force=True)
+                multMatrix.connectPlugs(chestCtrl[f'worldInverseMatrix[{chestCtrl.instanceNumber()}]'], 'matrixIn[1]', force=True)
+                multMatrix.connectPlugs(chestCtrl[f'parentMatrix[{chestCtrl.instanceNumber()}]'], 'matrixIn[2]', force=True)
 
             # Create head look-at control
             #

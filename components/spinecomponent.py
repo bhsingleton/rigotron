@@ -254,17 +254,8 @@ class SpineComponent(basecomponent.BaseComponent):
         #
         headComponents = [component for component in self.findComponentDescendants('HeadComponent') if component.neckEnabled]
         headExists = len(headComponents) == 1
+
         neckEnabled = headComponents[0].neckEnabled if headExists else False
-
-        spineTipPoint = None
-
-        if neckEnabled:
-
-            headComponent = headComponents[0]
-            neckSpec, = headComponent.skeleton()
-            neckExportJoint = neckSpec.getNode()
-
-            spineTipPoint = neckExportJoint.translation(space=om.MSpace.kWorld)
 
         # Create COG controller
         #
@@ -476,10 +467,16 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Create spine FK tip target
         #
+        spineTipPoint = None
         spineFKTipTarget = None
 
         if neckEnabled:
 
+            headComponent = headComponents[0]
+            neckSpec, = headComponent.skeleton()
+            firstNeckExportJoint = neckSpec.getNode()
+
+            spineTipPoint = firstNeckExportJoint.translation(space=om.MSpace.kWorld)
             spineTipMatrix = transformutils.createTranslateMatrix(spineTipPoint)
 
             spineFKTipTargetName = self.formatName(name=f'{self.componentName}Tip', subname='FK', type='target')
@@ -595,6 +592,7 @@ class SpineComponent(basecomponent.BaseComponent):
             controlNodes.append(spineFKTipTarget)
 
         # Get curve length to derive initial skin weights from
+        # The length of the curve varies based on whether a head component exists!
         #
         intermediateCurve = skinCluster.intermediateObject()
         numControlPoints = int(intermediateCurve.numCVs)
@@ -655,6 +653,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Override control-points on intermediate-object
         #
+        controlMultMatrices = [None] * numControlPoints  # type: List[mpynode.MPyNode]
         controlMatrices = [None] * numControlPoints  # type: List[mpynode.MPyNode]
 
         for (i, controlNode) in enumerate(controlNodes):
@@ -673,7 +672,27 @@ class SpineComponent(basecomponent.BaseComponent):
             breakMatrix.connectPlugs('row4Y', intermediateCurve[f'controlPoints[{i}].yValue'], force=True)
             breakMatrix.connectPlugs('row4Z', intermediateCurve[f'controlPoints[{i}].zValue'], force=True)
 
+            controlMultMatrices[i] = multMatrix
             controlMatrices[i] = breakMatrix
+
+        # Check if blend matrix is required for last control-point
+        #
+        if neckEnabled:
+
+            lastMultMatrix, lastBreakMatrix = controlMultMatrices[-1], controlMatrices[-1]
+
+            multMatrixName = self.formatName(name='Spine', subname='ControlPoint', index=numControlPoints, kinemat='Override', type='multMatrix')
+            multMatrix = self.scene.createNode('multMatrix', name=multMatrixName)
+
+            blendTransformName = self.formatName(name='Spine', subname='ControlPoint', index=numControlPoints, kinemat='Override', type='blendTransform')
+            blendTransform = self.scene.createNode('blendTransform', name=blendTransformName)
+            blendTransform.setAttr('blender', 0.0)
+            blendTransform.connectPlugs(lastMultMatrix['matrixSum'], 'inMatrix1')
+            blendTransform.connectPlugs(multMatrix['matrixSum'], 'inMatrix2')
+
+            lastBreakMatrix.connectPlugs(blendTransform['outMatrix'], 'inMatrix', force=True)
+
+            self.userProperties['controlPointOverride'] = blendTransform.uuid()
 
         # Create spine IK joints
         #
