@@ -159,21 +159,27 @@ class ControlRig(abstractinterface.AbstractInterface):
         :rtype: om.MBoundingBox
         """
 
+        # Check if rig bounding box is valid
+        #
         rigBoundingBoxMin = om.MPoint(self.rigBoundingBoxMin)
         rigBoundingBoxMax = om.MPoint(self.rigBoundingBoxMax)
         difference = (rigBoundingBoxMax - rigBoundingBoxMin)  # type: om.MVector
 
-        if difference.isEquivalent(om.MVector.kZeroVector, tolerance=1e-3):
+        isValid = not difference.isEquivalent(om.MVector.kZeroVector, tolerance=1e-3)
 
-            rigBoundingBox = setuputils.getBoundingBoxByTypeName(typeName='mesh')
-            self.rigBoundingBoxMin = rigBoundingBox.min
-            self.rigBoundingBoxMax = rigBoundingBox.max
-
-            return self.getRigBounds()
-
-        else:
+        if isValid:
 
             return om.MBoundingBox(rigBoundingBoxMin, rigBoundingBoxMax)
+
+        # Calculate rig bounding box
+        #
+        typeName = 'mesh' if (len(tuple(self.scene.iterNodesByTypeName('mesh'))) > 0) else 'joint'
+
+        rigBoundingBox = setuputils.getBoundingBoxByTypeName(typeName=typeName)
+        self.rigBoundingBoxMin = rigBoundingBox.min
+        self.rigBoundingBoxMax = rigBoundingBox.max
+
+        return self.getRigBounds()
 
     def getRigWidthAndHeight(self):
         """
