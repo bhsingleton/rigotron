@@ -74,7 +74,8 @@ class HeadComponent(basecomponent.BaseComponent):
         # Edit neck specs
         #
         numNeckLinks = int(self.numNeckLinks)
-        neckPassthrough = not bool(self.neckEnabled)
+        neckEnabled = bool(self.neckEnabled)
+        neckPassthrough = not neckEnabled
         neckSide = self.Side(self.componentSide)
 
         neckSize = numNeckLinks + 1  # Save space for the head spec!
@@ -115,7 +116,7 @@ class HeadComponent(basecomponent.BaseComponent):
         headSpec.side = neckSide
         headSpec.type = self.Type.HEAD
         headSpec.defaultMatrix = transformutils.createTranslateMatrix((self.__default_component_spacing__, 0.0, 0.0))
-        headSpec.driver.name = self.formatName(kinemat='IK', type='target')
+        headSpec.driver.name = self.formatName(kinemat='IK', type='target') if neckEnabled else self.formatName(type='control')
 
         # Call parent method
         #
@@ -150,7 +151,7 @@ class HeadComponent(basecomponent.BaseComponent):
 
             attachmentSpec = attachmentSpecs[attachmentIndex]
             exportJoint = attachmentSpec.getNode()
-            exportDriver = self.scene(componentParent.userProperties['spineTipIKTarget'])
+            exportDriver = self.scene(componentParent.userProperties['spineTipIKTarget']) if componentParent.spineEnabled else attachmentSpec.driver.getDriver()
 
             return exportJoint, exportDriver
 
@@ -175,7 +176,7 @@ class HeadComponent(basecomponent.BaseComponent):
 
         # Decompose component
         #
-        *neckSpecs, headSpec = self.skeleton(flatten=True)
+        *neckSpecs, headSpec = self.skeleton(flatten=True, skipPassthrough=False)
         neckExportJoints = [neckSpec.getNode() for neckSpec in neckSpecs]
         headExportJoint = headSpec.getNode()
         headExportMatrix = headExportJoint.worldMatrix()
@@ -198,7 +199,7 @@ class HeadComponent(basecomponent.BaseComponent):
         # Get space switch options
         #
         firstNeckSpec = neckSpecs[0]
-        neckEnabled = bool(firstNeckSpec.enabled)
+        neckEnabled = not bool(firstNeckSpec.passthrough)
 
         rootComponent = self.findRootComponent()
         motionCtrl = rootComponent.getPublishedNode('Motion')
