@@ -126,6 +126,14 @@ class LegComponent(TwoBoneLimbComponent):
         }
     }
     __default_rbf_samples__ = {
+        Side.CENTER: [
+            {'sampleName': 'Forward', 'sampleInputTranslate': om.MVector.kXnegAxisVector, 'sampleOutputTranslate': (0.0, 1.0, 0.0)},
+            {'sampleName': 'Backward', 'sampleInputTranslate': om.MVector.kXaxisVector, 'sampleOutputTranslate': (0.0, -1.0, 0.0)},
+            {'sampleName': 'Left', 'sampleInputTranslate': om.MVector.kZaxisVector, 'sampleOutputTranslate': (0.0, 1.0, 0.0)},
+            {'sampleName': 'Right', 'sampleInputTranslate': om.MVector.kZnegAxisVector, 'sampleOutputTranslate': (0.0, 1.0, 0.0)},
+            {'sampleName': 'Up', 'sampleInputTranslate': om.MVector.kYaxisVector, 'sampleOutputTranslate': (1.0, 0.0, 0.0)},
+            {'sampleName': 'Down', 'sampleInputTranslate': om.MVector.kYnegAxisVector, 'sampleOutputTranslate': (-1.0, 0.0, 0.0)}
+        ],
         Side.LEFT: [
             {'sampleName': 'Forward', 'sampleInputTranslate': om.MVector.kXnegAxisVector, 'sampleOutputTranslate': (0.0, 1.0, 0.0)},
             {'sampleName': 'Backward', 'sampleInputTranslate': om.MVector.kXaxisVector, 'sampleOutputTranslate': (0.0, -1.0, 0.0)},
@@ -135,6 +143,14 @@ class LegComponent(TwoBoneLimbComponent):
             {'sampleName': 'Down', 'sampleInputTranslate': om.MVector.kYnegAxisVector, 'sampleOutputTranslate': (-1.0, 0.0, 0.0)}
         ],
         Side.RIGHT: [
+            {'sampleName': 'Forward', 'sampleInputTranslate': om.MVector.kXnegAxisVector, 'sampleOutputTranslate': (0.0, 1.0, 0.0)},
+            {'sampleName': 'Backward', 'sampleInputTranslate': om.MVector.kXaxisVector, 'sampleOutputTranslate': (0.0, -1.0, 0.0)},
+            {'sampleName': 'Left', 'sampleInputTranslate': om.MVector.kZaxisVector, 'sampleOutputTranslate': (0.0, 1.0, 0.0)},
+            {'sampleName': 'Right', 'sampleInputTranslate': om.MVector.kZnegAxisVector, 'sampleOutputTranslate': (0.0, 1.0, 0.0)},
+            {'sampleName': 'Up', 'sampleInputTranslate': om.MVector.kYaxisVector, 'sampleOutputTranslate': (1.0, 0.0, 0.0)},
+            {'sampleName': 'Down', 'sampleInputTranslate': om.MVector.kYnegAxisVector, 'sampleOutputTranslate': (-1.0, 0.0, 0.0)}
+        ],
+        Side.NONE: [
             {'sampleName': 'Forward', 'sampleInputTranslate': om.MVector.kXnegAxisVector, 'sampleOutputTranslate': (0.0, 1.0, 0.0)},
             {'sampleName': 'Backward', 'sampleInputTranslate': om.MVector.kXaxisVector, 'sampleOutputTranslate': (0.0, -1.0, 0.0)},
             {'sampleName': 'Left', 'sampleInputTranslate': om.MVector.kZaxisVector, 'sampleOutputTranslate': (0.0, 1.0, 0.0)},
