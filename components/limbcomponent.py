@@ -256,8 +256,8 @@ class LimbComponent(basecomponent.BaseComponent):
 
         :rtype: Union[rigotron.components.extremitycomponent.ExtremityComponent, None]
         """
-
-        components = self.findComponentDescendants('ExtremityComponent')
+        
+        components = [component for component in self.iterComponentChildren() if any(cls.__name__.endswith('ExtremityComponent') for cls in component.iterBases())]
         numComponents = len(components)
 
         if numComponents == 0:
