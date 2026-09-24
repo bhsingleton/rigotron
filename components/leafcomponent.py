@@ -70,9 +70,11 @@ class LeafComponent(basecomponent.BaseComponent):
 
         # Create control
         #
+        leafMatrix = self.__default_mirror_matrices__[componentSide] * leafExportMatrix
+
         leafSpaceName = self.formatName(type='space')
         leafSpace = self.scene.createNode('transform', name=leafSpaceName, parent=controlsGroup)
-        leafSpace.setWorldMatrix(leafExportMatrix, skipScale=True)
+        leafSpace.setWorldMatrix(leafMatrix, skipScale=True)
         leafSpace.freezeTransform()
 
         leafCtrlName = self.formatName(type='control')
