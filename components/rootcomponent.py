@@ -115,12 +115,12 @@ class RootComponent(basecomponent.BaseComponent):
 
             # Create root control
             #
-            rootSpaceName = self.formatName(name='Root', type='space')
+            rootSpaceName = self.formatName(type='space')
             rootSpace = self.scene.createNode('transform', name=rootSpaceName, parent=controlsGroup)
             rootSpace.setWorldMatrix(rootExportMatrix)
             rootSpace.freezeTransform()
 
-            rootCtrlName = self.formatName(name='Root', type='control')
+            rootCtrlName = self.formatName(type='control')
             rootCtrl = self.scene.createNode('transform', name=rootCtrlName, parent=rootSpace)
             rootCtrl.addPointHelper('sphere', size=(5.0 * rigScale), colorRGB=darkColorRGB)
             rootCtrl.prepareChannelBoxForAnimation()
@@ -161,10 +161,10 @@ class RootComponent(basecomponent.BaseComponent):
 
             # Create root control
             #
-            rootSpaceName = self.formatName(name='Root', type='space')
+            rootSpaceName = self.formatName(type='space')
             rootSpace = self.scene.createNode('transform', name=rootSpaceName, parent=controlsGroup)
 
-            rootCtrlName = self.formatName(name='Root', type='control')
+            rootCtrlName = self.formatName(type='control')
             rootCtrl = self.scene.createNode('transform', name=rootCtrlName, parent=rootSpace)
             rootCtrl.addPointHelper('sphere', size=(15.0 * rigScale), colorRGB=darkColorRGB)
             rootCtrl.addPointHelper('pyramid', size=(10.0 * rigScale), localPosition=(0.0, (-7.5 * rigScale), 0.0), localRotate=(0.0, 0.0, -90.0), colorRGB=darkColorRGB)
