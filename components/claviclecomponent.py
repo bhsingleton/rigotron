@@ -17,6 +17,14 @@ class ClavicleComponent(basecomponent.BaseComponent):
     # region Dunderscores
     __default_component_name__ = 'Clavicle'
     __default_component_matrices__ = {
+        Side.CENTER: om.MMatrix(
+            [
+                (0.0, -1.0, 0.0, 0.0),
+                (-1.0, 0.0, 0.0, 0.0),
+                (0.0, 0.0, -1.0, 0.0),
+                (0.0, -5.0, 160.0, 1.0)
+            ]
+        ),
         Side.LEFT: om.MMatrix(
             [
                 (1.0, 0.0, 0.0, 0.0),
@@ -32,9 +40,18 @@ class ClavicleComponent(basecomponent.BaseComponent):
                 (0.0, 0.0, 1.0, 0.0),
                 (-5.0, 0.0, 160.0, 1.0)
             ]
-        )
+        ),
+        Side.NONE: om.MMatrix(
+            [
+                (0.0, -1.0, 0.0, 0.0),
+                (-1.0, 0.0, 0.0, 0.0),
+                (0.0, 0.0, -1.0, 0.0),
+                (0.0, -5.0, 160.0, 1.0)
+            ]
+        ),
     }
     __default_mirror_matrices__ = {
+        Side.CENTER: om.MMatrix.kIdentity,
         Side.LEFT: om.MMatrix.kIdentity,
         Side.RIGHT: om.MMatrix(
             [
@@ -43,7 +60,8 @@ class ClavicleComponent(basecomponent.BaseComponent):
                 (0.0, 0.0, 1.0, 0.0),
                 (0.0, 0.0, 0.0, 1.0)
             ]
-        )
+        ),
+        Side.NONE: om.MMatrix.kIdentity
     }
     # endregion
 

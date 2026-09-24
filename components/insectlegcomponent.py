@@ -34,6 +34,41 @@ class InsectLegComponent(limbcomponent.LimbComponent):
     __default_component_name__ = 'Leg'
     __default_limb_names__ = ('Coxa', 'Femur', 'Tibia', 'TibiaTip')
     __default_limb_matrices__ = {
+        Side.CENTER:
+        {
+            LimbType.COXA: om.MMatrix(
+                [
+                    (0.0, -1.0, -0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (-1.0, 0.0, 0.0, 0.0),
+                    (0.0, 0, 7.41181, 1.0)
+                ]
+            ),
+            LimbType.FEMUR: om.MMatrix(
+                [
+                    (0.642788, 0.766044, 0, 0),
+                    (-0.766044, 0.642788, 0, 0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 0.0, 1.0)
+                ]
+            ),
+            LimbType.TIBIA: om.MMatrix(
+                [
+                    (0.422619, -0.906308, -0, 0),
+                    (0.906308, 0.422619, 0, 0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (25.0, 0.0, 0.0, 1.0)
+                ]
+            ),
+            LimbType.TIBIA_TIP: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (20.0, 0.0, 0.0, 1.0)
+                ]
+            )
+        },
         Side.LEFT: {
             LimbType.COXA: om.MMatrix(
                 [
@@ -45,55 +80,98 @@ class InsectLegComponent(limbcomponent.LimbComponent):
             ),
             LimbType.FEMUR: om.MMatrix(
                 [
-                    (0.642788, 0.0, 0.766044, 0.0),
-                    (-0.766044, 0.0, 0.642788, 0.0),
-                    (0.0, -1.0, 0.0, 0.0),
-                    (19.6593, 0.0, 7.41181, 1.0)
+                    (0.642788, 0.766044, 0, 0),
+                    (-0.766044, 0.642788, 0, 0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 0.0, 1.0)
                 ]
             ),
             LimbType.TIBIA: om.MMatrix(
                 [
-                    (0.965926, 0.0, -0.258819, 0.0),
-                    (0.258819, 0.0, 0.965926, 0.0),
-                    (0.0, -1.0, 0.0, 0.0),
-                    (35.7289, 0.0, 26.5629, 1.0)
+                    (0.422619, -0.906308, -0, 0),
+                    (0.906308, 0.422619, 0, 0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (25.0, 0.0, 0.0, 1.0)
                 ]
             ),
             LimbType.TIBIA_TIP: om.MMatrix(
                 [
-                    (0.965926, 0.0, -0.258819, 0.0),
-                    (0.258819, 0.0, 0.965926, 0.0),
-                    (0.0, -1.0, 0.0, 0.0),
-                    (55.0474, 0.0, 21.3865, 1.0)
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (20.0, 0.0, 0.0, 1.0)
                 ]
             )
         },
         Side.RIGHT: {
             LimbType.COXA: om.MMatrix(
                 [
-                    (-0.965926, 0.0, -0.258819, 0.0),
-                    (0.258819, 0.0, 0.965926, 0.0),
+                    (-1.0, 0.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
                     (0.0, 1.0, 0.0, 0.0),
-                    (-10.0, 0.0, 10.0, 1.0)
+                    (-9.6593, 0, 7.41181, 1.0)
                 ]
             ),
             LimbType.FEMUR: om.MMatrix(
                 [
-                    (-0.642788, 0.0, 0.766044, 0.0),
-                    (-0.766044, 0.0, 0.642788, 0.0),
-                    (0.0, 1.0, 0.0, 0.0),
-                    (-19.6593, 0.0, 7.41181, 1.0)
+                    (0.642788, 0.766044, 0, 0),
+                    (-0.766044, 0.642788, 0, 0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 0.0, 1.0)
                 ]
             ),
             LimbType.TIBIA: om.MMatrix(
                 [
-                    (-0.965926, 0.0, -0.258819, 0.0),
-                    (0.258819, 0.0, 0.965926, 0.0),
+                    (0.422619, -0.906308, -0, 0),
+                    (0.906308, 0.422619, 0, 0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (25.0, 0.0, 0.0, 1.0)
+                ]
+            ),
+            LimbType.TIBIA_TIP: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
                     (0.0, 1.0, 0.0, 0.0),
-                    (-35.7289, 0.0, 26.5629, 1.0)
+                    (0.0, 0.0, 1.0, 0.0),
+                    (20.0, 0.0, 0.0, 1.0)
                 ]
             )
-        }
+        },
+        Side.NONE:
+        {
+            LimbType.COXA: om.MMatrix(
+                [
+                    (0.0, -1.0, -0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (-1.0, 0.0, 0.0, 0.0),
+                    (0.0, 0, 7.41181, 1.0)
+                ]
+            ),
+            LimbType.FEMUR: om.MMatrix(
+                [
+                    (0.642788, 0.766044, 0, 0),
+                    (-0.766044, 0.642788, 0, 0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 0.0, 1.0)
+                ]
+            ),
+            LimbType.TIBIA: om.MMatrix(
+                [
+                    (0.422619, -0.906308, -0, 0),
+                    (0.906308, 0.422619, 0, 0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (25.0, 0.0, 0.0, 1.0)
+                ]
+            ),
+            LimbType.TIBIA_TIP: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (20.0, 0.0, 0.0, 1.0)
+                ]
+            )
+        },
     }
     __default_rbf_samples__ = {
         Side.LEFT: [
@@ -148,27 +226,37 @@ class InsectLegComponent(limbcomponent.LimbComponent):
         size = len(self.LimbType)
         coxaSpec, femurSpec, tibiaSpec, tibiaTipSpec = self.resizeSkeleton(size, skeletonSpecs, hierarchical=True)
 
-        # Iterate through limb specs
+        # Edit coxa spec
         #
         coxaName, femurName, tibiaName, tibiaTipName = self.__default_limb_names__
         side = self.Side(self.componentSide)
 
+        coxaEnabled = bool(self.coxaEnabled)
+        defaultCoxaMatrix = om.MMatrix(self.__default_limb_matrices__[side][self.LimbType.COXA])
+
+        coxaSpec.passthrough = not coxaEnabled
         coxaSpec.name = self.formatName(name=coxaName)
         coxaSpec.side = side
         coxaSpec.type = self.Type.OTHER
         coxaSpec.otherType = coxaName
         coxaSpec.drawStyle = self.Style.BOX
-        coxaSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.COXA]
+        coxaSpec.defaultMatrix = defaultCoxaMatrix
         coxaSpec.driver.name = self.formatName(name=coxaName, type='joint')
+
+        # Edit femur spec
+        #
+        defaultFemurMatrix = om.MMatrix(self.__default_limb_matrices__[side][self.LimbType.FEMUR]) if coxaEnabled else om.MMatrix(self.__default_limb_matrices__[side][self.LimbType.FEMUR]) * defaultCoxaMatrix
 
         femurSpec.name = self.formatName(name=femurName)
         femurSpec.side = side
         femurSpec.type = self.Type.OTHER
         femurSpec.otherType = femurName
         femurSpec.drawStyle = self.Style.BOX
-        femurSpec.defaultMatrix = self.__default_limb_matrices__[side][self.LimbType.FEMUR]
+        femurSpec.defaultMatrix = defaultFemurMatrix
         femurSpec.driver.name = self.formatName(name=femurName, type='joint')
 
+        # Edit tibia spec
+        #
         tibiaSpec.name = self.formatName(name=tibiaName)
         tibiaSpec.side = side
         tibiaSpec.type = self.Type.OTHER
@@ -204,9 +292,17 @@ class InsectLegComponent(limbcomponent.LimbComponent):
 
         if isInsectFootComponent:
 
-            # Override reverse IK softener
+            # Override spring IK softener
             #
-            extremityCtrl = extremityComponent.getPublishedNode('Foot_IK')
+            extremityCtrl = None
+
+            if extremityComponent.clawEnabled:
+
+                extremityCtrl = self.scene(extremityComponent.getPublishedNode('Claw_IK').userProperties['sikTarget'])
+
+            else:
+
+                extremityCtrl = extremityComponent.getPublishedNode('Foot_IK')
 
             limbIKSoftener = self.scene(self.userProperties['sikSoftener'])
             limbIKSoftener.connectPlugs(extremityCtrl[f'worldMatrix[{extremityCtrl.instanceNumber()}]'], 'endMatrix', force=True)
@@ -235,9 +331,9 @@ class InsectLegComponent(limbcomponent.LimbComponent):
 
         # Decompose component
         #
-        coxaSpec, femurSpec, tibiaSpec, tibiaTipSpec = self.skeletonSpecs(flatten=True)
+        coxaSpec, femurSpec, tibiaSpec, tibiaTipSpec = self.skeleton(flatten=True, skipPassthrough=False, skipDisabled=False)
 
-        coxaEnabled = bool(coxaSpec.enabled)
+        coxaEnabled = not bool(coxaSpec.passthrough)
         coxaExportJoint = coxaSpec.getNode() if coxaEnabled else None
         coxaExportMatrix = coxaExportJoint.worldMatrix() if (coxaExportJoint is not None) else om.MMatrix.kIdentity
         
@@ -253,8 +349,8 @@ class InsectLegComponent(limbcomponent.LimbComponent):
         tibiaTipMatrix = tibiaTipExportJoint.worldMatrix() if (tibiaTipExportJoint is not None) else defaultTibiaTipMatrix
         tibiaTipPoint = transformutils.breakMatrix(tibiaTipMatrix)[3]
 
-        limbOrigin = transformutils.breakMatrix(coxaExportMatrix)[3]
         limbIKOrigin = transformutils.breakMatrix(femurExportMatrix)[3]
+        limbOrigin = transformutils.breakMatrix(coxaExportMatrix)[3] if coxaEnabled else limbIKOrigin
         hingePoint = transformutils.breakMatrix(tibiaExportMatrix)[3]
         effectorMatrix = self.effectorMatrix()
         limbIKGoal = transformutils.breakMatrix(effectorMatrix)[3]
@@ -294,9 +390,14 @@ class InsectLegComponent(limbcomponent.LimbComponent):
         tibiaDistance = om.MPoint(hingePoint).distanceTo(tibiaTipPoint)
         tarsusDistance = om.MPoint(tibiaTipPoint).distanceTo(limbIKGoal)
 
-        coxaForwardVector = om.MVector(limbIKOrigin - limbOrigin).normal()
-        coxaRightVector = transformutils.breakMatrix(coxaExportMatrix, normalize=True)[2]
-        coxaExportMatrix = transformutils.createAimMatrix(0, coxaForwardVector, 2, coxaRightVector, origin=limbOrigin)
+        if coxaEnabled:
+
+            coxaForwardVector = om.MVector(limbIKOrigin - limbOrigin).normal()
+            coxaRightVector = transformutils.breakMatrix(coxaExportMatrix, normalize=True)[2]
+            coxaExportMatrix = transformutils.createAimMatrix(0, coxaForwardVector, 2, coxaRightVector, origin=limbOrigin)
+
+            coxaExportJoint.setWorldMatrix(coxaExportMatrix, skipScale=True)
+            coxaSpec.cacheNode(delete=False)
 
         aimVector = om.MVector(tibiaTipPoint) - om.MVector(limbIKOrigin)
         forwardVector = aimVector.normal()
@@ -304,20 +405,17 @@ class InsectLegComponent(limbcomponent.LimbComponent):
         poleVector = (forwardVector ^ rightVector).normal()
         solution = kinematicutils.solveIk2BoneChain(limbIKOrigin, femurDistance, tibiaTipPoint, tibiaDistance, poleVector)
 
-        coxaExportJoint.setWorldMatrix(coxaExportMatrix, skipScale=True)
-        coxaSpec.cacheMatrix(delete=False)
-
         femurExportMatrix = om.MMatrix(solution[0])
         femurExportJoint.setWorldMatrix(femurExportMatrix, skipScale=True)
-        femurSpec.cacheMatrix(delete=False)
+        femurSpec.cacheNode(delete=False)
 
         tibiaExportMatrix = om.MMatrix(solution[1])
         tibiaExportJoint.setWorldMatrix(tibiaExportMatrix, skipScale=True)
-        tibiaSpec.cacheMatrix(delete=False)
+        tibiaSpec.cacheNode(delete=False)
 
         tibiaTipExportMatrix = om.MMatrix(solution[2])
 
-        self.save()  # Pushes skeleton spec changes to user property buffer!
+        self.userProperties.pushBuffer()
 
         # Create leg target
         #
@@ -343,31 +441,70 @@ class InsectLegComponent(limbcomponent.LimbComponent):
         legCtrl.addPointHelper('disc', 'axisView', size=(10.0 * rigScale), localScale=(0.0, 3.0, 3.0), colorRGB=colorRGB)
         legCtrl.addDivider('Settings')
         legCtrl.addAttr(longName='twist', attributeType='doubleAngle', keyable=True)
-        legCtrl.addDivider('Spaces')
-        legCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
-        legCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
-        legCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
-        legCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (Pelvis)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-        legCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
-        legCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
-        legCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
-        legCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (Pelvis)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
         legCtrl.prepareChannelBoxForAnimation()
         legCtrl.tagAsController()
         self.publishNode(legCtrl, alias='Leg')
 
-        legSpaceSwitch = legSpace.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl, pelvisCtrl], weighted=True, maintainOffset=True)
-        legSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (1.0, 1.0, 1.0)}])
-        legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
-        legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
-        legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
-        legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW3'], 'target[3].targetTranslateWeight')
-        legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
-        legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
-        legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
-        legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
-
         legCtrl.userProperties['space'] = legSpace.uuid()
+
+        # Setup leg space switching
+        #
+        componentParent = self.componentParent()
+        isSpineComponent = componentParent.className.endswith('SpineComponent')
+        isDefaultSetup = isSpineComponent and (self.attachmentId == 0)
+
+        legSpaceSwitch = None
+
+        if isDefaultSetup:
+
+            legCtrl.addDivider('Spaces')
+            legCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (Pelvis)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+            legCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (Pelvis)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+
+            legSpaceSwitch = legSpace.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl, pelvisCtrl], weighted=True, maintainOffset=True)
+            legSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (1.0, 1.0, 1.0)}])
+            legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW3'], 'target[3].targetTranslateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
+
+        else:
+
+            legCtrl.addDivider('Spaces')
+            legCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='positionSpaceW3', niceName='Position Space (Pelvis)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='positionSpaceW4', niceName=f'Position Space ({componentParent.componentName})', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+            legCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='rotationSpaceW3', niceName='Rotation Space (Pelvis)', attributeType='float', min=0.0, max=1.0, keyable=True)
+            legCtrl.addAttr(longName='rotationSpaceW4', niceName=f'Rotation Space ({componentParent.componentName})', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+
+            legSpaceSwitch = legSpace.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl, pelvisCtrl, parentExportCtrl], weighted=True, maintainOffset=True)
+            legSpaceSwitch.setAttr('target', [{'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (0.0, 0.0, 0.0)}, {'targetWeight': (1.0, 1.0, 1.0)}])
+            legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW0'], 'target[0].targetTranslateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW1'], 'target[1].targetTranslateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW2'], 'target[2].targetTranslateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW3'], 'target[3].targetTranslateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['positionSpaceW4'], 'target[4].targetTranslateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW0'], 'target[0].targetRotateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW1'], 'target[1].targetRotateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW2'], 'target[2].targetRotateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW3'], 'target[3].targetRotateWeight')
+            legSpaceSwitch.connectPlugs(legCtrl['rotationSpaceW4'], 'target[4].targetRotateWeight')
+
         legCtrl.userProperties['spaceSwitch'] = legSpaceSwitch.uuid()
 
         # Create leg kinematic joints
@@ -407,7 +544,7 @@ class InsectLegComponent(limbcomponent.LimbComponent):
         switchCtrl.addDivider('Settings')
         switchCtrl.addAttr(longName='length', attributeType='doubleLinear', array=True, hidden=True)
         switchCtrl.addAttr(longName='mode', niceName='Mode (FK/IK)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-        switchCtrl.addAttr(longName='coxaOffset', attributeType='doubleLinear', keyable=True)
+        switchCtrl.addAttr(longName='coxaOffset', attributeType='doubleLinear', hidden=not coxaEnabled, keyable=coxaEnabled)
         switchCtrl.addAttr(longName='femurOffset', attributeType='doubleLinear', keyable=True)
         switchCtrl.addAttr(longName='tibiaOffset', attributeType='doubleLinear', keyable=True)
         switchCtrl.addAttr(longName='tarsusOffset', attributeType='doubleLinear', hidden=True)
@@ -481,6 +618,7 @@ class InsectLegComponent(limbcomponent.LimbComponent):
 
         coxaFKJoint, coxaTipFKJoint = None, None
         coxaIKJoint, coxaTipIKJoint = None, None
+        coxaIKHandle, coxaIKEffector = None, None
         coxaBlendJoint, coxaTipBlendJoint = None, None
 
         if coxaEnabled:
@@ -801,7 +939,7 @@ class InsectLegComponent(limbcomponent.LimbComponent):
 
         # Tag FK controls
         #
-        femurFKCtrl.tagAsController(parent=coxaTransCtrl, children=[tibiaFKCtrl])
+        femurFKCtrl.tagAsController(parent=femurFKTarget, children=[tibiaFKCtrl])
         tibiaFKCtrl.tagAsController(parent=femurFKCtrl)
 
         # Create extremity IK control
@@ -972,8 +1110,9 @@ class InsectLegComponent(limbcomponent.LimbComponent):
             legSIKJoints[i] = joint
 
         femurSIKJoint, tibiaSIKJoint, tarsusSIKJoint, tarsusTipSIKJoint = legSIKJoints
+        legIKTarget = coxaTipIKJoint if coxaEnabled else legCtrl
 
-        femurSIKJoint.addConstraint('transformConstraint', [coxaTipIKJoint], skipRotate=True)
+        femurSIKJoint.addConstraint('transformConstraint', [legIKTarget], skipRotate=True)
         femurSIKJoint.connectPlugs('scale', tibiaSIKJoint['scale'])
         tibiaSIKJoint.connectPlugs('scale', tarsusSIKJoint['scale'])
         tarsusSIKJoint.connectPlugs('scale', tarsusTipSIKJoint['scale'])
@@ -999,7 +1138,7 @@ class InsectLegComponent(limbcomponent.LimbComponent):
         legSIKSoftener.connectPlugs(switchCtrl['soften'], 'radius')
         legSIKSoftener.connectPlugs(legReverseStretch['output'], 'envelope')
         legSIKSoftener.connectPlugs(legSIKLength['output1D'], 'chainLength')
-        legSIKSoftener.connectPlugs(coxaTransCtrl[f'worldMatrix[{coxaTransCtrl.instanceNumber()}]'], 'startMatrix')
+        legSIKSoftener.connectPlugs(legIKTarget[f'worldMatrix[{legIKTarget.instanceNumber()}]'], 'startMatrix')
         legSIKSoftener.connectPlugs(extremityIKCtrl[f'worldMatrix[{extremityIKCtrl.instanceNumber()}]'], 'endMatrix')
         legSIKSoftener.connectPlugs(legSIKHandleTarget[f'parentInverseMatrix[{legSIKHandleTarget.instanceNumber()}]'], 'parentInverseMatrix')
         legSIKSoftener.connectPlugs('outPosition', legSIKHandleTarget['translate'])
@@ -1027,7 +1166,7 @@ class InsectLegComponent(limbcomponent.LimbComponent):
         legIKHandle.addConstraint('pointConstraint', [tarsusSIKJoint])
         legIKEffector.setName(self.formatName(type='ikEffector'))
 
-        femurIKJoint.addConstraint('transformConstraint', [coxaTipIKJoint], skipRotate=True)
+        femurIKJoint.addConstraint('transformConstraint', [legIKTarget], skipRotate=True)
         femurIKJoint.connectPlugs('scale', tibiaIKJoint['scale'])
         tibiaIKJoint.connectPlugs('scale', tibiaTipIKJoint['scale'])
 
@@ -1145,20 +1284,24 @@ class InsectLegComponent(limbcomponent.LimbComponent):
 
         # Create hinge controls
         #
-        trochanterSpaceName = self.formatName(name='Trochanter', type='space')
-        trochanterSpace = self.scene.createNode('transform', name=trochanterSpaceName, parent=controlsGroup)
-        trochanterSpace.addConstraint('pointConstraint', [coxaTipBlendJoint])
-        trochanterSpace.addConstraint('orientConstraint', [coxaTipBlendJoint, femurBlendJoint])
-        trochanterSpace.addConstraint('scaleConstraint', [legCtrl])
-        trochanterSpace.freezeTransform()
+        trochanterSpace, trochanterCtrl = None, None
 
-        trochanterCtrlName = self.formatName(name='Trochanter', type='control')
-        trochanterCtrl = self.scene.createNode('transform', name=trochanterCtrlName, parent=trochanterSpace)
-        trochanterCtrl.addPointHelper('square', size=(20.0 * rigScale), localRotate=(45.0, 0.0, 0.0), lineWidth=4.0, colorRGB=darkColorRGB)
-        trochanterCtrl.prepareChannelBoxForAnimation()
-        self.publishNode(trochanterCtrl, alias='Trochanter')
+        if coxaEnabled:
 
-        trochanterCtrl.userProperties['space'] = trochanterSpace.uuid()
+            trochanterSpaceName = self.formatName(name='Trochanter', type='space')
+            trochanterSpace = self.scene.createNode('transform', name=trochanterSpaceName, parent=controlsGroup)
+            trochanterSpace.addConstraint('pointConstraint', [coxaTipBlendJoint])
+            trochanterSpace.addConstraint('orientConstraint', [coxaTipBlendJoint, femurBlendJoint])
+            trochanterSpace.addConstraint('scaleConstraint', [legCtrl])
+            trochanterSpace.freezeTransform()
+
+            trochanterCtrlName = self.formatName(name='Trochanter', type='control')
+            trochanterCtrl = self.scene.createNode('transform', name=trochanterCtrlName, parent=trochanterSpace)
+            trochanterCtrl.addPointHelper('square', size=(20.0 * rigScale), localRotate=(45.0, 0.0, 0.0), lineWidth=4.0, colorRGB=darkColorRGB)
+            trochanterCtrl.prepareChannelBoxForAnimation()
+            self.publishNode(trochanterCtrl, alias='Trochanter')
+
+            trochanterCtrl.userProperties['space'] = trochanterSpace.uuid()
 
         patellaBendTargetName = self.formatName(name='Patella', subname='Bend', type='target')
         patellaBendTarget = self.scene.createNode('transform', name=patellaBendTargetName, parent=privateGroup)
@@ -1202,8 +1345,14 @@ class InsectLegComponent(limbcomponent.LimbComponent):
         patellaCtrl.userProperties['space'] = patellaSpace.uuid()
         patellaCtrl.userProperties['spaceSwitch'] = patellaSpaceSwitch.uuid()
 
-        trochanterCtrl.tagAsController(parent=legCtrl, children=[patellaCtrl])
-        patellaCtrl.tagAsController(parent=trochanterCtrl)
+        if coxaEnabled:
+
+            trochanterCtrl.tagAsController(parent=legCtrl, children=[patellaCtrl])
+            patellaCtrl.tagAsController(parent=trochanterCtrl)
+
+        else:
+
+            patellaCtrl.tagAsController(parent=legCtrl)
 
         # Create PV handle curve
         #
@@ -1223,15 +1372,21 @@ class InsectLegComponent(limbcomponent.LimbComponent):
 
         # Create target joints
         #
-        coxaJointName = self.formatName(name='Coxa', type='joint')
-        coxaJoint = self.scene.createNode('joint', name=coxaJointName, parent=jointsGroup)
-        coxaJoint.addConstraint('pointConstraint', [coxaBlendJoint])
-        coxaJoint.addConstraint('aimConstraint', [trochanterCtrl], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpVector=(0.0, 0.0, 1.0), worldUpObject=femurBlendJoint)
-        coxaJoint.connectPlugs(coxaBlendJoint['scale'], 'scale')
+        coxaJoint = None
+
+        if coxaEnabled:
+
+            coxaJointName = self.formatName(name='Coxa', type='joint')
+            coxaJoint = self.scene.createNode('joint', name=coxaJointName, parent=jointsGroup)
+            coxaJoint.addConstraint('pointConstraint', [coxaBlendJoint])
+            coxaJoint.addConstraint('aimConstraint', [trochanterCtrl], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpVector=(0.0, 0.0, 1.0), worldUpObject=femurBlendJoint)
+            coxaJoint.connectPlugs(coxaBlendJoint['scale'], 'scale')
+
+        femurTargets = [trochanterCtrl] if coxaEnabled else [femurBlendJoint]
 
         femurJointName = self.formatName(name='Femur', type='joint')
         femurJoint = self.scene.createNode('joint', name=femurJointName, parent=jointsGroup)
-        femurJoint.addConstraint('pointConstraint', [trochanterCtrl])
+        femurJoint.addConstraint('pointConstraint', femurTargets)
         femurJoint.addConstraint('aimConstraint', [patellaCtrl], aimVector=(1.0, 0.0, 0.0), upVector=(0.0, 0.0, 1.0), worldUpType=2, worldUpVector=(0.0, 0.0, 1.0), worldUpObject=femurBlendJoint)
         femurJoint.connectPlugs(femurBlendJoint['scale'], 'scale')
 
@@ -1253,17 +1408,33 @@ class InsectLegComponent(limbcomponent.LimbComponent):
         self.userProperties['fkJoints'] = (femurFKJoint.uuid(), tibiaFKJoint.uuid(), tibiaTipFKJoint.uuid())
         self.userProperties['fkControls'] = (femurFKCtrl.uuid(), tibiaFKCtrl.uuid(), tibiaTipFKTarget.uuid())
 
-        self.userProperties['ikJoints'] = (coxaIKJoint.uuid(), femurIKJoint.uuid(), tibiaIKJoint.uuid(), tibiaTipIKJoint.uuid())
-        self.userProperties['ikSoftener'] = legIKSoftener.uuid()
-        self.userProperties['ikControls'] = (legCtrl.uuid(), coxaRotCtrl.uuid(), coxaTransCtrl.uuid(), extremityIKCtrl.uuid())
-        self.userProperties['ikTarget'] = legIKHandleTarget.uuid()
-        self.userProperties['sikJoints'] = (femurSIKJoint.uuid(), tibiaSIKJoint.uuid(), tarsusSIKJoint.uuid(), tarsusTipSIKJoint.uuid())
-        self.userProperties['sikSoftener'] = legSIKSoftener.uuid()
-        self.userProperties['sikTarget'] = legSIKHandleTarget.uuid()
-        self.userProperties['sikHandle'] = legSIKHandle.uuid()
-        self.userProperties['ikHandles'] = (coxaIKHandle.uuid(), legIKHandle.uuid())
-        self.userProperties['pvControl'] = legPVCtrl.uuid()
-        self.userProperties['hingeControls'] = (trochanterCtrl.uuid(), patellaCtrl.uuid())
+        if coxaEnabled:
+
+            self.userProperties['ikJoints'] = (coxaIKJoint.uuid(), femurIKJoint.uuid(), tibiaIKJoint.uuid(), tibiaTipIKJoint.uuid())
+            self.userProperties['ikSoftener'] = legIKSoftener.uuid()
+            self.userProperties['ikControls'] = (legCtrl.uuid(), coxaRotCtrl.uuid(), coxaTransCtrl.uuid(), extremityIKCtrl.uuid())
+            self.userProperties['ikTarget'] = legIKHandleTarget.uuid()
+            self.userProperties['sikJoints'] = (femurSIKJoint.uuid(), tibiaSIKJoint.uuid(), tarsusSIKJoint.uuid(), tarsusTipSIKJoint.uuid())
+            self.userProperties['sikSoftener'] = legSIKSoftener.uuid()
+            self.userProperties['sikTarget'] = legSIKHandleTarget.uuid()
+            self.userProperties['sikHandle'] = legSIKHandle.uuid()
+            self.userProperties['ikHandles'] = (coxaIKHandle.uuid(), legIKHandle.uuid())
+            self.userProperties['pvControl'] = legPVCtrl.uuid()
+            self.userProperties['hingeControls'] = (trochanterCtrl.uuid(), patellaCtrl.uuid())
+
+        else:
+
+            self.userProperties['ikJoints'] = (femurIKJoint.uuid(), tibiaIKJoint.uuid(), tibiaTipIKJoint.uuid())
+            self.userProperties['ikSoftener'] = legIKSoftener.uuid()
+            self.userProperties['ikControls'] = (legCtrl.uuid(), extremityIKCtrl.uuid())
+            self.userProperties['ikTarget'] = legIKHandleTarget.uuid()
+            self.userProperties['sikJoints'] = (femurSIKJoint.uuid(), tibiaSIKJoint.uuid(), tarsusSIKJoint.uuid(), tarsusTipSIKJoint.uuid())
+            self.userProperties['sikSoftener'] = legSIKSoftener.uuid()
+            self.userProperties['sikTarget'] = legSIKHandleTarget.uuid()
+            self.userProperties['sikHandle'] = legSIKHandle.uuid()
+            self.userProperties['ikHandles'] = (legIKHandle.uuid(),)
+            self.userProperties['pvControl'] = legPVCtrl.uuid()
+            self.userProperties['hingeControls'] = (patellaCtrl.uuid(),)
 
         self.userProperties['followJoints'] = (followJoint.uuid(), followTipJoint.uuid())
         self.userProperties['blendJoints'] = (femurBlendJoint.uuid(), tibiaBlendJoint.uuid(), tibiaTipBlendJoint.uuid())

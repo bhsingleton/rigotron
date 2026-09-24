@@ -64,6 +64,24 @@ class FootComponent(extremitycomponent.ExtremityComponent):
     __version__ = 1.0
     __default_component_name__ = 'Foot'
     __default_component_matrices__ = {
+        Side.CENTER: {
+            FootType.FOOT: om.MMatrix(
+                [
+                    (0.0, 0.0, -1.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 0.0, 10.0, 1.0)
+                ]
+            ),
+            FootType.BALL: om.MMatrix(
+                [
+                    (0.0, -1.0, 0.0, 0.0),
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (5.0, -10.0, 0.0, 1.0)
+                ]
+            )
+        },
         Side.LEFT: {
             FootType.FOOT: om.MMatrix(
                 [
@@ -99,6 +117,24 @@ class FootComponent(extremitycomponent.ExtremityComponent):
                     (5.0, -10.0, 0.0, 1.0)
                 ]
             )
+        },
+        Side.NONE: {
+            FootType.FOOT: om.MMatrix(
+                [
+                    (0.0, 0.0, -1.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 0.0, 10.0, 1.0)
+                ]
+            ),
+            FootType.BALL: om.MMatrix(
+                [
+                    (0.0, -1.0, 0.0, 0.0),
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (5.0, -10.0, 0.0, 1.0)
+                ]
+            )
         }
     }
     __default_pivot_points__ = [
@@ -111,80 +147,52 @@ class FootComponent(extremitycomponent.ExtremityComponent):
         (0.0, 0.0, 5.0),
         (0.0, -10.0, 5.0)
     ]
-    __default_pivot_matrices__ = {
-        Side.LEFT: {
-            FootPivotType.HEEL: om.MMatrix(
-                [
-                    (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 1.0, 0.0, 0.0),
-                    (0.0, 0.0, 1.0, 0.0),
-                    (20.0, 20.0, 0.0, 1.0)
-                ]
-            ),
-            FootPivotType.INSIDE: om.MMatrix(
-                [
-                    (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 1.0, 0.0, 0.0),
-                    (0.0, 0.0, 1.0, 0.0),
-                    (10.0, 0.0, 0.0, 1.0)
-                ]
-            ),
-            FootPivotType.OUTSIDE: om.MMatrix(
-                [
-                    (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 1.0, 0.0, 0.0),
-                    (0.0, 0.0, 1.0, 0.0),
-                    (30.0, 0.0, 0.0, 1.0)
-                ]
-            ),
-            FootPivotType.TIP: om.MMatrix(
-                [
-                    (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 1.0, 0.0, 0.0),
-                    (0.0, 0.0, 1.0, 0.0),
-                    (20.0, -20.0, 0.0, 1.0)
-                ]
-            )
-        },
-        Side.RIGHT: {
-            FootPivotType.HEEL: om.MMatrix(
-                [
-                    (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 1.0, 0.0, 0.0),
-                    (0.0, 0.0, 1.0, 0.0),
-                    (-20.0, 20.0, 0.0, 1.0)
-                ]
-            ),
-            FootPivotType.INSIDE: om.MMatrix(
-                [
-                    (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 1.0, 0.0, 0.0),
-                    (0.0, 0.0, 1.0, 0.0),
-                    (-10.0, 0.0, 0.0, 1.0)
-                ]
-            ),
-            FootPivotType.OUTSIDE: om.MMatrix(
-                [
-                    (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 1.0, 0.0, 0.0),
-                    (0.0, 0.0, 1.0, 0.0),
-                    (-30.0, 0.0, 0.0, 1.0)
-                ]
-            ),
-            FootPivotType.TIP: om.MMatrix(
-                [
-                    (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 1.0, 0.0, 0.0),
-                    (0.0, 0.0, 1.0, 0.0),
-                    (-20.0, -20.0, 0.0, 1.0)
-                ]
-            )
-        }
-    }
     __default_digit_name__ = 'Toe'
     __default_digit_types__ = ('Big', 'Long', 'Middle', 'Ring', 'Pinky')
     __default_digit_spacing__ = 5.0
     __default_digit_matrices__ = {
+        Side.CENTER: {
+            ToeType.BIG: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, -10.0, 1.0)
+                ]
+            ),
+            ToeType.LONG: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, -5.0, 1.0)
+                ]
+            ),
+            ToeType.MIDDLE: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 0.0, 1.0)
+                ]
+            ),
+            ToeType.RING: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 5.0, 1.0)
+                ]
+            ),
+            ToeType.PINKY: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 10.0, 1.0)
+                ]
+            )
+        },
         Side.LEFT: {
             ToeType.BIG: om.MMatrix(
                 [
@@ -266,11 +274,54 @@ class FootComponent(extremitycomponent.ExtremityComponent):
                     (0.0, 1.0, 0.0, 0.0),
                     (0.0, 0.0, 1.0, 0.0),
                     (10.0, 0.0, -10.0, 1.0)
+                ]
+            )
+        },
+        Side.NONE: {
+            ToeType.BIG: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, -10.0, 1.0)
+                ]
+            ),
+            ToeType.LONG: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, -5.0, 1.0)
+                ]
+            ),
+            ToeType.MIDDLE: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 0.0, 1.0)
+                ]
+            ),
+            ToeType.RING: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 5.0, 1.0)
+                ]
+            ),
+            ToeType.PINKY: om.MMatrix(
+                [
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                    (10.0, 0.0, 10.0, 1.0)
                 ]
             )
         }
     }
     __default_mirror_matrices__ = {
+        Side.CENTER: om.MMatrix.kIdentity,
         Side.LEFT: om.MMatrix.kIdentity,
         Side.RIGHT: om.MMatrix(
             [
@@ -279,7 +330,8 @@ class FootComponent(extremitycomponent.ExtremityComponent):
                 (0.0, 0.0, 1.0, 0.0),
                 (0.0, 0.0, 0.0, 1.0)
             ]
-        )
+        ),
+        Side.NONE: om.MMatrix.kIdentity,
     }
     # endregion
 
