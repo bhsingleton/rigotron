@@ -68,7 +68,7 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
             )
         }
     }
-    __default_tarsus_spacing__ = 10.0
+    __default_component_spacing__ = 10.0
     # endregion
 
     # region Enums
@@ -111,15 +111,15 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
         :rtype: om.MMatrix
         """
 
-        *tarsusSpecs, clawSpec, tipSpec = self.skeleton()
+        *tarsusSpecs, clawSpec, tipSpec = self.skeleton(flatten=True, skipPassthrough=False)
 
-        if clawSpec.enabled:
+        if clawSpec.passthrough:
 
-            return clawSpec.getNode().worldMatrix()
+            return tipSpec.getNode().worldMatrix()
 
         else:
 
-            return tipSpec.getNode().worldMatrix()
+            return clawSpec.getNode().worldMatrix()
 
     def invalidateSkeleton(self, skeletonSpecs, **kwargs):
         """
@@ -144,7 +144,7 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
         for (i, tarsusSpec) in enumerate(tarsusSpecs, start=1):
 
             isFirstTarsus = (i == 1)
-            defaultMatrix = om.MMatrix(self.__default_limb_matrices__[side][self.InsectFootType.TARSUS]) if isFirstTarsus else transformutils.createTranslateMatrix((self.__default_tarsus_spacing__, 0.0, 0.0))
+            defaultMatrix = om.MMatrix(self.__default_component_matrices__[side][self.InsectFootType.TARSUS]) if isFirstTarsus else transformutils.createTranslateMatrix((self.__default_component_spacing__, 0.0, 0.0))
 
             tarsusSpec.enabled = True
             tarsusSpec.name = self.formatName(name='Tarsus', index=i)
@@ -163,7 +163,7 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
         clawSpec.type = self.Type.OTHER
         clawSpec.otherType = 'Claw'
         clawSpec.drawStyle = self.Style.BOX
-        clawSpec.defaultMatrix = om.MMatrix(self.__default_component_matrices__[side][self.InsectFootType.CLAW]) * transformutils.createTranslateMatrix((self.__default_tarsus_spacing__, 0.0, 0.0))
+        clawSpec.defaultMatrix = om.MMatrix(self.__default_component_matrices__[side][self.InsectFootType.CLAW]) * transformutils.createTranslateMatrix((self.__default_component_spacing__, 0.0, 0.0))
         clawSpec.driver.name = self.formatName(name='Claw', kinemat='Blend', type='joint')
 
         # Edit tip spec
@@ -176,7 +176,7 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
         tipSpec.type = self.Type.OTHER
         tipSpec.otherType = tipName
         tipSpec.drawStyle = self.Style.BOX
-        tipSpec.defaultMatrix = transformutils.createTranslateMatrix((self.__default_tarsus_spacing__, 0.0, 0.0))
+        tipSpec.defaultMatrix = transformutils.createTranslateMatrix((self.__default_component_spacing__, 0.0, 0.0))
         tipSpec.driver.name = self.formatName(name=tipName, kinemat='Blend', type='joint')
 
         # Call parent method
@@ -192,12 +192,13 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
 
         # Decompose component
         #
-        *tarsusSpecs, clawSpec, tipSpec = self.skeleton()
+        *tarsusSpecs, clawSpec, tipSpec = self.skeleton(flatten=True, skipPassthrough=False)
         tarsusExportJoints = [tarsusSpec.getNode() for tarsusSpec in tarsusSpecs]
         tarsusExportMatrices = [tarsusExportJoint.worldMatrix() for tarsusExportJoint in tarsusExportJoints]
 
         clawExportJoint = clawSpec.getNode()
         clawExportMatrix = clawExportJoint.worldMatrix() if (clawExportJoint is not None) else om.MMatrix.kIdentity
+        clawPoint = transformutils.breakMatrix(clawExportMatrix)[3]
 
         tipExportJoint = tipSpec.getNode()
         tipExportMatrix = tipExportJoint.worldMatrix()
@@ -245,7 +246,7 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
 
         # Create foot control
         #
-        clawEnabled = bool(clawSpec.enabled)
+        clawEnabled = not bool(clawSpec.passthrough)
         defaultClawMatrix = clawExportMatrix if clawEnabled else tipExportMatrix
 
         footOrigin = transformutils.breakMatrix(defaultClawMatrix)[3]
@@ -275,12 +276,13 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
         footSpaceSwitch.connectPlugs(switchCtrl['mode'], 'target[1].targetWeight')
         footSpaceSwitch.connectPlugs(footCtrl['localOrGlobal'], 'target[2].targetRotateWeight')
 
-        coxaTransCtrl = limbComponent.getPublishedNode('Coxa_Trans')
+        coxaEnabled = bool(limbComponent.coxaEnabled)
+        legUpTarget = limbComponent.getPublishedNode('Coxa_Trans') if coxaEnabled else limbComponent.getPublishedNode('Leg')
         legFollowJoint = self.scene(limbComponent.userProperties['followJoints'][-1])
 
         footAimMatrixName = self.formatName(subname='AutoFollow', kinemat='IK', type='aimMatrix')
         footAimMatrix = self.scene.createNode('aimMatrix', name=footAimMatrixName)
-        footAimMatrix.connectPlugs(coxaTransCtrl[f'worldMatrix[{coxaTransCtrl.instanceNumber()}]'], 'inputMatrix')
+        footAimMatrix.connectPlugs(legUpTarget[f'worldMatrix[{legUpTarget.instanceNumber()}]'], 'inputMatrix')
         footAimMatrix.primaryInputAxis = (1.0, 0.0, 0.0)
         footAimMatrix.primaryMode = 1  # Aim
         footAimMatrix.primaryTargetVector = (1.0, 0.0, 0.0)
@@ -313,15 +315,18 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
         # Create tarsus IK controls
         #
         initialTarsusCount = len(tarsusExportJoints)
-        reversedTarsusMatrices = [footCtrlMatrix] + list(reversed(tarsusExportMatrices))
+        reversedTarsusExportJoints = list(reversed(tarsusExportJoints))
+        tarsusIKSourceNodes = [footCtrl] + reversedTarsusExportJoints
 
         tarsusIKMatrices = []
         tarsusIKCtrls = []
 
-        for (i, (startMatrix, endMatrix)) in enumerate(zip(reversedTarsusMatrices[:-1], reversedTarsusMatrices[1:])):
+        for (i, (startNode, endNode)) in enumerate(zip(tarsusIKSourceNodes[:-1], tarsusIKSourceNodes[1:])):
 
             # Compose tarsus IK matrix
             #
+            startMatrix, endMatrix = startNode.worldMatrix(), endNode.worldMatrix()
+
             tarsusOrigin = transformutils.breakMatrix(startMatrix, normalize=True)[3]
             tarsusGoal = transformutils.breakMatrix(endMatrix, normalize=True)[3]
             tarsusForwardVector = om.MVector(tarsusGoal - tarsusOrigin).normal()
@@ -352,7 +357,6 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
 
             tarsusIKCtrlName = self.formatName(name='Tarsus', kinemat='IK', index=index, type='control')
             tarsusIKCtrl = self.scene.createNode('transform', name=tarsusIKCtrlName, parent=tarsusIKSpace)
-            tarsusIKCtrl.addShape('RoundLollipopCurve', size=(30.0 * rigScale), localScale=(1.0 * mirrorSign, 1.0 * mirrorSign, 1.0), colorRGB=lightColorRGB, lineWidth=4.0)
             tarsusIKCtrl.addDivider('Settings')
             tarsusIKCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
             tarsusIKCtrl.prepareChannelBoxForAnimation()
@@ -360,6 +364,11 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
             self.publishNode(tarsusIKCtrl, alias=f'Tarsus{str(index).zfill(2)}_IK')
 
             tarsusIKCtrls.append(tarsusIKCtrl)
+
+            # Create tarsus IK control shape
+            #
+            tarsusIKCtrlShape = tarsusIKCtrl.addPointHelper('box', size=(15.0 * rigScale), colorRGB=lightColorRGB, lineWidth=2.0)
+            tarsusIKCtrlShape.reorientAndScaleToFit(endNode)
 
             # Setup tarsus IK space switching
             #
@@ -384,10 +393,11 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
 
             tarsusIKCtrl.userProperties['space'] = tarsusIKSpace.uuid()
             tarsusIKCtrl.userProperties['spaceSwitch'] = tarsusIKSpaceSwitch.uuid()
+            tarsusIKCtrl.userProperties['target'] = tarsusIKTarget.uuid()
 
         # Create limb IK target
         #
-        tarsusTipIKTargetName = self.formatName(name='Tarsus', index=initialTarsusCount, subname='IK', type='target')
+        tarsusTipIKTargetName = self.formatName(name='TarsusTip', kinemat='IK', type='target')
         tarsusTipIKTarget = self.scene.createNode('transform', name=tarsusTipIKTargetName, parent=tarsusIKCtrls[-1])
         tarsusTipIKTarget.displayLocalAxis = True
         tarsusTipIKTarget.visibility = False
@@ -423,20 +433,9 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
             #
             firstTarsusIKSpace = self.scene(firstTarsusIKCtrl.userProperties['space'])
             firstTarsusIKSpaceSwitch = self.scene(firstTarsusIKCtrl.userProperties['spaceSwitch'])
+            firstTarsusIKTarget = self.scene(firstTarsusIKCtrl.userProperties['target'])
 
             lastSpringIKJoint = self.scene(limbComponent.userProperties['sikJoints'][-1])
-
-            # Compose foot target matrix
-            #
-            tarsusIKFootOffsetMatrix = firstTarsusIKCtrl.worldMatrix() * footCtrl.worldInverseMatrix()
-            tarsusIKFootOffsetComposeMatrixName = self.formatName(name='Tarsus', subname='FootOffset', kinemat='IK', type='composeMatrix')
-            tarsusIKFootOffsetComposeMatrix = self.scene.createNode('composeMatrix', name=tarsusIKFootOffsetComposeMatrixName)
-            tarsusIKFootOffsetComposeMatrix.copyMatrix(tarsusIKFootOffsetMatrix)
-
-            tarsusIKFootOffsetMultMatrixName = self.formatName(name='Tarsus', subname='FootOffset', kinemat='IK', type='multMatrix')
-            tarsusIKFootOffsetMultMatrix = self.scene.createNode('multMatrix', name=tarsusIKFootOffsetMultMatrixName)
-            tarsusIKFootOffsetMultMatrix.connectPlugs(tarsusIKFootOffsetComposeMatrix['outputMatrix'], 'matrixIn[0]')
-            tarsusIKFootOffsetMultMatrix.connectPlugs(footCtrl[f'worldMatrix[{footCtrl.instanceNumber()}]'], 'matrixIn[1]')
 
             # Compose spring target matrix
             #
@@ -463,214 +462,397 @@ class InsectFootComponent(extremitycomponent.ExtremityComponent):
             tarsusIKSpringOffsetComposeMatrix = self.scene.createNode('composeMatrix', name=tarsusIKSpringOffsetComposeMatrixName)
             tarsusIKSpringOffsetComposeMatrix.copyMatrix(tarsusIKSpringOffsetMatrix)
 
-            tarsusIKSpringOffsetMultMatrixName = self.formatName(name='Tarsus', subname='springOffset', kinemat='IK', type='multMatrix')
+            tarsusIKSpringOffsetMultMatrixName = self.formatName(name='Tarsus', subname='SpringOffset', kinemat='IK', type='multMatrix')
             tarsusIKSpringOffsetMultMatrix = self.scene.createNode('multMatrix', name=tarsusIKSpringOffsetMultMatrixName)
             tarsusIKSpringOffsetMultMatrix.connectPlugs(tarsusIKSpringOffsetComposeMatrix['outputMatrix'], 'matrixIn[0]')
             tarsusIKSpringOffsetMultMatrix.connectPlugs(tarsusIKSpringBlendMatrix['outMatrix'], 'matrixIn[1]')
 
             # Create local space blend and replace target
             #
-            tarsusIKLocalSpaceBlendMatrixName = self.formatName(name='Tarsus', subname='LocalSpace', kinemat='IK', type='blendTransform')
+            tarsusIKLocalSpaceBlendMatrixName = self.formatName(name='Tarsus', subname='LocalSpace', kinemat='IK', index=1, type='blendTransform')
             tarsusIKLocalSpaceBlendMatrix = self.scene.createNode('blendTransform', name=tarsusIKLocalSpaceBlendMatrixName)
             tarsusIKLocalSpaceBlendMatrix.connectPlugs(firstTarsusIKCtrl['localSpringLock'], 'blender')
-            tarsusIKLocalSpaceBlendMatrix.connectPlugs(tarsusIKFootOffsetMultMatrix['matrixSum'], 'inMatrix1')
+            tarsusIKLocalSpaceBlendMatrix.connectPlugs(firstTarsusIKTarget[f'worldMatrix[{firstTarsusIKTarget.instanceNumber()}]'], 'inMatrix1')
             tarsusIKLocalSpaceBlendMatrix.connectPlugs(tarsusIKSpringOffsetMultMatrix['matrixSum'], 'inMatrix2')
 
             firstTarsusIKSpaceSwitch.replaceTarget(0, tarsusIKLocalSpaceBlendMatrix, maintainOffset=False, resetOffset=True)
 
-        # Check if claws were enabled
+        # Create kinematic tarsus joints
         #
+        adjustedTarsusCount = initialTarsusCount + 1
+        jointTypes = (['Tarsus'] * initialTarsusCount) + ['TarsusTip']
+        kinematicTypes = ('FK', 'IK', 'Blend')
+
+        tarsusFKJoints = [None] * adjustedTarsusCount
+        tarsusIKJoints = [None] * adjustedTarsusCount
+        tarsusBlendJoints = [None] * adjustedTarsusCount
+        tarsusMatrices = tarsusExportMatrices + ([clawExportMatrix] if clawEnabled else [tipExportMatrix])
+        tarsusKinematicJoints = (tarsusFKJoints, tarsusIKJoints, tarsusBlendJoints)
+
+        lastIndex = initialTarsusCount
+
+        for (i, kinematicType) in enumerate(kinematicTypes):
+
+            for (j, jointType) in enumerate(jointTypes):
+
+                parent = tarsusKinematicJoints[i][j - 1] if (j > 0) else jointsGroup
+                inheritsTransform = not (j == 0)
+                index = None if (j == lastIndex) else (j + 1)
+
+                jointName = self.formatName(name=jointType, kinemat=kinematicType, index=index, type='joint')
+                joint = self.scene.createNode('joint', name=jointName, parent=parent)
+                joint.inheritsTransform = inheritsTransform
+                joint.displayLocalAxis = True
+                joint.setWorldMatrix(tarsusMatrices[j])
+
+                tarsusKinematicJoints[i][j] = joint
+
+        # Setup kinematic blends
+        #
+        blender = switchCtrl['mode']
+
+        for (i, (tarsusFKJoint, tarsusIKJoint, tarsusBlendJoint)) in enumerate(zip(tarsusFKJoints, tarsusIKJoints, tarsusBlendJoints)):
+
+            footBlender = setuputils.createTransformBlends(tarsusFKJoint, tarsusIKJoint, tarsusBlendJoint, blender=blender)
+            footBlender.setName(self.formatName(name='Foot', subname=jointTypes[i], type='blendTransform'))
+
+        # Create tarsus FK controls
+        #
+        tarsusFKCtrls = [None] * initialTarsusCount
+        tarsusTipFKTarget = None
+
+        for (i, tarsusFKJoint) in enumerate(tarsusFKJoints):
+
+            # Evaluate position in tarsus FK chain
+            #
+            previousTarsusCtrl = tarsusFKCtrls[i - 1] if (i > 0) else limbFKCtrl
+            index = i + 1
+
+            if i == lastIndex:
+
+                # Create tarsus tip FK target
+                #
+                tarsusTipFKTargetName = self.formatName(name='TarsusTip', kinemat='FK', type='target')
+                tarsusTipFKTarget = self.scene.createNode('transform', name=tarsusTipFKTargetName, parent=tarsusFKCtrls[-1])
+                tarsusTipFKTarget.displayLocalAxis = True
+                tarsusTipFKTarget.visibility = False
+                tarsusTipFKTarget.setWorldMatrix(tipExportMatrix, skipScale=True)
+                tarsusTipFKTarget.freezeTransform()
+                tarsusTipFKTarget.lock()
+
+                tarsusFKJoint.addConstraint('transformConstraint', [tarsusTipFKTarget])
+
+            else:
+
+                # Create tarsus FK target
+                #
+                tarsusFKTargetName = self.formatName(name='Tarsus', kinemat='FK', index=index, type='target')
+                tarsusFKTarget = self.scene.createNode('transform', name=tarsusFKTargetName, parent=previousTarsusCtrl)
+                tarsusFKTarget.displayLocalAxis = True
+                tarsusFKTarget.visibility = False
+                tarsusFKTarget.copyTransform(tarsusFKJoint, skipScale=True)
+                tarsusFKTarget.freezeTransform()
+                tarsusFKTarget.lock()
+
+                # Create tarsus FK control
+                #
+                tarsusFKCtrlMatrix = mirrorMatrix * tarsusFKTarget.worldMatrix()
+
+                tarsusFKSpaceName = self.formatName(name='Tarsus', kinemat='FK', index=index, type='space')
+                tarsusFKSpace = self.scene.createNode('transform', name=tarsusFKSpaceName, parent=controlsGroup)
+                tarsusFKSpace.setWorldMatrix(tarsusFKCtrlMatrix, skipScale=True)
+                tarsusFKSpace.freezeTransform()
+
+                tarsusFKCtrlName = self.formatName(name='Tarsus', kinemat='FK', index=index, type='control')
+                tarsusFKCtrl = self.scene.createNode('transform', name=tarsusFKCtrlName, parent=tarsusFKSpace)
+                tarsusFKCtrl.addDivider('Settings')
+                tarsusFKCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
+                tarsusFKCtrl.prepareChannelBoxForAnimation()
+                tarsusFKCtrl.tagAsController(parent=previousTarsusCtrl)
+
+                tarsusFKShape = tarsusFKCtrl.addPointHelper('cylinder', size=(15.0 * rigScale), lineWidth=2.0, colorRGB=lightColorRGB)
+                tarsusFKShape.reorientAndScaleToFit(tarsusFKJoints[i + 1])
+
+                # Add space switching to tarsus FK control
+                #
+                tarsusFKSpaceSwitch = tarsusFKSpace.addSpaceSwitch([previousTarsusCtrl, motionCtrl], weighted=True, maintainOffset=True)
+                tarsusFKSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
+                tarsusFKSpaceSwitch.connectPlugs(tarsusFKCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
+                tarsusFKSpaceSwitch.connectPlugs(tarsusFKCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
+
+                tarsusFKAimMatrixName = self.formatName(name='Tarsus', subname='WorldSpace', index=index, kinemat='FK', type='aimMatrix')
+                tarsusFKAimMatrix = self.scene.createNode('aimMatrix', name=tarsusFKAimMatrixName)
+                tarsusFKAimMatrix.connectPlugs(tarsusFKTarget[f'worldMatrix[{tarsusFKTarget.instanceNumber()}]'], 'inputMatrix')
+                tarsusFKAimMatrix.primaryInputAxis = (0.0, 0.0, 1.0)
+                tarsusFKAimMatrix.primaryMode = 2  # Align
+                tarsusFKAimMatrix.primaryTargetVector = (0.0, 0.0, 1.0)
+                tarsusFKAimMatrix.connectPlugs(tarsusFKTarget[f'worldMatrix[{tarsusFKTarget.instanceNumber()}]'], 'primaryTargetMatrix')
+                tarsusFKAimMatrix.secondaryInputAxis = (0.0, 1.0, 0.0)
+                tarsusFKAimMatrix.secondaryMode = 2  # Align
+                tarsusFKAimMatrix.secondaryTargetVector = (0.0, 0.0, -1.0)
+                tarsusFKAimMatrix.connectPlugs(motionCtrl[f'worldMatrix[{motionCtrl.instanceNumber()}]'], 'secondaryTargetMatrix')
+
+                tarsusFKSpaceSwitch.replaceTarget(1, tarsusFKAimMatrix, maintainOffset=True)
+
+                tarsusFKCtrl.userProperties['space'] = tarsusFKSpace.uuid()
+                tarsusFKCtrl.userProperties['spaceSwitch'] = tarsusFKSpaceSwitch.uuid()
+                tarsusFKCtrl.userProperties['target'] = tarsusFKTarget.uuid()
+
+                tarsusFKCtrls[i] = tarsusFKCtrl
+
+                # Constrain tarsus FK joint
+                #
+                tarsusFKJoint.addConstraint('transformConstraint', [tarsusFKCtrl], maintainOffset=requiresMirroring)
+
+        footSpaceSwitch.replaceTarget(0, tarsusTipFKTarget, maintainOffset=True)
+
+        # Apply single-chain IK solvers to tarsus IK joints
+        #
+        reversedTarsusIKCtrls = list(reversed(tarsusIKCtrls))
+        limbIKSoftener = self.scene(limbComponent.userProperties['sikSoftener'])
+
+        for (i, (startIKJoint, endIKJoint)) in enumerate(zip(tarsusIKJoints[:-1], tarsusIKJoints[1:])):
+
+            # Apply single-chain IK solver
+            #
+            tarsusIKCtrl = reversedTarsusIKCtrls[i]
+            index = i + 1
+
+            tarsusIKHandle, tarsusIKEffector = kinematicutils.applySingleChainSolver(startIKJoint, endIKJoint)
+            tarsusIKHandle.setName(self.formatName(name='Foot', subname='Tarsus', index=index, type='ikHandle'))
+            tarsusIKHandle.setParent(privateGroup)
+            tarsusIKHandle.addConstraint('transformConstraint', [tarsusIKCtrl], maintainOffset=True)
+            tarsusIKEffector.setName(self.formatName(name='Foot', subname='Tarsus', index=index, type='ikEffector'))
+
+            # Setup IK stretch
+            # TODO: Test if parent limb component supports scaling!
+            #
+            defaultLength = startIKJoint.distanceBetween(endIKJoint)
+            tarsusIKCtrl.addAttr(longName='length', attributeType='float', default=defaultLength, hidden=True)
+
+            tarsusIKStretchName = self.formatName(name='Tarsus', kinemat='IK', subname='Stretch', index=index, type='multDoubleLinear')
+            tarsusIKStretch = self.scene.createNode('multDoubleLinear', name=tarsusIKStretchName)
+            tarsusIKStretch.connectPlugs(tarsusIKCtrl['length'], 'input1')
+            tarsusIKStretch.connectPlugs(limbIKSoftener['softScale'], 'input2')
+
+            tarsusIKEnvelopeName = self.formatName(name='Tarsus', kinemat='IK', subname='Envelope', index=index, type='blendTwoAttr')
+            tarsusIKEnvelope = self.scene.createNode('blendTwoAttr', name=tarsusIKEnvelopeName)
+            tarsusIKEnvelope.connectPlugs(switchCtrl['stretch'], 'attributesBlender')
+            tarsusIKEnvelope.connectPlugs(tarsusIKCtrl['length'], 'input[0]')
+            tarsusIKEnvelope.connectPlugs(tarsusIKStretch['output'], 'input[1]')
+            tarsusIKEnvelope.connectPlugs('output', endIKJoint['translateX'])
+
+        tarsusIKJoints[0].addConstraint('pointConstraint', [limbTipRIKJoint])
+
         if clawEnabled:
 
-            # Create claw tip control
+            # Create claw kinematic joints
             #
-            clawTipMatrix = transformutils.createAimMatrix(2, footUpVector, 1, footRightVector, origin=tipPoint)
+            clawTypes = ('Claw', 'ClawTip')
+            clawMatrices = (clawExportMatrix, tipExportMatrix)
 
-            clawTipCtrlName = self.formatName(name='ClawTip', kinemat='IK', type='control')
-            clawTipCtrl = self.scene.createNode('transform', name=clawTipCtrlName, parent=footCtrl)
-            clawTipCtrl.addPointHelper('pyramid')
-            clawTipCtrl.setWorldMatrix(clawTipMatrix)
-            clawTipCtrl.freezeTransform()
-            self.publishNode(clawTipCtrl, alias='ClawTip')
-
-            # Override tarsus space switch
-            #
-            firstTarsusIKCtrl = tarsusIKCtrls[0]
-            firstTarsusIKSpaceSwitch = self.scene(firstTarsusIKCtrl.userProperties['spaceSwitch'])
-            firstTarsusIKSpaceSwitch.replaceTarget(0, clawTipCtrl)
-
-            # Forgive me father...
-            #
-            raise NotImplementedError('Claws have not been implemented yet.')
-
-        else:
-
-            # Create kinematic tarsus joints
-            #
-            adjustedTarsusCount = initialTarsusCount + 1
-            jointTypes = (['Tarsus'] * initialTarsusCount) + ['TarsusTip']
-            kinematicTypes = ('FK', 'IK', 'Blend')
-
-            tarsusFKJoints = [None] * adjustedTarsusCount
-            tarsusIKJoints = [None] * adjustedTarsusCount
-            tarsusBlendJoints = [None] * adjustedTarsusCount
-            tarsusMatrices = tarsusExportMatrices + [tipExportMatrix]
-            kinematicJoints = (tarsusFKJoints, tarsusIKJoints, tarsusBlendJoints)
-
-            lastIndex = initialTarsusCount
+            clawFKJoints = [None] * 2
+            clawIKJoints = [None] * 2
+            clawBlendJoints = [None] * 2
+            clawKinematicJoints = (clawFKJoints, clawIKJoints, clawBlendJoints)
 
             for (i, kinematicType) in enumerate(kinematicTypes):
 
-                for (j, jointType) in enumerate(jointTypes):
+                for (j, clawType) in enumerate(clawTypes):
 
-                    parent = kinematicJoints[i][j - 1] if (j > 0) else jointsGroup
+                    parent = clawKinematicJoints[i][j - 1] if (j > 0) else jointsGroup
                     inheritsTransform = not (j == 0)
-                    index = None if (j == lastIndex) else (j + 1)
 
-                    jointName = self.formatName(name=jointType, kinemat=kinematicType, index=index, type='joint')
+                    jointName = self.formatName(name=clawType, kinemat=kinematicType, type='joint')
                     joint = self.scene.createNode('joint', name=jointName, parent=parent)
                     joint.inheritsTransform = inheritsTransform
                     joint.displayLocalAxis = True
-                    joint.setWorldMatrix(tarsusMatrices[j])
+                    joint.setWorldMatrix(clawMatrices[j])
 
-                    kinematicJoints[i][j] = joint
+                    clawKinematicJoints[i][j] = joint
 
             # Setup kinematic blends
             #
             blender = switchCtrl['mode']
 
-            for (i, (tarsusFKJoint, tarsusIKJoint, tarsusBlendJoint)) in enumerate(zip(tarsusFKJoints, tarsusIKJoints, tarsusBlendJoints)):
+            for (i, (clawFKJoint, clawIKJoint, clawBlendJoint)) in enumerate(zip(clawFKJoints, clawIKJoints, clawBlendJoints)):
 
-                footBlender = setuputils.createTransformBlends(tarsusFKJoint, tarsusIKJoint, tarsusBlendJoint, blender=blender)
-                footBlender.setName(self.formatName(name='Foot', subname=jointTypes[i], type='blendTransform'))
+                clawBlender = setuputils.createTransformBlends(clawFKJoint, clawIKJoint, clawBlendJoint, blender=blender)
+                clawBlender.setName(self.formatName(name=clawTypes[i], type='blendTransform'))
 
-            # Create tarsus FK controls
+            # Create claw IK controls
             #
-            tarsusFKCtrls = [None] * initialTarsusCount
-            tarsusTipFKTarget = None
+            clawForwardVector = transformutils.breakMatrix(clawExportMatrix, normalize=True)[0]
+            clawIKMatrix = transformutils.createAimMatrix(0, clawForwardVector, 1, footRightVector, origin=clawPoint)
+            clawTipIKMatrix = transformutils.createRotationMatrix(clawIKMatrix) * transformutils.createTranslateMatrix(tipPoint)
 
-            for (i, tarsusFKJoint) in enumerate(tarsusFKJoints):
+            clawIKSpaceName = self.formatName(name='Claw', kinemat='IK', type='space')
+            clawIKSpace = self.scene.createNode('transform', name=clawIKSpaceName, parent=controlsGroup)
+            clawIKSpace.setWorldMatrix(clawIKMatrix, skipScale=True)
+            clawIKSpace.freezeTransform()
 
-                # Evaluate position in tarsus FK chain
-                #
-                previousTarsusCtrl = tarsusFKCtrls[i - 1] if (i > 0) else limbFKCtrl
-                index = i + 1
+            clawIKCtrlName = self.formatName(name='Claw', kinemat='IK', type='control')
+            clawIKCtrl = self.scene.createNode('transform', name=clawIKCtrlName, parent=clawIKSpace)
+            clawIKCtrl.addDivider('Settings')
+            clawIKCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
+            clawIKCtrl.tagAsController(parent=footCtrl)
+            self.publishNode(clawIKCtrl, alias='Claw_IK')
 
-                if i == lastIndex:
+            clawTipIKCtrlName = self.formatName(name='ClawTip', kinemat='IK', type='control')
+            clawTipIKCtrl = self.scene.createNode('transform', name=clawTipIKCtrlName, parent=clawIKCtrl)
+            clawTipIKCtrl.addPointHelper('pyramid', size=(15.0 * rigScale), lineWidth=2.0, colorRGB=lightColorRGB)
+            clawTipIKCtrl.setWorldMatrix(clawTipIKMatrix, skipScale=True)
+            clawTipIKCtrl.freezeTransform()
+            clawTipIKCtrl.tagAsController(parent=clawIKCtrl)
+            self.publishNode(clawTipIKCtrl, alias='ClawTip_IK')
 
-                    # Create tarsus tip FK target
-                    #
-                    tarsusTipFKTargetName = self.formatName(name='TarsusTip', kinemat='FK', type='target')
-                    tarsusTipFKTarget = self.scene.createNode('transform', name=tarsusTipFKTargetName, parent=tarsusFKCtrls[-1])
-                    tarsusTipFKTarget.displayLocalAxis = True
-                    tarsusTipFKTarget.visibility = False
-                    tarsusTipFKTarget.setWorldMatrix(tipExportMatrix, skipScale=True)
-                    tarsusTipFKTarget.freezeTransform()
-                    tarsusTipFKTarget.lock()
+            clawIKCtrlShape = clawIKCtrl.addPointHelper('box', size=(15.0 * rigScale), lineWidth=4.0, colorRGB=colorRGB)
+            clawIKCtrlShape.reorientAndScaleToFit(clawTipIKCtrl)
 
-                    tarsusFKJoint.addConstraint('transformConstraint', [tarsusTipFKTarget])
+            clawIKTargetName = self.formatName(name='Claw', kinemat='IK', type='target')
+            clawIKTarget = self.scene.createNode('transform', name=clawIKTargetName, parent=clawTipIKCtrl)
+            clawIKTarget.displayLocalAxis = True
+            clawIKTarget.visibility = False
+            clawIKTarget.setWorldMatrix(tipExportMatrix, skipScale=True)
+            clawIKTarget.freezeTransform()
+            clawIKTarget.lock()
 
-                else:
+            footIKTargetName = self.formatName(kinemat='IK', type='target')
+            footIKTarget = self.scene.createNode('transform', name=footIKTargetName, parent=clawTipIKCtrl)
+            footIKTarget.displayLocalAxis = True
+            footIKTarget.visibility = False
+            footIKTarget.setWorldMatrix(footCtrlMatrix, skipScale=True)
+            footIKTarget.freezeTransform()
+            footIKTarget.lock()
 
-                    # Create tarsus FK target
-                    #
-                    tarsusFKTargetName = self.formatName(name='Tarsus', kinemat='FK', index=index, type='target')
-                    tarsusFKTarget = self.scene.createNode('transform', name=tarsusFKTargetName, parent=previousTarsusCtrl)
-                    tarsusFKTarget.displayLocalAxis = True
-                    tarsusFKTarget.visibility = False
-                    tarsusFKTarget.copyTransform(tarsusFKJoint, skipScale=True)
-                    tarsusFKTarget.freezeTransform()
-                    tarsusFKTarget.lock()
-
-                    # Create tarsus FK control
-                    #
-                    tarsusFKCtrlMatrix = mirrorMatrix * tarsusFKTarget.worldMatrix()
-
-                    tarsusFKSpaceName = self.formatName(name='Tarsus', kinemat='FK', index=index, type='control')
-                    tarsusFKSpace = self.scene.createNode('transform', name=tarsusFKSpaceName, parent=controlsGroup)
-                    tarsusFKSpace.setWorldMatrix(tarsusFKCtrlMatrix, skipScale=True)
-                    tarsusFKSpace.freezeTransform()
-
-                    tarsusFKCtrlName = self.formatName(name='Tarsus', kinemat='FK', index=index, type='control')
-                    tarsusFKCtrl = self.scene.createNode('transform', name=tarsusFKCtrlName, parent=tarsusFKSpace)
-                    tarsusFKCtrl.addDivider('Settings')
-                    tarsusFKCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
-                    tarsusFKCtrl.prepareChannelBoxForAnimation()
-                    tarsusFKCtrl.tagAsController(parent=previousTarsusCtrl)
-
-                    tarsusFKShape = tarsusFKCtrl.addPointHelper('cylinder', size=(15.0 * rigScale), lineWidth=2.0, colorRGB=lightColorRGB)
-                    tarsusFKShape.reorientAndScaleToFit(tarsusFKJoints[i + 1])
-
-                    # Add space switching to tarsus FK control
-                    #
-                    tarsusFKSpaceSwitch = tarsusFKSpace.addSpaceSwitch([previousTarsusCtrl, motionCtrl], weighted=True, maintainOffset=True)
-                    tarsusFKSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
-                    tarsusFKSpaceSwitch.connectPlugs(tarsusFKCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
-                    tarsusFKSpaceSwitch.connectPlugs(tarsusFKCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
-
-                    tarsusFKAimMatrixName = self.formatName(name='Tarsus', subname='WorldSpace', index=index, kinemat='FK', type='aimMatrix')
-                    tarsusFKAimMatrix = self.scene.createNode('aimMatrix', name=tarsusFKAimMatrixName)
-                    tarsusFKAimMatrix.connectPlugs(tarsusFKTarget[f'worldMatrix[{tarsusFKTarget.instanceNumber()}]'], 'inputMatrix')
-                    tarsusFKAimMatrix.primaryInputAxis = (0.0, 0.0, 1.0)
-                    tarsusFKAimMatrix.primaryMode = 2  # Align
-                    tarsusFKAimMatrix.primaryTargetVector = (0.0, 0.0, 1.0)
-                    tarsusFKAimMatrix.connectPlugs(tarsusFKTarget[f'worldMatrix[{tarsusFKTarget.instanceNumber()}]'], 'primaryTargetMatrix')
-                    tarsusFKAimMatrix.secondaryInputAxis = (0.0, 1.0, 0.0)
-                    tarsusFKAimMatrix.secondaryMode = 2  # Align
-                    tarsusFKAimMatrix.secondaryTargetVector = (0.0, 0.0, -1.0)
-                    tarsusFKAimMatrix.connectPlugs(motionCtrl[f'worldMatrix[{motionCtrl.instanceNumber()}]'], 'secondaryTargetMatrix')
-
-                    tarsusFKSpaceSwitch.replaceTarget(1, tarsusFKAimMatrix, maintainOffset=True)
-
-                    tarsusFKCtrl.userProperties['space'] = tarsusFKSpace.uuid()
-                    tarsusFKCtrl.userProperties['spaceSwitch'] = tarsusFKSpaceSwitch.uuid()
-                    tarsusFKCtrl.userProperties['target'] = tarsusFKTarget.uuid()
-
-                    tarsusFKCtrls[i] = tarsusFKCtrl
-
-                    # Constrain tarsus FK joint
-                    #
-                    tarsusFKJoint.addConstraint('transformConstraint', [tarsusFKCtrl], maintainOffset=requiresMirroring)
-
-            footSpaceSwitch.replaceTarget(0, tarsusTipFKTarget, maintainOffset=True)
-
-            # Apply IK solvers to tarsus IK joints
+            # Add space switching to claw IK control
             #
-            reversedTarsusIKCtrls = list(reversed(tarsusIKCtrls))
-            limbIKSoftener = self.scene(limbComponent.userProperties['sikSoftener'])
+            limbIKPickMatrixName = self.formatName(name='ClawTip', subname='LocalPositionSpace', kinemat='IK', type='pickMatrix')
+            limbIKPickMatrix = self.scene.createNode('pickMatrix', name=limbIKPickMatrixName)
+            limbIKPickMatrix.useTranslate = False
+            limbIKPickMatrix.useRotate = True
+            limbIKPickMatrix.useScale = True
+            limbIKPickMatrix.useShear = True
+            limbIKPickMatrix.connectPlugs(limbIKOffsetCtrl[f'worldMatrix[{limbIKOffsetCtrl.instanceNumber()}]'], 'inputMatrix')
 
-            for (i, (startIKJoint, endIKJoint)) in enumerate(zip(tarsusIKJoints[:-1], tarsusIKJoints[1:])):
+            footIKPickMatrixName = self.formatName(name='ClawTip', subname='LocalRotationSpace', kinemat='IK', type='pickMatrix')
+            footIKPickMatrix = self.scene.createNode('pickMatrix', name=footIKPickMatrixName)
+            footIKPickMatrix.useTranslate = True
+            footIKPickMatrix.useRotate = False
+            footIKPickMatrix.useScale = False
+            footIKPickMatrix.useShear = False
+            footIKPickMatrix.connectPlugs(footCtrl[f'worldMatrix[{limbIKOffsetCtrl.instanceNumber()}]'], 'inputMatrix')
 
-                # Apply single-chain IK solver
-                #
-                tarsusIKCtrl = reversedTarsusIKCtrls[i]
-                index = i + 1
+            clawTipIKLocalSpaceMultMatrixName = self.formatName(name='ClawTip', subname='LocalSpace', kinemat='IK', type='multMatrix')
+            clawTipIKLocalSpaceMultMatrix = self.scene.createNode('multMatrix', name=clawTipIKLocalSpaceMultMatrixName)
+            clawTipIKLocalSpaceMultMatrix.connectPlugs(limbIKPickMatrix['outputMatrix'], 'matrixIn[0]')
+            clawTipIKLocalSpaceMultMatrix.connectPlugs(footIKPickMatrix['outputMatrix'], 'matrixIn[1]')
 
-                tarsusIKHandle, tarsusIKEffector = kinematicutils.applySingleChainSolver(startIKJoint, endIKJoint)
-                tarsusIKHandle.setName(self.formatName(name='Foot', subname='Tarsus', index=index, type='ikHandle'))
-                tarsusIKHandle.setParent(privateGroup)
-                tarsusIKHandle.addConstraint('transformConstraint', [tarsusIKCtrl], maintainOffset=True)
-                tarsusIKEffector.setName(self.formatName(name='Foot', subname='Tarsus', index=index, type='ikEffector'))
+            clawIKSpaceSwitch = clawIKSpace.addSpaceSwitch([limbIKOffsetCtrl, motionCtrl], weighted=True, maintainOffset=True)
+            clawIKSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
+            clawIKSpaceSwitch.connectPlugs(clawIKCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
+            clawIKSpaceSwitch.connectPlugs(clawIKCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
+            clawIKSpaceSwitch.replaceTarget(0, clawTipIKLocalSpaceMultMatrix)
 
-                # Setup IK stretch
-                # TODO: Test if parent limb component supports scaling!
-                #
-                defaultLength = startIKJoint.distanceBetween(endIKJoint)
-                tarsusIKCtrl.addAttr(longName='length', attributeType='float', default=defaultLength, hidden=True)
+            clawIKCtrl.userProperties['space'] = clawIKSpace.uuid()
+            clawIKCtrl.userProperties['spaceSwitch'] = clawIKSpaceSwitch.uuid()
+            clawIKCtrl.userProperties['tip'] = clawTipIKCtrl.uuid()
+            clawIKCtrl.userProperties['ikTarget'] = clawIKTarget.uuid()
+            clawIKCtrl.userProperties['sikTarget'] = footIKTarget.uuid()
 
-                tarsusIKStretchName = self.formatName(name='Tarsus', kinemat='IK', subname='Stretch', index=index, type='multDoubleLinear')
-                tarsusIKStretch = self.scene.createNode('multDoubleLinear', name=tarsusIKStretchName)
-                tarsusIKStretch.connectPlugs(tarsusIKCtrl['length'], 'input1')
-                tarsusIKStretch.connectPlugs(limbIKSoftener['softScale'], 'input2')
+            # Point constrain first tarsus IK target
+            #
+            firstTarsusIKCtrl = tarsusIKCtrls[0]
+            firstTarsusFKCtrl, lastTarsusFKCtrl = tarsusFKCtrls[0], tarsusFKCtrls[-1]
 
-                tarsusIKEnvelopeName = self.formatName(name='Tarsus', kinemat='IK', subname='Envelope', index=index, type='blendTwoAttr')
-                tarsusIKEnvelope = self.scene.createNode('blendTwoAttr', name=tarsusIKEnvelopeName)
-                tarsusIKEnvelope.connectPlugs(switchCtrl['stretch'], 'attributesBlender')
-                tarsusIKEnvelope.connectPlugs(tarsusIKCtrl['length'], 'input[0]')
-                tarsusIKEnvelope.connectPlugs(tarsusIKStretch['output'], 'input[1]')
-                tarsusIKEnvelope.connectPlugs('output', endIKJoint['translateX'])
+            firstTarsusIKTarget = self.scene(firstTarsusIKCtrl.userProperties['target'])
+            firstTarsusIKTarget.unlock()
+            firstTarsusIKTarget.addConstraint('pointConstraint', [footIKTarget])
+            firstTarsusIKTarget.lock()
 
-            tarsusIKJoints[0].addConstraint('pointConstraint', [limbTipRIKJoint])
+            # Apply single-chain IK solver to claw IK joints
+            #
+            clawIKJoint, clawTipIKJoint = clawIKJoints
+            lastTarsusIKJoint = tarsusIKJoints[-1]
+
+            clawIKHandle, clawIKEffector = kinematicutils.applySingleChainSolver(clawIKJoint, clawTipIKJoint)
+            clawIKHandle.setName(self.formatName(name='Claw', type='ikHandle'))
+            clawIKHandle.setParent(privateGroup)
+            clawIKHandle.addConstraint('transformConstraint', [clawIKTarget])
+            clawIKEffector.setName(self.formatName(name='Claw', type='ikEffector'))
+
+            clawIKJoint.addConstraint('pointConstraint', [lastTarsusIKJoint])
+
+            # Create claw FK control
+            #
+            clawFKTargetMatrix = mirrorMatrix * clawExportMatrix
+
+            clawFKTargetName = self.formatName(name='Claw', kinemat='FK', type='target')
+            clawFKTarget = self.scene.createNode('transform', name=clawFKTargetName, parent=lastTarsusFKCtrl)
+            clawFKTarget.displayLocalAxis = True
+            clawFKTarget.visibility = False
+            clawFKTarget.setWorldMatrix(clawFKTargetMatrix, skipScale=True)
+            clawFKTarget.freezeTransform()
+            clawFKTarget.lock()
+
+            clawFKSpaceName = self.formatName(name='Claw', kinemat='FK', type='space')
+            clawFKSpace = self.scene.createNode('transform', name=clawFKSpaceName, parent=controlsGroup)
+            clawFKSpace.setWorldMatrix(clawFKTargetMatrix, skipScale=True)
+            clawFKSpace.freezeTransform()
+
+            clawFKCtrlName = self.formatName(name='Claw', kinemat='FK', type='control')
+            clawFKCtrl = self.scene.createNode('transform', name=clawFKCtrlName, parent=clawFKSpace)
+            clawFKCtrl.addDivider('Settings')
+            clawFKCtrl.addAttr(longName='localOrGlobal', attributeType='float', min=0.0, max=1.0, keyable=True)
+            clawFKCtrl.prepareChannelBoxForAnimation()
+            clawFKCtrl.tagAsController(parent=firstTarsusFKCtrl)
+
+            # Create claw-tip FK target
+            #
+            clawTipFKTargetMatrix = mirrorMatrix * tipExportMatrix
+
+            clawTipFKTargetName = self.formatName(name='ClawTip', kinemat='FK', type='target')
+            clawTipFKTarget = self.scene.createNode('transform', name=clawTipFKTargetName, parent=clawFKCtrl)
+            clawTipFKTarget.displayLocalAxis = True
+            clawTipFKTarget.visibility = False
+            clawTipFKTarget.setWorldMatrix(clawTipFKTargetMatrix, skipScale=True)
+            clawTipFKTarget.freezeTransform()
+            clawTipFKTarget.lock()
+
+            # Add shape to claw FK control
+            #
+            clawFKCtrlShape = clawFKCtrl.addPointHelper('cylinder', size=(15.0 * rigScale), localRotate=(45.0, 0.0, 0.0), lineWidth=2.0, colorRGB=lightColorRGB)
+            clawFKCtrlShape.reorientAndScaleToFit(clawTipFKTarget)
+
+            # Add space switching to claw FK control
+            #
+            clawFKSpaceSwitch = clawFKSpace.addSpaceSwitch([clawFKTarget, motionCtrl], weighted=True, maintainOffset=True)
+            clawFKSpaceSwitch.setAttr('target', [{'targetWeight': (1.0, 0.0, 1.0), 'targetReverse': (False, True, False)}, {'targetWeight': (0.0, 0.0, 0.0)}])
+            clawFKSpaceSwitch.connectPlugs(clawFKCtrl['localOrGlobal'], 'target[0].targetRotateWeight')
+            clawFKSpaceSwitch.connectPlugs(clawFKCtrl['localOrGlobal'], 'target[1].targetRotateWeight')
+
+            clawFKAimMatrixName = self.formatName(name='Claw', subname='WorldSpace', index=index, kinemat='FK', type='aimMatrix')
+            clawFKAimMatrix = self.scene.createNode('aimMatrix', name=clawFKAimMatrixName)
+            clawFKAimMatrix.connectPlugs(clawFKTarget[f'worldMatrix[{clawFKTarget.instanceNumber()}]'], 'inputMatrix')
+            clawFKAimMatrix.primaryInputAxis = (0.0, 0.0, 1.0)
+            clawFKAimMatrix.primaryMode = 2  # Align
+            clawFKAimMatrix.primaryTargetVector = (0.0, 0.0, 1.0)
+            clawFKAimMatrix.connectPlugs(clawFKTarget[f'worldMatrix[{clawFKTarget.instanceNumber()}]'], 'primaryTargetMatrix')
+            clawFKAimMatrix.secondaryInputAxis = (0.0, 1.0, 0.0)
+            clawFKAimMatrix.secondaryMode = 2  # Align
+            clawFKAimMatrix.secondaryTargetVector = (0.0, 0.0, -1.0)
+            clawFKAimMatrix.connectPlugs(motionCtrl[f'worldMatrix[{motionCtrl.instanceNumber()}]'], 'secondaryTargetMatrix')
+
+            clawFKSpaceSwitch.replaceTarget(1, clawFKAimMatrix, maintainOffset=True)
+
+            clawFKCtrl.userProperties['space'] = clawFKSpace.uuid()
+            clawFKCtrl.userProperties['spaceSwitch'] = clawFKSpaceSwitch.uuid()
+            clawFKCtrl.userProperties['target'] = clawFKTarget.uuid()
+
+            # Constraint claw FK joints
+            #
+            clawFKJoints[0].addConstraint('transformConstraint', [clawFKCtrl], maintainOffset=requiresMirroring)
+            clawFKJoints[1].addConstraint('transformConstraint', [clawTipFKTarget], maintainOffset=requiresMirroring)
 
         # Call parent method
         #
