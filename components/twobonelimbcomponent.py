@@ -30,15 +30,14 @@ class LimbType(IntEnum):
 class TwoBoneLimbComponent(limbcomponent.LimbComponent):
     """
     Overload of `AbstractComponent` that outlines two-bone limb components.
-    TODO: Override `repairSkeleton` method to get rid of wrist/ankle joints!
     """
 
     # region Dunderscores
     __default_limb_names__ = ('', '', '')
     __default_hinge_name__ = ''
     __default_limb_types__ = (Type.NONE, Type.NONE, Type.NONE)
-    __default_limb_matrices__ = {Side.LEFT: {}, Side.RIGHT: {}}
-    __default_rbf_samples__ = {Side.LEFT: {}, Side.RIGHT: {}}
+    __default_limb_matrices__ = {Side.LEFT: {}, Side.RIGHT: {}, Side.CENTER: {}, Side.NONE: {}}
+    __default_rbf_samples__ = {Side.LEFT: {}, Side.RIGHT: {}, Side.CENTER: {}, Side.NONE: {}}
     # endregion
 
     # region Enums
@@ -227,15 +226,23 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         clavicleComponent = clavicleComponents[0] if hasClavicleComponent else None
         clavicleCtrl = clavicleComponent.getPublishedNode('Clavicle') if (clavicleComponent is not None) else None
 
+        # Compose limb matrix
+        #
+        defaultLimbMatrix = transformutils.createRotationMatrix(self.__default_limb_matrices__[componentSide][self.LimbType.UPPER]) * transformutils.createTranslateMatrix(upperLimbMatrix)
+        defaultLimbNormal = transformutils.breakMatrix(defaultLimbMatrix, normalize=True)[0]
+
+        xAxis, yAxis, zAxis, position = transformutils.breakMatrix(upperLimbMatrix, normalize=True)
+        projectedYAxis = transformutils.projectVector(yAxis, defaultLimbNormal)
+        projectedLimbMatrix = transformutils.createAimMatrix(0, defaultLimbNormal, 1, projectedYAxis, origin=position)
+
+        limbMatrix = transformutils.alignMatrixToNearestAxes(projectedLimbMatrix, defaultLimbMatrix)
+        mirroredLimbMatrix = mirrorMatrix * limbMatrix
+
         # Create limb target
         #
-        defaultUpperLimbMatrix = self.__default_limb_matrices__[componentSide][self.LimbType.UPPER]
-        defaultLimbMatrix = transformutils.alignMatrixToNearestAxes(defaultUpperLimbMatrix, om.MMatrix.kIdentity)
-        limbMatrix = mirrorMatrix * transformutils.createRotationMatrix(defaultLimbMatrix) * transformutils.createTranslateMatrix(limbOrigin)
-
         limbTargetName = self.formatName(type='target')
         limbTarget = self.scene.createNode('transform', name=limbTargetName, parent=privateGroup)
-        limbTarget.setWorldMatrix(limbMatrix)
+        limbTarget.setWorldMatrix(mirroredLimbMatrix)
         limbTarget.freezeTransform()
 
         target = clavicleCtrl if hasClavicleComponent else spineCtrl
@@ -307,7 +314,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         #
         limbSpaceName = self.formatName(type='space')
         limbSpace = self.scene.createNode('transform', name=limbSpaceName, parent=controlsGroup)
-        limbSpace.setWorldMatrix(limbMatrix)
+        limbSpace.setWorldMatrix(mirroredLimbMatrix)
         limbSpace.freezeTransform()
 
         limbCtrlName = self.formatName(type='control')
@@ -541,7 +548,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         lowerFKShape = lowerFKCtrl.addPointHelper('cylinder', size=(15.0 * rigScale), lineWidth=2.0, colorRGB=lightColorRGB)
         lowerFKShape.reorientAndScaleToFit(extremityFKTarget)
 
-        supportsResizing = int(mc.about(version=True)) >= 2025
+        supportsResizing = int(mc.about(version=True)) >= 2025  # Anything prior absolutely destroys memory usage!
 
         if supportsResizing:
 
@@ -798,6 +805,32 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         polePosition = poleOrigin + (poleVector * sum(limbLengths))
         poleMatrix = transformutils.createTranslateMatrix(polePosition)
 
+        # Reorient RBF follow parameters
+        #
+        defaultFollowSamples = self.__default_rbf_samples__[componentSide]  # Samples are originally in waist space!
+        requiresReorienting = not defaultLimbMatrix.isEquivalent(limbMatrix, tolerance=1e-3)
+
+        followSamples = defaultFollowSamples
+
+        if requiresReorienting:
+
+            followSamples = [None] * len(defaultFollowSamples)
+
+            for (i, followSample) in enumerate(defaultFollowSamples):
+
+                sampleInputTranslate = (om.MVector(followSample['sampleInputTranslate']) * waistCtrl.worldMatrix()) * defaultLimbMatrix.inverse()
+                sampleOutputTranslate = (om.MVector(followSample['sampleOutputTranslate']) * waistCtrl.worldMatrix()) * defaultLimbMatrix.inverse()
+
+                upperLimbOffsetMatrix = transformutils.createRotationMatrix(limbMatrix * defaultLimbMatrix.inverse())
+                newInputTranslate = ((sampleInputTranslate * upperLimbOffsetMatrix) * defaultLimbMatrix) * waistCtrl.worldInverseMatrix()
+                newOutputTranslate = ((sampleOutputTranslate * upperLimbOffsetMatrix) * defaultLimbMatrix) * waistCtrl.worldInverseMatrix()
+
+                followSamples[i] = {
+                    'sampleName': followSample['sampleName'],
+                    'sampleInputTranslate': newInputTranslate.normal(),
+                    'sampleOutputTranslate': newOutputTranslate.normal()
+                }
+
         # Create PV follow system
         #
         followJointName = self.formatName(subname='Follow', type='joint')
@@ -827,7 +860,6 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
 
         defaultSampleInput = forwardVector * waistCtrl.worldInverseMatrix()
         defaultSampleOutput = -poleVector * waistCtrl.worldInverseMatrix()
-        followSamples = self.__default_rbf_samples__[componentSide]
 
         followRBFSolverName = self.formatName(subname='Follow', type='rbfSolver')
         followRBFSolver = self.scene.createNode('rbfSolver', name=followRBFSolverName)
