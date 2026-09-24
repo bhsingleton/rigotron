@@ -106,7 +106,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
         # Edit COG spec
         #
-        pelvisSpec, nullSpec, *spineSpecs = self.skeleton(flatten=True)
+        pelvisSpec, nullSpec, *spineSpecs = self.skeleton(flatten=True, skipDisabled=False)
 
         cogSpec.name = self.formatName(subname='COG', type='locator')
         cogSpec.defaultMatrix = self.__default_pivot_matrices__[self.SpinePivotType.COG]
@@ -924,9 +924,8 @@ class SpineComponent(basecomponent.BaseComponent):
         pelvisExportJoint = pelvisSpec.getNode()
         pelvisMatrix = pelvisExportJoint.worldMatrix()
 
-        cogSpec, = self.pivotSpecs()
-        cogPivot = cogSpec.getNode()
-        cogMatrix = cogPivot.worldMatrix()
+        cogSpec, = self.pivots()
+        cogMatrix = om.MMatrix(cogSpec.worldMatrix)
 
         controlsGroup = self.scene(self.controlsGroup)
         privateGroup = self.scene(self.privateGroup)
@@ -938,7 +937,7 @@ class SpineComponent(basecomponent.BaseComponent):
         darkColorRGB = colorRGB.darker()
 
         controlRig = self.findControlRig()
-        rigDiameter = float(controlRig.rigRadius) * 2.0
+        rigWidth, rigHeight = controlRig.getRigWidthAndHeight()
         rigScale = controlRig.getRigScale()
 
         parentExportJoint, parentExportCtrl = self.getAttachmentTargets()
@@ -988,7 +987,7 @@ class SpineComponent(basecomponent.BaseComponent):
 
         if hasLegComponents:
 
-            legJoints = [legComponent.skeleton()[0].getNode() for legComponent in legComponents]
+            legJoints = [legComponent.skeleton(flatten=True)[0].getNode() for legComponent in legComponents]
             weight = 1.0 / numLegComponents
             waistCenter = sum([legJoint.translation(space=om.MSpace.kWorld) * weight for legJoint in legJoints], start=om.MVector.kZeroVector)
             waistMatrix = transformutils.createRotationMatrix(self.__default_component_matrix__) * transformutils.createTranslateMatrix([0.0, waistCenter.y, waistCenter.z])
@@ -1025,7 +1024,7 @@ class SpineComponent(basecomponent.BaseComponent):
         pelvisCtrl.addShape('HandleBarCurve', size=(45.0 * rigScale), localPosition=localPosition, localRotate=localRotate, localScale=(0.25, 0.25, 1.25), colorRGB=lightColorRGB)
         pelvisCtrl.addDivider('Settings')
         pelvisCtrl.addAttr(longName='lookAt', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
-        pelvisCtrl.addAttr(longName='lookAtOffset', niceName='Look-At Offset', attributeType='distance', min=1.0, default=rigDiameter, channelBox=True)
+        pelvisCtrl.addAttr(longName='lookAtOffset', niceName='Look-At Offset', attributeType='distance', min=1.0, default=rigWidth, channelBox=True)
         pelvisCtrl.addDivider('Spaces')
         pelvisCtrl.addAttr(longName='positionSpaceW0', niceName='Position Space (World)', attributeType='float', min=0.0, max=1.0, keyable=True)
         pelvisCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
