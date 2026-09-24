@@ -1455,7 +1455,7 @@ class QRigTab(qabstracttab.QAbstractTab):
         status = Status(index)
         currentStatus = Status(self.selectedComponent.componentStatus)
 
-        skeletonToMeta = currentStatus == Status.SKELETON and status == Status.META
+        skeletonToMeta = (currentStatus == Status.SKELETON) and (status == Status.META)
 
         if skeletonToMeta:
 
@@ -1463,7 +1463,7 @@ class QRigTab(qabstracttab.QAbstractTab):
 
         # Check if shapes require caching
         #
-        rigToSkeleton = currentStatus == Status.RIG and status == Status.SKELETON
+        rigToSkeleton = (currentStatus == Status.RIG) and (status == Status.SKELETON)
 
         if rigToSkeleton:
 
@@ -1477,7 +1477,7 @@ class QRigTab(qabstracttab.QAbstractTab):
 
             # Check if skins require updating
             #
-            metaToSkeleton = currentStatus == Status.META and status == Status.SKELETON
+            metaToSkeleton = (currentStatus == Status.META) and (status == Status.SKELETON)
 
             if metaToSkeleton:
 
