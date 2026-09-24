@@ -100,7 +100,7 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
         self.invalidateName()
         self.markSkeletonDirty()
-        # self.markPivotsDirty()
+        self.markPivotsDirty()
 
     @componentSide.changed
     def componentSide(self, value):
@@ -113,7 +113,7 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
         self.invalidateName()
         self.markSkeletonDirty()
-        # self.markPivotsDirty()
+        self.markPivotsDirty()
 
     @componentId.changed
     def componentId(self, value):
@@ -126,7 +126,7 @@ class AbstractComponent(mpynodeextension.MPyNodeExtension, metaclass=mabcmeta.MA
 
         self.invalidateName()
         self.markSkeletonDirty()
-        # self.markPivotsDirty()
+        self.markPivotsDirty()
     # endregion
 
     # region Methods
