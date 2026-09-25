@@ -3,7 +3,7 @@ from mpy import mpyattribute
 from enum import IntEnum
 from dcc.maya.libs import transformutils, shapeutils
 from dcc.dataclasses.colour import Colour
-from . import extremitycomponent
+from . import extremitycomponent, limbcomponent
 from ..libs import Side, Style, skeletonspec, setuputils
 
 import logging
@@ -506,8 +506,8 @@ class HandComponent(extremitycomponent.ExtremityComponent):
         rootComponent = self.findRootComponent()
         motionCtrl = rootComponent.getPublishedNode('Motion')
 
-        limbComponents = self.findComponentAncestors('LimbComponent')
-        hasLimbComponent = len(limbComponents) == 1
+        limbComponent = self.componentParent()
+        hasLimbComponent = isinstance(limbComponent, limbcomponent.LimbComponent)
 
         if not hasLimbComponent:
 
@@ -515,8 +515,6 @@ class HandComponent(extremitycomponent.ExtremityComponent):
 
         # Get required limb nodes
         #
-        limbComponent = limbComponents[0]
-
         switchCtrl = self.scene(limbComponent.userProperties['switchControl'])
         limbFKCtrl = self.scene(limbComponent.userProperties['fkControls'][-1])
         limbIKCtrl = self.scene(limbComponent.userProperties['ikControls'][-1])
