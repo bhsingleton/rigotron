@@ -2,7 +2,6 @@ import math
 
 from maya import cmds as mc
 from maya.api import OpenMaya as om
-from maya.app.renderSetup.views.propertyEditor.main import kWarningPropagateLightValueChange
 from mpy import mpyattribute
 from dcc.maya.libs import transformutils, shapeutils
 from dcc.dataclasses.colour import Colour
@@ -216,15 +215,14 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         isArm = self.className.endswith('ArmComponent')
         isLeg = self.className.endswith('LegComponent')
         spineAlias = 'Chest' if isArm else 'Pelvis'
-        spineComponent = rootComponent.findComponentDescendants('SpineComponent')[0]
+        spineComponent = self.findComponentAncestors('SpineComponent')[0]
         cogCtrl = spineComponent.getPublishedNode('COG')
         waistCtrl = spineComponent.getPublishedNode('Waist')
         spineCtrl = spineComponent.getPublishedNode(spineAlias)
 
-        clavicleComponents = self.findComponentAncestors('ClavicleComponent')
-        hasClavicleComponent = len(clavicleComponents) > 0
-        clavicleComponent = clavicleComponents[0] if hasClavicleComponent else None
-        clavicleCtrl = clavicleComponent.getPublishedNode('Clavicle') if (clavicleComponent is not None) else None
+        parentComponent = self.componentParent()
+        hasIntermediateComponent = parentComponent is not spineComponent
+        intermediateAlias = parentComponent.componentName if hasIntermediateComponent else ''
 
         # Compose limb matrix
         #
@@ -245,7 +243,7 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         limbTarget.setWorldMatrix(mirroredLimbMatrix)
         limbTarget.freezeTransform()
 
-        target = clavicleCtrl if hasClavicleComponent else spineCtrl
+        target = parentExportCtrl if hasIntermediateComponent else spineCtrl
         limbTarget.addConstraint('transformConstraint', [target], maintainOffset=True)
 
         # Create kinematic limb joints
@@ -323,15 +321,12 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         limbCtrl.prepareChannelBoxForAnimation()
         self.publishNode(limbCtrl, alias=limbName)
 
-        clavicleComponents = self.findComponentAncestors('ClavicleComponent')
-        hasClavicleComponent = len(clavicleComponents) > 0
-
         limbSpaceSwitch = None
 
-        if hasClavicleComponent:
+        if hasIntermediateComponent:
 
             defaultWorldWeight = 1.0 if isArm else 0.0
-            defaultClavicleWeight = 0.0 if isArm else 1.0
+            defaultIntermediateWeight = 0.0 if isArm else 1.0
 
             limbCtrl.addDivider('Settings')
             limbCtrl.addAttr(longName='followBody', attributeType='float', min=0.0, max=1.0, keyable=True)
@@ -340,12 +335,12 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
             limbCtrl.addAttr(longName='positionSpaceW1', niceName='Position Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
             limbCtrl.addAttr(longName='positionSpaceW2', niceName='Position Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
             limbCtrl.addAttr(longName='positionSpaceW3', niceName=f'Position Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
-            limbCtrl.addAttr(longName='positionSpaceW4', niceName='Position Space (Clavicle)', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
+            limbCtrl.addAttr(longName='positionSpaceW4', niceName=f'Position Space ({intermediateAlias})', attributeType='float', min=0.0, max=1.0, default=1.0, keyable=True)
             limbCtrl.addAttr(longName='rotationSpaceW0', niceName='Rotation Space (World)', attributeType='float', min=0.0, max=1.0, default=defaultWorldWeight, keyable=True)
             limbCtrl.addAttr(longName='rotationSpaceW1', niceName='Rotation Space (COG)', attributeType='float', min=0.0, max=1.0, keyable=True)
             limbCtrl.addAttr(longName='rotationSpaceW2', niceName='Rotation Space (Waist)', attributeType='float', min=0.0, max=1.0, keyable=True)
             limbCtrl.addAttr(longName='rotationSpaceW3', niceName=f'Rotation Space ({spineAlias})', attributeType='float', min=0.0, max=1.0, keyable=True)
-            limbCtrl.addAttr(longName='rotationSpaceW4', niceName='Rotation Space (Clavicle)', attributeType='float', min=0.0, max=1.0, default=defaultClavicleWeight, keyable=True)
+            limbCtrl.addAttr(longName='rotationSpaceW4', niceName=f'Rotation Space ({intermediateAlias})', attributeType='float', min=0.0, max=1.0, default=defaultIntermediateWeight, keyable=True)
 
             limbSpaceSwitch = limbSpace.addSpaceSwitch([motionCtrl, cogCtrl, waistCtrl, spineCtrl, limbTarget], maintainOffset=True)
             limbSpaceSwitch.weighted = True
