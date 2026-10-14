@@ -114,7 +114,7 @@ class ClavicleComponent(basecomponent.BaseComponent):
         attachmentIndex = int(self.attachmentId)
         lastIndex = numAttachmentSpecs - 1
 
-        if attachmentIndex == lastIndex:
+        if (attachmentIndex == lastIndex) and componentParent.spineEnabled:
 
             attachmentSpec = attachmentSpecs[attachmentIndex]
             exportJoint = attachmentSpec.getNode(referenceNode=self.skeletonReference())
