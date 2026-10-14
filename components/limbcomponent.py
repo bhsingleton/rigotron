@@ -299,7 +299,7 @@ class LimbComponent(basecomponent.BaseComponent):
 
         # Get default effector matrix
         #
-        skeletonSpecs = self.skeleton()
+        skeletonSpecs = self.skeleton(flatten=True, skipPassthrough=True, skipDisabled=True)
         numSkeletonSpecs = len(skeletonSpecs)
 
         if numSkeletonSpecs > 0:

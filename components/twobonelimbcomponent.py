@@ -212,13 +212,16 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         rootComponent = self.findRootComponent()
         motionCtrl = rootComponent.getPublishedNode('Motion')
 
-        isArm = self.className.endswith('ArmComponent')
-        isLeg = self.className.endswith('LegComponent')
-        spineAlias = 'Chest' if isArm else 'Pelvis'
         spineComponent = self.findComponentAncestors('SpineComponent')[0]
         cogCtrl = spineComponent.getPublishedNode('COG')
         waistCtrl = spineComponent.getPublishedNode('Waist')
-        spineCtrl = spineComponent.getPublishedNode(spineAlias)
+        pelvisCtrl = spineComponent.getPublishedNode('Pelvis')
+        chestCtrl = spineComponent.getPublishedNode('Chest')
+
+        isArm = self.className.endswith('ArmComponent')
+        isLeg = self.className.endswith('LegComponent')
+        spineAlias = 'Chest' if (isArm and (chestCtrl is not None)) else 'Pelvis'
+        spineCtrl = chestCtrl if (isArm and (chestCtrl is not None)) else pelvisCtrl
 
         parentComponent = self.componentParent()
         hasIntermediateComponent = parentComponent is not spineComponent
@@ -598,13 +601,17 @@ class TwoBoneLimbComponent(limbcomponent.LimbComponent):
         extremityComponents = self.findComponentDescendants('ExtremityComponent')
         hasExtremity = len(extremityComponents) == 1
 
-        extremityIKMatrix = mirrorMatrix * extremityMatrix
+        extremityIKMatrix = om.MMatrix.kIdentity
 
         if hasExtremity:  # TODO: Investigate if this is even necessary anymore?
 
             extremityComponent = extremityComponents[0]
             extremitySpecs = extremityComponent.skeleton()
             extremityIKMatrix = mirrorMatrix * extremitySpecs[0].getNode().worldMatrix()
+
+        else:
+
+            extremityIKMatrix = mirrorMatrix * extremityMatrix
 
         # Create IK extremity control
         #
